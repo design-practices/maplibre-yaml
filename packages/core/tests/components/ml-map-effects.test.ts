@@ -62,6 +62,7 @@ vi.mock("../../src/renderer/map-renderer", () => ({
       }),
       pause: vi.fn(),
       rebuildSeed: () => ({ initialState: {}, initialVisibility: {} }),
+      mountHostChrome: vi.fn(),
       failedSources: () => new Set<string>(),
     };
     renderers.push(r);

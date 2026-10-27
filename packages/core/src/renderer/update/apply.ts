@@ -48,7 +48,7 @@ import type {
 } from "./types";
 import { beforeIdOf } from "./order";
 import { sourceIdOf } from "./compare";
-import { guard, layerContext, sourceContext } from "./guard";
+import { contextOf, guard, hostLayerCollision, layerContext, sourceContext } from "./guard";
 
 type StructuralOp = LayerAddOp | LayerReplaceOp;
 type SourceChangeOp = SourceAddOp | SourceReplaceOp | SourceSetDataOp | SourceSetUrlOp | SourceSetTilesOp;
@@ -216,14 +216,6 @@ function removeLayer(host: UpdateHost, op: LayerRemoveOp): void {
  */
 const PLACE_ONLY = { awaitData: false } as const;
 
-/** The message for a document layer whose id a host's layer holds (KTD1): the document's changes never reach it. */
-function notOurs(layerId: string, what: string): Error {
-  return new Error(
-    `Layer "${layerId}" is on the map but was not declared by the document ` +
-      `(a host added it through addLayer or getMap().addLayer), so ${what}. Give one of them another id.`
-  );
-}
-
 /**
  * Add or replace a document layer in document position. A layer id the map
  * already has that the document did not declare is a host's: the document
@@ -232,13 +224,7 @@ function notOurs(layerId: string, what: string): Error {
 async function placeLayer(host: UpdateHost, op: StructuralOp): Promise<void> {
   const { layerId, layer, position } = op;
   const owned = host.layerManager.ownsLayer(layerId);
-  if (!owned && host.map.getLayer(layerId)) {
-    throw new Error(
-      `Layer "${layerId}" is already on the map but was not declared by the document ` +
-        `(a host added it through addLayer or getMap().addLayer), so the document's layer is skipped. ` +
-        `Give one of them another id.`
-    );
-  }
+  if (!owned && host.map.getLayer(layerId)) throw hostLayerCollision(layerId, "so the document's layer is skipped");
   const prepared = host.prepareLayer(layer);
   if (!prepared) return; // skipped with the renderer's own warning (a type below the runtime floor)
   if (owned) {
@@ -264,7 +250,7 @@ async function placeLayer(host: UpdateHost, op: StructuralOp): Promise<void> {
 function setProperty(host: UpdateHost, next: AppliedDocument, op: LayerSetPropertyOp): void {
   if (op.target === "runtime") {
     if (op.property !== "interactive") return;
-    if (!host.layerManager.ownsLayer(op.layerId)) throw notOurs(op.layerId, "its interactions are not bound to it");
+    if (!host.layerManager.ownsLayer(op.layerId)) throw hostLayerCollision(op.layerId, "so its interactions are not bound to it");
     const layer = next.layers.find((entry) => entry.id === op.layerId);
     if (layer) host.eventHandler.reattachEvents(layer);
     return;
@@ -281,9 +267,9 @@ function setProperty(host: UpdateHost, next: AppliedDocument, op: LayerSetProper
 function dropForeignProperties(host: UpdateHost, summary: UpdateSummary, properties: LayerSetPropertyOp[]): LayerSetPropertyOp[] {
   const foreign = new Set(properties.map((op) => op.layerId).filter((layerId) => !host.layerManager.ownsLayer(layerId)));
   for (const layerId of foreign) {
-    const error = notOurs(layerId, "the document's changes to it are skipped");
+    const error = hostLayerCollision(layerId, "so the document's changes to it are skipped");
     summary.failures.push({ op: "layerSetProperty", message: error.message, layerId });
-    host.onError(error, layerContext(layerId));
+    host.onError(error, contextOf(error, layerContext(layerId)));
   }
   return foreign.size === 0 ? properties : properties.filter((op) => !foreign.has(op.layerId));
 }

@@ -10,11 +10,23 @@
  * same turn as the assignment (KTD8). `fallbackReason` in `diff.ts` mirrors
  * this inside the chunk (which may import nothing) and names the key.
  *
+ * Also home to the empty hints and the empty summary the renderer and the
+ * element share, since both import this file and nothing in the chunk does.
+ *
  * Types only from the rest of core: this file lives in `update/` and keeps
  * its import rule.
  */
 
 import type { MapConfig } from "../../schemas/map.schema";
+import type { DiffHints, UpdateSummary } from "./types";
+
+/** No hints (KTD1): an unchanged document is a no-op. */
+export const NO_HINTS: DiffHints = { failedSources: new Set(), urlsRebased: false };
+
+/** An update summary with nothing in it — or, for a rebuild, every document layer as added. */
+export function emptySummary(rebuild = false, added: string[] = []): UpdateSummary {
+  return { added, removed: [], moved: [], replaced: [], propertiesSet: [], sourcesReplaced: [], cameraMoved: false, rebuild, failures: [] };
+}
 
 /** `config:` keys an update applies in place: the camera (KTD13), `fitTo`, and the options with a setter (KTD7). */
 export const IN_PLACE_CONFIG_KEYS: ReadonlySet<string> = new Set([

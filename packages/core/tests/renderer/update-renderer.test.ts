@@ -320,3 +320,65 @@ describe("MapRenderer.update(): runtime features", () => {
     expect(map.addSource).toHaveBeenCalledWith("pts", expect.not.objectContaining({ generateId: true }));
   });
 });
+
+describe("MapRenderer.update(): the review sweep", () => {
+  it("an equal document fires no update:applied — unless the hints say reload, which answers with an empty summary (KTD11)", async () => {
+    const renderer = await loaded(doc([circle("a")]));
+    const applied = vi.fn();
+    renderer.on("update:applied", applied);
+    const same = await renderer.update(doc([circle("a")]));
+    expect(same.outcome).toBe("applied");
+    expect(applied).not.toHaveBeenCalled();
+    const reloaded = await renderer.update(doc([circle("a")]), { failedSources: new Set(), urlsRebased: false, reload: true });
+    expect(reloaded.outcome).toBe("applied");
+    expect(applied).toHaveBeenCalledTimes(1);
+    expect(applied.mock.calls[0]![0].summary).toMatchObject({ rebuild: false, failures: [], added: [], replaced: [], propertiesSet: [] });
+  });
+
+  it("an equal document after a fitTo prefetch render is a no-op: the host's prefetchedData is not the document's (KTD1)", async () => {
+    const data = { type: "FeatureCollection", features: [{ type: "Feature", geometry: { type: "Point", coordinates: [1, 1] }, properties: {} }] };
+    const fetcher = { fetch: vi.fn(async () => ({ data, fromCache: false, featureCount: 1, duration: 0 })) };
+    const source = { type: "geojson", url: "/pts.geojson" };
+    const layer = { id: "a", type: "circle", source: "pts" } as Layer;
+    const fitConfig = { ...config, fitTo: { source: "pts" } } as never;
+    const renderer = new MapRenderer(
+      container,
+      fitConfig,
+      [layer],
+      { sourceData: { fetcher: fetcher as never, pending: { pts: Promise.resolve(data as never) } } },
+      { pts: { ...source, prefetchedData: data } as never }
+    );
+    const ready = new Promise<void>((resolve) => renderer.on("load", resolve));
+    (renderer.getMap() as any).emit("load");
+    await ready;
+    const applied = vi.fn();
+    renderer.on("update:applied", applied);
+    const result = await renderer.update({ config: fitConfig, layers: [layer], sources: { pts: source as never }, options: {} });
+    expect(result.outcome).toBe("applied");
+    expect(result.summary).toMatchObject({ sourcesReplaced: [], replaced: [], propertiesSet: [], cameraMoved: false, failures: [] });
+    expect(applied).not.toHaveBeenCalled();
+  });
+
+  it("a MapLibre error for a layer or source an update added is classified as the document's (the classifier reads the applied document)", async () => {
+    const onError = vi.fn();
+    const renderer = await loaded(doc([circle("a")]), { onError });
+    const map = renderer.getMap() as any;
+    await renderer.update(doc([circle("a"), circle("b")]));
+    map.emit("error", { error: new Error("layers.b.paint.circle-color: bad"), layer: { id: "b" } });
+    expect(onError).toHaveBeenLastCalledWith(expect.any(Error), false, { kind: "layer", layerId: "b" });
+    await renderer.update(doc([circle("a"), { id: "c", type: "circle", source: "pts" } as Layer], {}, { pts: { type: "geojson", data: EMPTY } as never }));
+    map.emit("error", { error: new Error("tiles 404"), sourceId: "pts" });
+    expect(onError).toHaveBeenLastCalledWith(expect.any(Error), false, { kind: "source", sourceId: "pts" });
+    // A layer the update removed is no longer the document's.
+    await renderer.update(doc([circle("a")]));
+    map.emit("error", { error: new Error("layers.b.paint.circle-color: bad"), layer: { id: "b" } });
+    expect(onError).toHaveBeenLastCalledWith(expect.any(Error), false, undefined);
+  });
+
+  it("update() before the map loads resolves superseded when the renderer is destroyed first", async () => {
+    const renderer = new MapRenderer(container, config, [circle("a")], {});
+    const pending = renderer.update(doc([circle("a", { paint: { "circle-color": "#0f0" } })]));
+    renderer.destroy();
+    await expect(pending).resolves.toEqual({ outcome: "superseded" });
+  });
+});

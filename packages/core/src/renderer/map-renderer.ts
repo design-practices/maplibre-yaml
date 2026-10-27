@@ -36,6 +36,7 @@ import { ChromeLayout, type ChromeCorner } from './chrome-layout';
 import {
   ParamsBuilder,
   hasPanelContent,
+  stateDefault,
   type ParamsPanelConfig,
   type ParameterMeta,
 } from './params-builder';
@@ -57,7 +58,7 @@ import type {
   UpdateResult,
   UpdateSummary,
 } from './update/types';
-import { needsRebuild } from './update/rebuild';
+import { NO_HINTS, emptySummary, needsRebuild } from './update/rebuild';
 import { documentOrderMoves } from './update/order';
 import { getDecoder } from '../formats/decoders';
 import { createStrings, type Strings } from '../i18n';
@@ -317,6 +318,12 @@ export interface MapErrorContext {
   swapped?: [number, number];
   /** The style URL, for `style` errors when the style was given as a URL. */
   url?: string;
+  /**
+   * For `layer` errors from an update (KTD1): the document layer's id is
+   * held by a layer the host added, so the document's layer and its changes
+   * were skipped — an author hint, not a draw failure.
+   */
+  reason?: 'host-layer-collision';
 }
 
 /**
@@ -465,6 +472,14 @@ export interface MapRendererOptions {
    * the next update diffs against the document, not the carried view.
    */
   initialCamera?: { center: [number, number]; zoom: number; bearing: number; pitch: number };
+  /**
+   * Built off the page for a fallback rebuild (KTD8): the host's
+   * {@link chrome} and {@link legendElement} — borrowed from the map still
+   * showing — are left where they are at style load and mounted by
+   * {@link MapRenderer.mountHostChrome}, which the host calls when this map
+   * takes the old one's place. A swap that never commits moves nothing.
+   */
+  deferChrome?: boolean;
 }
 
 /** One host-supplied chrome element and the corner it mounts into. */
@@ -509,11 +524,6 @@ export interface MapRendererEvents {
 /** Who set a `state:` value (KTD6): the document, the panel's midpoint seed, or a reader (`setState` or a panel write). */
 type StateProvenance = 'default' | 'seed' | 'user';
 
-/** A `state:` entry's default: `{ default }` per the spec, a bare value for programmatic callers, `undefined` when it declares nothing. */
-function stateDefault(entry: unknown): unknown {
-  return entry && typeof entry === 'object' ? (entry as { default?: unknown }).default : entry;
-}
-
 /** The declared-absence line for a runtime below the state floor. */
 const NO_STATE_SETTER = 'the running maplibre-gl has no setGlobalStateProperty (needs >= 5.6)';
 
@@ -546,7 +556,23 @@ function withDocumentOptions(options: MapRendererOptions, next: DocumentOptions)
   return { ...merged, ...next } as MapRendererOptions;
 }
 
-const NO_HINTS: DiffHints = { failedSources: new Set(), urlsRebased: false };
+/**
+ * The document's sources without what the host put in them: a `fitTo`
+ * prefetch's data rides in as `prefetchedData` on the source the host is
+ * loading (`sourceData.pending`), and is not the document's — the next
+ * update diffs against the document as written (KTD1).
+ */
+function documentSources(sources: Record<string, LayerSource> | undefined, options: MapRendererOptions): Record<string, LayerSource> {
+  const own = { ...sources };
+  for (const id of Object.keys(options.sourceData?.pending ?? {})) {
+    const source = own[id];
+    if (source && typeof source === 'object' && 'prefetchedData' in source) {
+      const { prefetchedData: _prefetched, ...rest } = source as Record<string, unknown>;
+      own[id] = rest as LayerSource;
+    }
+  }
+  return own;
+}
 
 /** One queued update (KTD5): the next document, its hints, and the caller waiting on it. */
 interface PendingUpdate {
@@ -630,6 +656,10 @@ export class MapRenderer {
   private visibility = new Map<string, boolean>();
   /** `initialState` and `setState` writes made before the map loads, applied after the defaults in the load handler. */
   private pendingState: Record<string, unknown> | null;
+  /** The host's chrome went into the corner system (at style load, or at the host's commit under `deferChrome`). */
+  private hostChromeMounted = false;
+  /** Updates made before the document loads (KTD5), released by `load` — or by `destroy()`, as superseded. */
+  private loadWaiters: (() => void)[] = [];
 
 
   /**
@@ -674,7 +704,7 @@ export class MapRenderer {
     // One `locale:` table for MapLibre's controls and the library's own
     // strings (namespaced `maplibre-yaml.*`, which MapLibre ignores).
     this.strings = createStrings(config.locale);
-    this.applied = { config, layers, sources: sources ?? {}, options: documentOptions(options) };
+    this.applied = { config, layers, sources: documentSources(sources, options), options: documentOptions(options) };
     this.options = options;
     this.pendingState = options.initialState ? { ...options.initialState } : null;
     // A fallback rebuild's carried view (KTD8): built there, with the
@@ -1099,9 +1129,9 @@ export class MapRenderer {
       // A classified map without a `legend:` block gets one (0.9).
       const legend = effectiveLegend(options.legend, layers, AUTO_LEGEND);
       if (options.legendElement && !this.legendBuilt) {
-        // The `legend` slot replaces the built-in legend outright.
+        // The `legend` slot replaces the built-in legend outright (mounted
+        // with the rest of the host's chrome, below, at the corner's edge).
         this.legendBuilt = true;
-        this.chromeLayout().mount(legend?.position ?? 'top-left', options.legendElement);
       } else if (legend && !this.legendBuilt) {
         this.buildLegend(this.createLegendContainer(legend), layers, legend);
       }
@@ -1116,10 +1146,10 @@ export class MapRenderer {
       }
 
       // Host chrome (U9 slots) mounts last: built-in pieces keep the corner
-      // edge and author children stack after them (KTD10 registration order).
-      for (const { position, element } of options.chrome ?? []) {
-        this.chromeLayout().mount(position, element);
-      }
+      // edge and author children stack after them (KTD10 registration order)
+      // — unless this map is a swap's, built off the page: the host mounts
+      // them when it commits (KTD8), and they stay on the old map until then.
+      if (!options.deferChrome) this.mountHostChrome();
 
       // A narrow map opens MapLibre's compact attribution expanded, across
       // a bottom-left legend/slot (ml-aot.26) or scale bar (ml-aot.38):
@@ -1216,6 +1246,7 @@ export class MapRenderer {
             }
             this.emit('load', undefined);
             options.onLoad?.();
+            this.releaseLoadWaiters();
           });
         })
         .catch((error) => {
@@ -1272,14 +1303,16 @@ export class MapRenderer {
 
     // Which runtime errors belong to the document: its own layers (named
     // in MapLibre's validation messages, or on the event) and its own
-    // sources (named sources, plus the `<layer>-source` an inline one gets).
-    const documentLayerIds = layers.map((layer) => layer.id);
-    const documentSourceIds = new Set<string>([
-      ...Object.keys(sources ?? {}),
-      ...layers
-        .filter((layer) => layer.source && typeof layer.source === 'object')
-        .map((layer) => `${layer.id}-source`),
-    ]);
+    // sources (named sources, plus the `<layer>-source` an inline one gets)
+    // — read from the applied document, which updates move on (KTD1).
+    const documentLayerIds = () => this.applied.layers.map((layer) => layer.id);
+    const documentSourceIds = () =>
+      new Set<string>([
+        ...Object.keys(this.applied.sources),
+        ...this.applied.layers
+          .filter((layer) => layer.source && typeof layer.source === 'object')
+          .map((layer) => `${layer.id}-source`),
+      ]);
     const styleUrl = typeof config.mapStyle === 'string' ? config.mapStyle : undefined;
     let styleLoaded = false;
     this.map.on('style.load', () => {
@@ -1305,13 +1338,12 @@ export class MapRenderer {
         return { kind: 'style', ...(styleUrl ? { url: styleUrl } : {}) };
       }
       const eventLayer = typeof e.layer?.id === 'string' ? e.layer.id : undefined;
+      const layerIds = documentLayerIds();
       const layerId =
-        (eventLayer && documentLayerIds.includes(eventLayer) ? eventLayer : undefined) ??
-        documentLayerIds.find(
-          (id) => message.startsWith(`layers.${id}.`) || message.startsWith(`layers.${id}:`)
-        );
+        (eventLayer && layerIds.includes(eventLayer) ? eventLayer : undefined) ??
+        layerIds.find((id) => message.startsWith(`layers.${id}.`) || message.startsWith(`layers.${id}:`));
       if (layerId) return { kind: 'layer', layerId };
-      if (typeof e.sourceId === 'string' && documentSourceIds.has(e.sourceId)) {
+      if (typeof e.sourceId === 'string' && documentSourceIds().has(e.sourceId)) {
         return { kind: 'source', sourceId: e.sourceId };
       }
       // A basemap style's own PMTiles file that failed (a self-hosted
@@ -2247,7 +2279,8 @@ export class MapRenderer {
    */
   private orderDocumentLayers(layers: Layer[]): void {
     const onMap = (this.map.getStyle?.()?.layers ?? []).map((layer) => layer.id);
-    for (const { layerId, beforeId } of documentOrderMoves(layers, onMap)) {
+    // Last to first (order.ts): each layer's successor is in place before the layer goes before it.
+    for (const { layerId, beforeId } of documentOrderMoves(layers, onMap).reverse()) {
       try {
         this.layerManager.moveLayer(layerId, beforeId);
       } catch (error) {
@@ -2339,15 +2372,11 @@ export class MapRenderer {
 
   private async performUpdate(next: AppliedDocument, hints: DiffHints, generation: number): Promise<UpdateResult> {
     // Fallback is decided here, synchronously, before any await (KTD7).
-    if (needsRebuild(this.applied.config, next.config)) {
-      return {
-        outcome: 'fallback',
-        summary: { added: [], removed: [], moved: [], replaced: [], propertiesSet: [], sourcesReplaced: [], cameraMoved: false, rebuild: true, failures: [] },
-      };
-    }
+    if (needsRebuild(this.applied.config, next.config)) return { outcome: 'fallback', summary: emptySummary(true) };
     const stale = () => this.destroyed || generation !== this.updateGeneration;
-    // An update made before the document loads waits for the renderer's own `load`.
-    if (!this.layersAdded) await new Promise<void>((resolve) => this.on('load', () => resolve()));
+    // An update made before the document loads waits for the renderer's own
+    // `load` — or for `destroy()`, which releases it as superseded.
+    if (!this.layersAdded) await new Promise<void>((resolve) => this.loadWaiters.push(resolve));
     if (stale()) return { outcome: 'superseded' };
     let engine: Awaited<ReturnType<typeof getDecoder<'update'>>>;
     try {
@@ -2369,7 +2398,9 @@ export class MapRenderer {
     if (result.summary.rebuild) return { outcome: 'fallback', summary: result.summary };
     this.applied = next;
     this.options = withDocumentOptions(this.options, next.options);
-    if (result.changed) this.emit('update:applied', { summary: result.summary });
+    // An equal document is a no-op with no event (R8) — except on a reload,
+    // which answers with what it did, possibly nothing (KTD11).
+    if (result.changed || hints.reload) this.emit('update:applied', { summary: result.summary });
     return { outcome: 'applied', summary: result.summary };
   }
 
@@ -2416,6 +2447,32 @@ export class MapRenderer {
         this.emit(event, payload);
       },
     };
+  }
+
+  /**
+   * Put the host's chrome into the corner system (KTD10): the `legend` slot
+   * at its corner's edge, in the built-in legend's place, then the `chrome`
+   * elements after the built-in pieces. Once: at style load, or, for a map
+   * built off the page (`deferChrome`), when the host commits the swap
+   * (KTD8) — right before it is shown, so the elements leave the old map
+   * only then and never for a map that fails to load.
+   */
+  mountHostChrome(): void {
+    if (this.hostChromeMounted || this.destroyed) return;
+    this.hostChromeMounted = true;
+    const { legendElement, chrome } = this.options;
+    if (legendElement) {
+      const legend = effectiveLegend(this.applied.options.legend, this.applied.layers, AUTO_LEGEND);
+      this.chromeLayout().mount(legend?.position ?? 'top-left', legendElement, true);
+    }
+    for (const { position, element } of chrome ?? []) this.chromeLayout().mount(position, element);
+  }
+
+  /** The updates waiting for `load` go on (KTD5): the document loaded, or the map is gone. */
+  private releaseLoadWaiters(): void {
+    const waiters = this.loadWaiters;
+    this.loadWaiters = [];
+    for (const resolve of waiters) resolve();
   }
 
   /** The shared corner system (KTD10), created on first chrome mount. */
@@ -2514,11 +2571,12 @@ export class MapRenderer {
   destroy(): void {
     this.queuedUpdate?.resolve({ outcome: 'superseded' });
     this.queuedUpdate = null;
+    this.destroyed = true;
+    this.releaseLoadWaiters();
     this.classify?.destroy();
     this.classify = null;
     this.eventHandler.destroy();
     this.layerManager.destroy();
-    this.destroyed = true;
     this.markersManager?.destroy();
     this.markersManager = null;
     this.popupsManager?.destroy();

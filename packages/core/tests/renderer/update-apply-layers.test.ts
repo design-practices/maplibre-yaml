@@ -498,7 +498,7 @@ describe("applyOps: existence reconciliation (KTD1)", () => {
     const summary = await update(h, applied, doc([layer("a"), layer("x")]));
 
     expect(summary.failures).toEqual([{ op: "layerAdd", message: expect.stringMatching(/not declared by the document/), layerId: "x" }]);
-    expect(h.onError).toHaveBeenCalledWith(expect.any(Error), false, { kind: "layer", layerId: "x" });
+    expect(h.onError).toHaveBeenCalledWith(expect.any(Error), false, { kind: "layer", layerId: "x", reason: "host-layer-collision" });
     expect(h.map.removeLayer).not.toHaveBeenCalledWith("x");
     expect(h.map.layer("x")!.type).toBe("line");
     expect(h.layerManager.ownsLayer("x")).toBe(false);
@@ -531,7 +531,7 @@ describe("applyOps: existence reconciliation (KTD1)", () => {
 
     expect(summary.failures).toEqual([{ op: "layerSetProperty", message: expect.stringMatching(/"x".*not declared by the document/), layerId: "x" }]);
     expect(h.onError).toHaveBeenCalledTimes(1);
-    expect(h.onError).toHaveBeenCalledWith(expect.any(Error), false, { kind: "layer", layerId: "x" });
+    expect(h.onError).toHaveBeenCalledWith(expect.any(Error), false, { kind: "layer", layerId: "x", reason: "host-layer-collision" });
     expect(h.map.setPaintProperty).not.toHaveBeenCalled();
     expect(h.map.setLayoutProperty).not.toHaveBeenCalled();
     expect(h.map.setFilter).not.toHaveBeenCalled();

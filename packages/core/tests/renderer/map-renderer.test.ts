@@ -79,7 +79,7 @@ vi.mock("maplibre-gl", () => {
   };
 });
 
-import { documentOrderMoves } from "../../src/renderer/update/order";
+import { beforeIdOf, documentOrderMoves } from "../../src/renderer/update/order";
 
 describe("first render puts layers in document order (KTD3, live documents)", () => {
   const EMPTY = { type: "FeatureCollection", features: [] } as const;
@@ -1080,5 +1080,172 @@ describe("MapRenderer", () => {
 
       expect(map.remove).toHaveBeenCalled();
     });
+  });
+});
+
+/** A map double whose style keeps layer order and its sources, as MapLibre does, starting from `basemap`. */
+function liveStyle(map: any, basemap: string[]): { order: string[] } {
+  const order: string[] = [...basemap];
+  const sources: Record<string, unknown> = {};
+  map.addSource.mockImplementation((id: string, spec: any) => {
+    sources[id] = { ...spec, setData: vi.fn() };
+  });
+  map.getSource.mockImplementation((id: string) => sources[id]);
+  map.addLayer.mockImplementation((spec: any, before?: string) => {
+    const at = before ? order.indexOf(before) : -1;
+    if (at >= 0) order.splice(at, 0, spec.id);
+    else order.push(spec.id);
+  });
+  map.getLayer.mockImplementation((id: string) => (order.includes(id) ? { id } : undefined));
+  map.moveLayer = vi.fn((id: string, before?: string) => {
+    order.splice(order.indexOf(id), 1);
+    const at = before ? order.indexOf(before) : -1;
+    if (at >= 0) order.splice(at, 0, id);
+    else order.push(id);
+  });
+  map.getStyle = () => ({ layers: order.map((id) => ({ id })) });
+  return { order };
+}
+
+describe("first-render ordering: pinned anchors and the apply order of moves (KTD3 review sweep)", () => {
+  const EMPTY = { type: "FeatureCollection", features: [] } as const;
+  const config = { center: [0, 0] as [number, number], zoom: 2, mapStyle: "https://example.com/style.json" };
+  const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
+  let container: HTMLElement;
+  beforeEach(() => {
+    container = document.createElement("div");
+    document.body.appendChild(container);
+  });
+
+  it("three url layers whose fetches answer in reverse order end in document order: the moves are applied last to first", async () => {
+    const pending = new Map<string, (result: unknown) => void>();
+    const fetcher = { fetch: vi.fn((url: string) => new Promise((resolve) => pending.set(url, resolve))) };
+    const layer = (id: string) => ({ id, type: "circle", source: { type: "geojson", url: `/${id}.geojson` } }) as any;
+    const renderer = new MapRenderer(container, config, [layer("a"), layer("b"), layer("c")], { sourceData: { fetcher: fetcher as never } });
+    const map = renderer.getMap() as any;
+    const { order } = liveStyle(map, ["land"]);
+    const loaded = new Promise<void>((resolve) => renderer.on("load", () => resolve()));
+    map.emit("load");
+    await tick();
+    expect([...pending.keys()]).toEqual(["/a.geojson", "/b.geojson", "/c.geojson"]);
+    for (const id of ["c", "b", "a"]) {
+      pending.get(`/${id}.geojson`)!({ data: EMPTY, fromCache: false, featureCount: 0, duration: 0 });
+      await tick();
+    }
+    await loaded;
+    expect(order).toEqual(["land", "a", "b", "c"]);
+    renderer.destroy();
+  });
+
+  it("a layer pinned by before: to a basemap layer stays there; the unpinned layers around it keep document order on top (the Protomaps fixture)", () => {
+    const basemap = ["background", "earth", "places_subplace", "places_country"];
+    const pinned = { id: "under-labels", before: "places_subplace" } as any;
+    const dot = { id: "pier-dot" } as any;
+    const landed = ["background", "earth", "under-labels", "places_subplace", "places_country", "pier-dot"];
+    // Parallel adds put each where it belongs, in either document order: nothing to move.
+    expect(documentOrderMoves([dot, pinned], landed)).toEqual([]);
+    expect(documentOrderMoves([pinned, dot], landed)).toEqual([]);
+    // The pinned layer landed on top (its anchor arrived late): back below its anchor; the dot stays on top.
+    expect(documentOrderMoves([pinned, dot], [...basemap, "pier-dot", "under-labels"])).toEqual([{ layerId: "under-labels", beforeId: "places_subplace" }]);
+    expect(documentOrderMoves([dot, pinned], [...basemap, "under-labels", "pier-dot"])).toEqual([{ layerId: "under-labels", beforeId: "places_subplace" }]);
+    // The anchor is not on the map (a typo, an update's applied order): nothing to place against.
+    expect(documentOrderMoves([pinned, dot], ["pier-dot", "under-labels"])).toEqual([]);
+    // Two layers pinned to the same anchor keep document order below it.
+    const two = [{ id: "p1", before: "water" }, { id: "p2", before: "water" }, { id: "c" }] as any;
+    expect(documentOrderMoves(two, ["land", "p2", "p1", "water", "c"])).toEqual([{ layerId: "p1", beforeId: "p2" }]);
+    expect(beforeIdOf(two, 0)).toBe("p2");
+    expect(beforeIdOf(two, 1)).toBe("water");
+    expect(beforeIdOf(two, 2)).toBeUndefined();
+    expect(beforeIdOf([dot, pinned], 0)).toBeUndefined();
+  });
+
+  it("over a basemap, one unanchored layer then one anchored (and the reverse): the anchored sits below its anchor, the other on top", async () => {
+    const basemap = ["background", "earth", "places_subplace", "places_country"];
+    const inline = (id: string, extra: Record<string, unknown> = {}) => ({ id, type: "circle", source: { type: "geojson", data: EMPTY }, ...extra }) as any;
+    for (const layers of [
+      [inline("pier-dot"), inline("under-labels", { before: "places_subplace" })],
+      [inline("under-labels", { before: "places_subplace" }), inline("pier-dot")],
+    ]) {
+      const renderer = new MapRenderer(container, config, layers, {});
+      const map = renderer.getMap() as any;
+      const { order } = liveStyle(map, basemap);
+      const loaded = new Promise<void>((resolve) => renderer.on("load", () => resolve()));
+      map.emit("load");
+      await loaded;
+      expect(order[order.length - 1]).toBe("pier-dot");
+      expect(order.indexOf("under-labels")).toBe(order.indexOf("places_subplace") - 1);
+      renderer.destroy();
+    }
+  });
+});
+
+describe("host chrome under a swap (deferChrome, KTD8)", () => {
+  const config = { center: [0, 0] as [number, number], zoom: 2, mapStyle: "https://example.com/style.json" };
+
+  /** A loaded renderer over no layers, its host chrome elements sitting in `corner` (the old map's). */
+  async function swapRenderer(corner: HTMLElement, container: HTMLElement, deferChrome: boolean) {
+    const element = document.createElement("div");
+    const legend = document.createElement("div");
+    corner.append(element, legend);
+    const renderer = new MapRenderer(container, config, [], {
+      ...(deferChrome ? { deferChrome } : {}),
+      chrome: [{ position: "top-right", element }],
+      legendElement: legend,
+    });
+    const loaded = new Promise<void>((resolve) => renderer.on("load", () => resolve()));
+    (renderer.getMap() as any).emit("load");
+    await loaded;
+    return { renderer, element, legend };
+  }
+
+  it("stays where it is at style load and moves at mountHostChrome(); without the flag it mounts at style load", async () => {
+    const corner = document.createElement("div");
+    document.body.appendChild(corner);
+    const container = document.createElement("div"); // off the page, as a swap's map is
+    const { renderer, element, legend } = await swapRenderer(corner, container, true);
+    expect(element.parentElement).toBe(corner);
+    expect(legend.parentElement).toBe(corner);
+    renderer.mountHostChrome();
+    expect(element.closest(".ml-map-chrome-top-right")?.parentElement).toBe(container);
+    expect(legend.closest(".ml-map-chrome-top-left")?.parentElement).toBe(container);
+    renderer.mountHostChrome(); // once
+    expect(container.querySelectorAll(".ml-map-chrome-top-right").length).toBe(1);
+    renderer.destroy();
+
+    const direct = await swapRenderer(corner, container, false);
+    expect(direct.element.closest(".ml-map-chrome-top-right")?.parentElement).toBe(container);
+    direct.renderer.destroy();
+  });
+
+  it("a swap that never commits (destroyed before mounting) loses nothing from the old map", async () => {
+    const corner = document.createElement("div");
+    document.body.appendChild(corner);
+    const { renderer, element, legend } = await swapRenderer(corner, document.createElement("div"), true);
+    renderer.destroy();
+    expect(element.parentElement).toBe(corner);
+    expect(legend.parentElement).toBe(corner);
+    renderer.mountHostChrome(); // after destroy: nothing
+    expect(element.parentElement).toBe(corner);
+  });
+});
+
+describe("the applied document is the document as written (KTD1 review sweep)", () => {
+  it("a fitTo prefetch's prefetchedData (a source in sourceData.pending) is left out; a document's own stays", () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const data = { type: "FeatureCollection", features: [] };
+    const renderer = new MapRenderer(
+      container,
+      { center: [0, 0], zoom: 2, mapStyle: "https://example.com/style.json" },
+      [],
+      { sourceData: { pending: { pts: Promise.resolve(data as never) } } },
+      {
+        pts: { type: "geojson", url: "/pts.geojson", prefetchedData: data } as any,
+        own: { type: "geojson", url: "/own.geojson", prefetchedData: data } as any,
+      }
+    );
+    expect(renderer.getDocument().sources.pts).toEqual({ type: "geojson", url: "/pts.geojson" });
+    expect(renderer.getDocument().sources.own).toHaveProperty("prefetchedData");
+    renderer.destroy();
   });
 });

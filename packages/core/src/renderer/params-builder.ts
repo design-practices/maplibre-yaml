@@ -111,6 +111,15 @@ function sliderText(raw: string, language: string | undefined): string {
   );
 }
 
+/**
+ * A `state:` entry's default: `{ default }` per the spec, a bare value for
+ * programmatic callers, `undefined` when it declares nothing. One reading
+ * for the renderer (what it applies) and the panel (what it seeds from).
+ */
+export function stateDefault(entry: unknown): unknown {
+  return typeof entry === "object" && entry !== null ? (entry as { default?: unknown }).default : entry;
+}
+
 export class ParamsBuilder {
   private readonly strings: Strings;
   private readonly language: () => string | undefined;
@@ -165,11 +174,7 @@ export class ParamsBuilder {
    */
   private stateDefault(config: ParamsPanelConfig, key: string): unknown {
     if (config.values && key in config.values) return config.values[key];
-    const entry = config.state?.[key];
-    if (typeof entry === "object" && entry !== null) {
-      return "default" in entry ? (entry as { default?: unknown }).default : undefined;
-    }
-    return entry;
+    return stateDefault(config.state?.[key]);
   }
 
   /** Resolve the control kind: explicit type wins, then shape inference. */

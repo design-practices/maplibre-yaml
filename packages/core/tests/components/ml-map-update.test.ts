@@ -59,6 +59,7 @@ interface FakeRenderer {
   setState: ReturnType<typeof vi.fn>;
   getState: ReturnType<typeof vi.fn>;
   rebuildSeed: ReturnType<typeof vi.fn>;
+  mountHostChrome: ReturnType<typeof vi.fn>;
   failedSources: ReturnType<typeof vi.fn>;
   getDocument(): any;
   getMap(): FakeMap;
@@ -116,14 +117,15 @@ vi.mock("../../src/renderer/map-renderer", () => ({
       destroyed: false,
       handlers,
       // As the renderer: `update:applied` fires only when the document changed.
-      update: vi.fn(async (next: any) => {
+      update: vi.fn(async (next: any, hints?: { reload?: boolean }) => {
         const changed =
           JSON.stringify([next.config, next.layers, next.sources]) !== JSON.stringify([r.config, r.layers, r.sources ?? {}]);
         r.config = next.config;
         r.layers = next.layers;
         r.sources = next.sources;
         const summary = emptySummary();
-        if (changed) r.emit("update:applied", { summary });
+        // ... or on a reload, which answers even when nothing changed (KTD11).
+        if (changed || hints?.reload) r.emit("update:applied", { summary });
         return { outcome: "applied", summary };
       }),
       destroy: vi.fn(() => {
@@ -135,6 +137,7 @@ vi.mock("../../src/renderer/map-renderer", () => ({
       setState: vi.fn(),
       getState: vi.fn(() => ({ year: 2020 })),
       rebuildSeed: vi.fn(() => ({ initialState: { year: 2020 }, initialVisibility: { pts: false } })),
+      mountHostChrome: vi.fn(),
       failedSources: vi.fn(() => new Set<string>()),
       getDocument: () => ({ config: r.config, layers: r.layers, sources: r.sources ?? {}, options: r.options }),
       getMap: () => map,
@@ -855,14 +858,219 @@ describe("state and errors through the element", () => {
     const { el } = await mounted();
     first().update.mockImplementationOnce(async () => {
       first().options.onError(
-        new Error('Layer "pts" is already on the map but was not declared by the document (a host added it), so the document\'s layer is skipped.'),
+        new Error('Layer "pts" is on the map but was not declared by the document (a host added it), so the document\'s layer is skipped.'),
         false,
-        { kind: "layer", layerId: "pts" }
+        { kind: "layer", layerId: "pts", reason: "host-layer-collision" }
       );
       return { outcome: "applied", summary: emptySummary() };
     });
     el.config = block({}, { zoom: 4 }) as any;
     await settle();
     expect(el.querySelector(".ml-map-notice")?.textContent).toMatch(/page.*pts|pts.*page/);
+  });
+});
+
+describe("the notice is settled when an update applies, never before (review sweep)", () => {
+  const notice = (el: MLMap) => el.querySelector(".ml-map-notice")?.textContent ?? "";
+  const failPts = (message: string) => first().options.onError(new Error(message), false, { kind: "layer", layerId: "pts" });
+
+  it("a failure the update itself reports for a layer it added survives; the line from before the update goes", async () => {
+    const { el } = await mounted();
+    failPts("layers.pts: old failure");
+    expect(notice(el)).toContain("old failure");
+    first().update.mockImplementationOnce(async () => {
+      failPts("layers.pts: new failure");
+      const summary = { ...emptySummary(), added: ["pts"] };
+      first().emit("update:applied", { summary });
+      return { outcome: "applied", summary };
+    });
+    el.config = block({}, { zoom: 4 }) as any;
+    await settle();
+    expect(notice(el)).toContain("new failure");
+    expect(notice(el)).not.toContain("old failure");
+  });
+
+  it("the same failure reported again during the update stays on the notice", async () => {
+    const { el } = await mounted();
+    failPts("layers.pts: bad colour");
+    first().update.mockImplementationOnce(async () => {
+      failPts("layers.pts: bad colour");
+      const summary = { ...emptySummary(), replaced: ["pts"] };
+      first().emit("update:applied", { summary });
+      return { outcome: "applied", summary };
+    });
+    el.config = block({}, { zoom: 4 }) as any;
+    await settle();
+    expect(notice(el)).toContain("bad colour");
+  });
+
+  it("a removed layer's line goes with it", async () => {
+    const { el } = await mounted();
+    failPts("layers.pts: bad colour");
+    expect(notice(el)).toContain("Layer pts");
+    first().update.mockImplementationOnce(async () => {
+      const summary = { ...emptySummary(), removed: ["pts"] };
+      first().emit("update:applied", { summary });
+      return { outcome: "applied", summary };
+    });
+    el.config = block({ layers: [] }) as any;
+    await settle();
+    expect(el.querySelector(".ml-map-notice")).toBeNull();
+  });
+
+  it("a document's on-page warning goes when a clean document replaces it", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    // The reserved `=` prefix in a style value: an author hint on the page (and an in-place change, not a rebuild).
+    const reserved = { id: "pts", type: "symbol", source: "pts", layout: { "text-field": "=upper({name})" } };
+    const { el } = await mounted(block({ layers: [reserved] }));
+    expect(notice(el)).toContain("=upper({name})");
+    el.config = block({}, { zoom: 4 }) as any;
+    await settle();
+    expect(el.querySelector(".ml-map-notice")).toBeNull();
+    warn.mockRestore();
+  });
+});
+
+describe("a refused update never clobbers a later one (KTD5)", () => {
+  it("A rejected (chunk) while B is in flight: the document is B's", async () => {
+    const { el } = await mounted();
+    let settleA!: (result: unknown) => void;
+    first().update.mockImplementationOnce(() => new Promise((resolve) => (settleA = resolve)));
+    el.config = block({}, { zoom: 4 }) as any;
+    el.config = block({}, { zoom: 5 }) as any;
+    await settle();
+    expect(el.getDocument()?.config.zoom).toBe(5);
+    settleA({ outcome: "rejected", errors: [{ kind: "chunk", message: "offline" }] });
+    await settle();
+    expect(el.getDocument()?.config.zoom).toBe(5);
+    expect(el.config?.config.zoom).toBe(5);
+  });
+
+  it("A applied while B is in flight, then B rejected: the document goes back to A's, not to the one before A", async () => {
+    const { el } = await mounted();
+    let settleB!: (result: unknown) => void;
+    first()
+      .update.mockImplementationOnce(async (next: any) => {
+        first().config = next.config;
+        return { outcome: "applied", summary: emptySummary() };
+      })
+      .mockImplementationOnce(() => new Promise((resolve) => (settleB = resolve)));
+    el.config = block({}, { zoom: 4 }) as any;
+    el.config = block({}, { zoom: 5 }) as any;
+    await settle();
+    settleB({ outcome: "rejected", errors: [{ kind: "chunk", message: "offline" }] });
+    await settle();
+    expect(el.getDocument()?.config.zoom).toBe(4);
+  });
+});
+
+describe("the swap: a base change, the next map's notices, state written meanwhile (KTD8 review sweep)", () => {
+  it("a base change during a swap applies to the document the swap builds, once it is up: no third map", async () => {
+    const { el } = await mounted();
+    el.config = block({}, { mapStyle: STYLE_B }) as any;
+    el.base = "/my-repo/";
+    await settle();
+    expect(renderers).toHaveLength(2);
+    latest().load();
+    await settle();
+    expect(renderers).toHaveLength(2);
+    expect(first().update).not.toHaveBeenCalled();
+    expect(latest().update).toHaveBeenCalledTimes(1);
+    const [next, hints] = latest().update.mock.calls[0]!;
+    expect(next.config.mapStyle).toBe(STYLE_B);
+    expect(next.sources.pts.url).toBe("/my-repo/data/pts.geojson");
+    expect(hints.urlsRebased).toBe(true);
+    expect(el.getDocument()?.config.mapStyle).toBe(STYLE_B);
+  });
+
+  it("what the next map reports while it loads goes on the notice when it takes the old map's place", async () => {
+    const { el } = await mounted();
+    el.config = block({}, { mapStyle: STYLE_B }) as any;
+    latest().options.onError(new Error("layers.pts: bad colour"), false, { kind: "layer", layerId: "pts" });
+    // Not the old map's problem: nothing on the page yet.
+    expect(el.querySelector(".ml-map-notice")).toBeNull();
+    latest().load();
+    await settle();
+    expect(el.querySelector(".ml-map-notice")?.textContent).toContain("Layer pts");
+  });
+
+  it("... and is dropped when the swap fails", async () => {
+    const { el } = await mounted();
+    el.config = block({}, { mapStyle: STYLE_B }) as any;
+    latest().options.onError(new Error("layers.pts: bad colour"), false, { kind: "layer", layerId: "pts" });
+    latest().options.onError(new Error("Failed to fetch b.json: 404"), true, { kind: "style", url: STYLE_B });
+    await settle();
+    expect(el.getRenderer()).toBe(first());
+    expect(el.querySelector(".ml-map-notice")?.textContent ?? "").not.toContain("Layer pts");
+  });
+
+  it("the slot children are mounted on the new map at commit, not before", async () => {
+    const { el } = await mounted();
+    el.config = block({}, { mapStyle: STYLE_B }) as any;
+    expect(latest().options.deferChrome).toBe(true);
+    expect(first().options.deferChrome).toBeUndefined();
+    expect(latest().mountHostChrome).not.toHaveBeenCalled();
+    latest().load();
+    await settle();
+    expect(latest().mountHostChrome).toHaveBeenCalledTimes(1);
+    expect(latest().mountHostChrome.mock.invocationCallOrder[0]).toBeLessThan(latest().map.resize.mock.invocationCallOrder[0]!);
+  });
+
+  it("setState during a swap that then fails lands on the map that stays; getState() reads it back meanwhile", async () => {
+    const { el } = await mounted();
+    el.config = block({}, { mapStyle: STYLE_B }) as any;
+    latest().rebuildSeed.mockReturnValue({ initialState: { year: 2025, other: 1 }, initialVisibility: {} });
+    el.setState({ year: 2025 });
+    expect(latest().setState).toHaveBeenCalledWith({ year: 2025 });
+    // The old document declares `year`, not `other`.
+    expect(el.getState()).toEqual({ year: 2025 });
+    latest().options.onError(new Error("Failed to fetch b.json: 404"), true, { kind: "style", url: STYLE_B });
+    await settle();
+    expect(first().setState).toHaveBeenCalledWith({ year: 2025 });
+  });
+});
+
+describe("update() before connect and reload() of an unchanged document (review sweep)", () => {
+  it("update() before the element connects resolves with the first render's outcome, not a fabricated 'applied'", async () => {
+    const el = document.createElement("ml-map") as MLMap;
+    const result = el.update(block());
+    document.body.appendChild(el);
+    await settle();
+    first().load();
+    await expect(result).resolves.toMatchObject({ outcome: "fallback", summary: { rebuild: true } });
+  });
+
+  it("... or 'rejected' when that first render is the error card", async () => {
+    const el = document.createElement("ml-map") as MLMap;
+    const { mapStyle: _drop, ...rest } = block().config;
+    const result = el.update({ ...block(), config: rest } as any);
+    document.body.appendChild(el);
+    await settle();
+    await expect(result).resolves.toMatchObject({ outcome: "rejected" });
+    expect(el.querySelector(".ml-map-error")).not.toBeNull();
+  });
+
+  it("reload() of an unchanged inline document still answers with ml-map:update-applied (rebuild false, no failures); an equal config still dispatches nothing", async () => {
+    const el = document.createElement("ml-map") as MLMap;
+    el.innerHTML = `<script type="text/yaml">type: map
+id: m
+config: { center: [0, 0], zoom: 2, mapStyle: "${STYLE_A}" }
+layers: []
+</script>`;
+    document.body.appendChild(el);
+    await settle();
+    first().load();
+    const seen = record(el, EVENTS);
+    await el.reload();
+    await settle();
+    expect(first().update).toHaveBeenCalledTimes(1);
+    expect(first().update.mock.calls[0]![1].reload).toBe(true);
+    expect(seen.map((e) => e.type)).toEqual(["ml-map:update-applied"]);
+    expect(seen[0]!.detail.summary).toMatchObject({ rebuild: false, failures: [] });
+    el.config = JSON.parse(JSON.stringify(el.getDocument()));
+    await settle();
+    expect(first().update).toHaveBeenCalledTimes(2);
+    expect(first().update.mock.calls[1]![1].reload).toBeUndefined();
+    expect(seen).toHaveLength(1);
   });
 });

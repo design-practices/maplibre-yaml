@@ -71,14 +71,22 @@ export interface AppliedDocument {
 export interface DiffHints {
   failedSources: ReadonlySet<string>;
   urlsRebased: boolean;
+  /**
+   * A `reload()` or a `base` change (KTD11): the document is applied even
+   * when it is unchanged — the engine chunk is fetched again when its last
+   * load failed — and `update:applied` answers with what was done, possibly
+   * nothing. Without it an equal document is a no-op with no event (R8).
+   */
+  reload?: boolean;
 }
 
 /**
  * Where a layer goes in the document: its index among document layers and
- * the layer it is inserted before — the next document layer in document
- * order, or the layer's own `before:` when that names a layer the document
- * does not declare (a basemap layer, KTD3). Absent for the last layer with
- * no anchor: it goes on top.
+ * the layer it is inserted before — the next unpinned document layer in
+ * document order, or, when the layer's own `before:` names a layer the
+ * document does not declare (a basemap layer, KTD3), the next layer pinned
+ * to that anchor or the anchor itself (`beforeIdOf` in order.ts). Absent
+ * for the last unpinned layer: it goes on top.
  */
 export interface LayerPosition {
   index: number;

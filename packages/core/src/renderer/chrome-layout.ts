@@ -102,15 +102,17 @@ export class ChromeLayout {
     return el;
   }
 
-  /** Mount one chrome piece into a corner (stacks after current occupants). */
-  mount(corner: ChromeCorner, el: HTMLElement): void {
+  /** Mount one chrome piece into a corner: after the current occupants, or at the corner's edge (`first`). */
+  mount(corner: ChromeCorner, el: HTMLElement, first = false): void {
     el.style.pointerEvents = "auto";
     // Flex children refuse to shrink by default (min-height: auto) — a
     // piece taller than the corner must scroll, not clip unreachably under
     // MapLibre's overflow: hidden host.
     el.style.minHeight = "0";
     el.style.overflowY = "auto";
-    this.corner(corner).appendChild(el);
+    const host = this.corner(corner);
+    if (first) host.prepend(el);
+    else host.appendChild(el);
     this.shareRows();
   }
 

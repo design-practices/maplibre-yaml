@@ -158,7 +158,7 @@ describe("<ml-map base>", () => {
     // Live documents (0.10): the same map, every URL-bearing source counted as changed.
     expect(renderers).toHaveLength(1);
     expect(latest().update).toHaveBeenCalledTimes(1);
-    expect(latest().update.mock.calls[0]![1]).toEqual({ failedSources: new Set(), urlsRebased: true });
+    expect(latest().update.mock.calls[0]![1]).toEqual({ failedSources: new Set(), urlsRebased: true, reload: true });
     expect(latest().sources.pts.url).toBe("/my-repo/data/pts.geojson");
 
     // An equivalent spelling is not a change.
