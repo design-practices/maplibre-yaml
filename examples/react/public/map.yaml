@@ -1,0 +1,26 @@
+# The React quick start's public/map.yaml (docs: integrations/react), made
+# hermetic for the browser suite: the same layer, popup and properties, with
+# a local basemap and a snapshot of the USGS week feed (M4.5+ and Japan;
+# public domain) in place of the live URLs. The recipe snippets load it at
+# /map.yaml, as they do in a reader's app.
+type: map
+id: earthquake-map
+config:
+  center: [-160, 20]
+  zoom: 1
+  mapStyle: "./styles/basemap.json"
+layers:
+  - id: earthquakes
+    type: circle
+    source:
+      type: geojson
+      url: "./data/earthquakes.geojson"
+    paint:
+      circle-radius: ["interpolate", ["linear"], ["get", "mag"], 1, 2, 7, 20]
+      circle-color: "#e74c3c"
+      circle-opacity: 0.7
+    interactive:
+      click:
+        popup:
+          - h3:
+              - property: place

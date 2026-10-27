@@ -1,0 +1,16 @@
+import "../maplibre-worker"; // maplibre-gl 6: before any map is built
+import "maplibre-gl/dist/maplibre-gl.css";
+import "@maplibre-yaml/core/register";
+import "../styles.css";
+import { StrictMode } from "react";
+import { createRoot } from "react-dom/client";
+import { Recipes } from "./Recipes";
+import { recordMapEvents } from "../instrumentation";
+
+recordMapEvents();
+
+createRoot(document.getElementById("root")!).render(
+  <StrictMode>
+    <Recipes />
+  </StrictMode>
+);

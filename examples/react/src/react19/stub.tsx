@@ -10,3 +10,13 @@ export function React19Panel() {
     </p>
   );
 }
+
+// What the React 18 build renders in place of the React 19 click recipe.
+export function ClickedPlace() {
+  return (
+    <p className="note" data-testid="r19-click-stub">
+      React 18 ignores <code>onml-map:*</code> props, so this recipe needs React 19.
+      The ref form beside it works on both.
+    </p>
+  );
+}
