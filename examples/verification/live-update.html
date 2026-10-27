@@ -34,6 +34,12 @@
     and (on localhost) a hint says so. Press Swap basemap while dragging —
     the new background appears where you let go.
 
+    maplibre-gl below 5.6 has no `global-state`: its style validator refuses
+    the towns layer outright (a map error, no layer), so on such a runtime
+    the page inlines the state default into the filter before the element
+    upgrades — what `emit --with-fallbacks` does for a 4.x target. Every
+    document example still runs there; the state ones (AE7–AE9) need 5.6.
+
     The e2e server mounts packages/core at /cdn/@maplibre-yaml/core@<version>/,
     the way unpkg/jsDelivr serve the published package.
     Serve from the repo root:  pnpm verify:serve
@@ -293,7 +299,7 @@ layers:
       });
     }
 
-    window.__live = { el, docs, apply, addHostLayer, hostSetStyle, trackCamera, lastSeen, clone };
+    window.__live = { el, docs, apply, addHostLayer, hostSetStyle, trackCamera, lastSeen, clone, inlinedState: false };
 
     const press = (id, fn) => document.getElementById(id).addEventListener("click", fn);
     press("reorder", () => apply(docs.reordered(el.getDocument())));
@@ -308,6 +314,20 @@ layers:
     press("host-layer", addHostLayer);
     press("basemap", () => apply(docs.basemap(el.getDocument())));
     press("host-style", hostSetStyle);
+  </script>
+  <script type="module">
+    // Module scripts run in document order, so this settles before
+    // register.js defines <ml-map> and reads the YAML. Below maplibre-gl 5.6
+    // (no setGlobalStateProperty, no `global-state`) the towns filter reads
+    // the state default itself — `state.year.default`, 2010 — the inlining
+    // the emitter's fallback mode performs for such a target. The `state:`
+    // and `parameters:` blocks stay: the renderer warns once about each.
+    import maplibregl from "maplibre-gl";
+    if (typeof maplibregl.Map.prototype.setGlobalStateProperty !== "function") {
+      const yaml = document.querySelector("#map script[type='text/yaml']");
+      yaml.textContent = yaml.textContent.replace('["global-state", "year"]', "2010");
+      window.__live.inlinedState = true;
+    }
   </script>
   <script type="module" src="/cdn/@maplibre-yaml/core@0.10.0/register.js"></script>
 </body>

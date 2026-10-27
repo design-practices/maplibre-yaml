@@ -16,11 +16,41 @@
  * Effects (a paint change keeps the effect attached; a reorder keeps the
  * `::fx-` layer above its static layer) live in e2e/effects.spec.ts with
  * the effects fixture; stories in e2e/scrollytelling.spec.ts.
+ *
+ * The CI matrix runs this against maplibre-gl 4, 5 and 6. `state:` and the
+ * `global-state` expression exist from 5.6: below that the fixture inlines
+ * the state default into the towns filter (what `emit --with-fallbacks`
+ * does for such a target), so every example that is about documents, not
+ * state, still runs on 4.x; the three that need a live global state
+ * (AE7–AE9) skip there, naming the floor and the vendor version.
  */
 import { test, expect, type Page } from "@playwright/test";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { meetsVersion, STATE_RUNTIME_FLOOR } from "../packages/core/src/capabilities";
 
 const PAGE = "/examples/verification/live-update.html";
 const DOC_LAYERS = ["areas", "routes", "towns", "grades"];
+
+/**
+ * The vendored maplibre-gl version: the package e2e/server.mjs serves from
+ * /vendor (VERIFY_MAPLIBRE_DIR for another major locally; the CI matrix
+ * overrides node_modules per leg).
+ */
+const MAPLIBRE_DIR = process.env.VERIFY_MAPLIBRE_DIR ?? join(process.cwd(), "node_modules/maplibre-gl");
+const VENDOR_MAPLIBRE_VERSION: string = JSON.parse(readFileSync(join(MAPLIBRE_DIR, "package.json"), "utf8")).version;
+
+/** The release that introduced `state:`, `global-state` and `setGlobalStateProperty`. */
+const GLOBAL_STATE_FLOOR = STATE_RUNTIME_FLOOR;
+const vendorHasGlobalState = () => meetsVersion(VENDOR_MAPLIBRE_VERSION, GLOBAL_STATE_FLOOR);
+
+/** Skip unless the vendor evaluates `global-state` (a live `state:` block, the params slider). */
+function requireGlobalState(what: string): void {
+  test.skip(
+    !vendorHasGlobalState(),
+    `${what} needs maplibre-gl >= ${GLOBAL_STATE_FLOOR} (global-state; vendor is ${VENDOR_MAPLIBRE_VERSION})`
+  );
+}
 
 /** Page errors (an unhandled rejection is one), console errors and off-origin requests. */
 async function guard(page: Page): Promise<string[]> {
@@ -38,19 +68,27 @@ async function guard(page: Page): Promise<string[]> {
   return errors;
 }
 
-/** Open the fixture and wait until the map is loaded and the towns have drawn. */
+/**
+ * Open the fixture and wait until the map is loaded and the document has
+ * drawn: first a layer that owes nothing to global state (`areas`, inline
+ * data), then the towns, which draw on every leg — from the state default
+ * above the floor, from the value the fixture inlined below it.
+ */
 async function open(page: Page, query = ""): Promise<string[]> {
   const errors = await guard(page);
   await page.goto(`${PAGE}${query}`, { waitUntil: "domcontentloaded" });
   await page.evaluate(() => (document.getElementById("map") as any).mapReady());
-  await page.waitForFunction(
-    () => {
-      const map = (document.getElementById("map") as any).getMap();
-      return map.isStyleLoaded() && map.queryRenderedFeatures(undefined, { layers: ["towns"] }).length > 0;
-    },
-    undefined,
-    { timeout: 45_000 }
-  );
+  const drawn = (layer: string) =>
+    page.waitForFunction(
+      (layer) => {
+        const map = (document.getElementById("map") as any).getMap();
+        return map.isStyleLoaded() && map.getLayer(layer) && map.queryRenderedFeatures(undefined, { layers: [layer] }).length > 0;
+      },
+      layer,
+      { timeout: 45_000 }
+    );
+  await drawn("areas");
+  await drawn("towns");
   await settle(page);
   return errors;
 }
@@ -393,6 +431,7 @@ test.describe("live documents: acceptance examples (ml-4ug)", () => {
   });
 
   test("AE7: setState with an undeclared key reports an error naming it and changes nothing", async ({ page }) => {
+    requireGlobalState("AE7 (setState against a declared state: block)");
     const errors = await open(page);
     const result = await page.evaluate(() => {
       const el = document.getElementById("map") as any;
@@ -414,6 +453,7 @@ test.describe("live documents: acceptance examples (ml-4ug)", () => {
   });
 
   test("AE8: setState moves the params panel slider and fires exactly one state-change event", async ({ page }) => {
+    requireGlobalState("AE8 (the params slider and a global-state filter)");
     const errors = await open(page);
     const slider = page.locator("#map .ml-map-params input[type=range]");
     await expect(slider).toHaveValue("2010");
@@ -441,6 +481,7 @@ test.describe("live documents: acceptance examples (ml-4ug)", () => {
   test("AE9: a host setStyle with transformStyle keeps global-state filters evaluating against the current state", async ({
     page,
   }) => {
+    requireGlobalState("AE9 (global-state filters across a host setStyle)");
     const errors = await open(page);
     await rememberMap(page);
     await page.evaluate(() => (document.getElementById("map") as any).setState({ year: 2015 }));
