@@ -149,10 +149,12 @@ for (const { major, dir: build, dev } of BUILDS) {
       expect(errors).toEqual([]);
     });
 
-    test("an equal config never rebuilds the map; a changed one does", async ({ page }) => {
+    test("an equal config never rebuilds the map; a changed one updates in place", async ({ page }) => {
       const errors = await open(page);
       const mapEl = page.locator("#config ml-map");
       await mapEl.evaluate((el: any) => ((window as any).__firstConfigMap = el.getMap()));
+      const routeColour = () => mapEl.evaluate((el: any) => el.getMap().getPaintProperty("routes", "line-color"));
+      const before = await routeColour();
 
       const rerender = page.locator("#config").getByRole("button", { name: /Re-render/ });
       for (let i = 0; i < 3; i++) await rerender.click();
@@ -161,9 +163,30 @@ for (const { major, dir: build, dev } of BUILDS) {
       expect(await loadsIn(page, "config")).toBe(1);
       expect(await mapEl.evaluate((el: any) => el.getMap() === (window as any).__firstConfigMap)).toBe(true);
 
+      // A changed document applies in place (live documents, 0.10): the
+      // element reports what changed, the map object and its one load stay.
+      const applied = mapEl.evaluate(
+        (el: any) =>
+          new Promise<{ summary: { propertiesSet: unknown[]; rebuild: boolean; failures: unknown[] } }>((resolve) =>
+            el.addEventListener("ml-map:update-applied", (e: CustomEvent) => resolve(e.detail), { once: true })
+          )
+      );
       await page.locator("#config").getByRole("button", { name: "Change color" }).click();
-      await expect.poll(() => loadsIn(page, "config")).toBe(2);
-      expect(await mapEl.evaluate((el: any) => el.getMap() === (window as any).__firstConfigMap)).toBe(false);
+      const { summary } = await applied;
+      expect(summary.rebuild).toBe(false);
+      expect(summary.failures).toEqual([]);
+      // routesDocument(color) colours the routes and the airports alike.
+      expect(summary.propertiesSet).toEqual(
+        expect.arrayContaining([
+          { layerId: "routes", property: "line-color" },
+          { layerId: "airports", property: "circle-color" },
+        ])
+      );
+      expect(summary.propertiesSet).toHaveLength(2);
+      expect(await routeColour()).not.toBe(before);
+      await page.waitForTimeout(300);
+      expect(await loadsIn(page, "config")).toBe(1);
+      expect(await mapEl.evaluate((el: any) => el.getMap() === (window as any).__firstConfigMap)).toBe(true);
       expect(errors).toEqual([]);
     });
 
@@ -180,11 +203,26 @@ for (const { major, dir: build, dev } of BUILDS) {
         await page.waitForTimeout(300);
         await expect(page.getByTestId("r19-loads")).toHaveText("1");
 
+        // A changed object updates the map in place (live documents, 0.10):
+        // the typed onml-map:update-applied prop fires, the one load stays.
+        const mapEl = panel.locator("ml-map");
+        const applied = mapEl.evaluate(
+          (el: any) =>
+            new Promise<{ summary: { propertiesSet: unknown[] } }>((resolve) =>
+              el.addEventListener("ml-map:update-applied", (e: CustomEvent) => resolve(e.detail), { once: true })
+            )
+        );
         await panel.getByRole("button", { name: "Change color" }).click();
-        await expect(page.getByTestId("r19-loads")).toHaveText("2");
+        expect((await applied).summary.propertiesSet).toEqual(
+          expect.arrayContaining([
+            { layerId: "routes", property: "line-color" },
+            { layerId: "airports", property: "circle-color" },
+          ])
+        );
+        await page.waitForTimeout(300);
+        await expect(page.getByTestId("r19-loads")).toHaveText("1");
 
         // onml-map:layer-click, typed detail -> React state.
-        const mapEl = panel.locator("ml-map");
         const point = await mapEl.evaluate((el: any) => {
           const p = el.getMap().project([36.82, -1.29]); // Nairobi
           return { x: p.x, y: p.y };

@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Live documents: edit, reorder, break, fix and swap the basemap of a running map</title>
+  <!--
+    0.10 (ml-4ug, live documents): one <ml-map> on the plain CDN build (an
+    import map that maps ONLY maplibre-gl), driven by buttons that hand it a
+    changed document. Each button is one acceptance example of
+    docs/plans/2026-10-27-001-feat-live-documents-plan.md, and
+    e2e/live-update.spec.ts presses the same buttons' code paths
+    (window.__live) and awaits the element's real events.
+
+    The document: four layers (areas, routes, towns, grades), a GeoJSON
+    `url:` source with two editions on disk (live-update/2023.geojson and
+    2024.geojson), a `state:` block with a slider on the params panel, a
+    popup on the towns, and a classified layer with a legend. Buttons:
+      Reorder          towns first (AE1) — no flash, the host layer stays (AE5)
+      2024 edition     the towns source points at the other file (AE2)
+      Recolour         a paint-only edit; pan first: the camera stays (AE6)
+      Recentre         the document's center changes: the camera follows (AE6)
+      Break it         an invalid document: refused, map untouched (AE3)
+      Reclassify       new breaks for the graded circles; legend follows (AE11)
+      Year 2020        host setState: the slider moves, one state-change (AE8)
+      Add host layer   a layer through getMap(), outside the document (AE5)
+      Swap basemap     a mapStyle change: two-map rebuild at the current camera (AE4)
+      Host setStyle    getMap().setStyle(other, { transformStyle }) carrying the
+                       document's sources and layers; state filters still work (AE9)
+    `window.__events` logs every ml-map:* event in order.
+
+    PASS by hand: pan the map, press Recolour — the dots change colour and
+    the map does not move. Press Break it — the map keeps its last document
+    and (on localhost) a hint says so. Press Swap basemap while dragging —
+    the new background appears where you let go.
+
+    The e2e server mounts packages/core at /cdn/@maplibre-yaml/core@<version>/,
+    the way unpkg/jsDelivr serve the published package.
+    Serve from the repo root:  pnpm verify:serve
+    Then open: http://localhost:4174/examples/verification/live-update.html
+    Query: ?camera=host (the host owns the camera, AE6 third case), ?quiet
+  -->
+  <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; }
+    header { padding: 8px 16px; background: #1d3557; color: white; font-size: 13px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    header button { font: inherit; padding: 2px 8px; }
+    ml-map { display: block; height: 460px; }
+    #log { font: 12px/1.4 ui-monospace, monospace; padding: 8px 16px; white-space: pre-wrap; max-height: 160px; overflow: auto; }
+  </style>
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }
+  </script>
+</head>
+<body>
+  <header>
+    Live documents —
+    <button id="reorder" type="button">Reorder</button>
+    <button id="edition" type="button">2024 edition</button>
+    <button id="recolour" type="button">Recolour</button>
+    <button id="recentre" type="button">Recentre</button>
+    <button id="break" type="button">Break it</button>
+    <button id="reclassify" type="button">Reclassify</button>
+    <button id="year" type="button">Year 2020</button>
+    <button id="host-layer" type="button">Add host layer</button>
+    <button id="basemap" type="button">Swap basemap</button>
+    <button id="host-style" type="button">Host setStyle</button>
+  </header>
+  <ml-map id="map">
+    <script type="text/yaml">
+type: map
+id: live-update
+config:
+  center: [10.2, 42.15]
+  zoom: 9.6
+  mapStyle: "/examples/verification/configs/local-style.json"
+legend:
+  title: Live update
+  position: top-right
+state:
+  year:
+    default: 2010
+parameters:
+  year:
+    label: Founded by
+    type: range
+    min: 2000
+    max: 2020
+    step: 5
+sources:
+  towns:
+    type: geojson
+    url: ./live-update/2023.geojson
+layers:
+  - id: areas
+    type: fill
+    label: Areas
+    source:
+      type: geojson
+      data:
+        type: FeatureCollection
+        features:
+          - type: Feature
+            properties: { name: West }
+            geometry: { type: Polygon, coordinates: [[[10.0, 42.05], [10.18, 42.05], [10.18, 42.25], [10.0, 42.25], [10.0, 42.05]]] }
+          - type: Feature
+            properties: { name: East }
+            geometry: { type: Polygon, coordinates: [[[10.22, 42.05], [10.4, 42.05], [10.4, 42.25], [10.22, 42.25], [10.22, 42.05]]] }
+    paint: { fill-color: "#e9c46a", fill-opacity: 0.45 }
+  - id: routes
+    type: line
+    label: Routes
+    source:
+      type: geojson
+      data:
+        type: FeatureCollection
+        features:
+          - { type: Feature, properties: {}, geometry: { type: LineString, coordinates: [[10.05, 42.1], [10.15, 42.22], [10.25, 42.12], [10.35, 42.22]] } }
+    paint: { line-color: "#1d3557", line-width: 3 }
+  - id: towns
+    type: circle
+    label: Towns
+    source: towns
+    filter: ["<=", ["get", "founded"], ["global-state", "year"]]
+    paint: { circle-radius: 8, circle-color: "#d62828", circle-stroke-width: 2, circle-stroke-color: "#ffffff" }
+    interactive:
+      click:
+        popup:
+          - h3:
+              - property: name
+          - p:
+              - property: edition
+  - id: grades
+    type: circle
+    label: Population
+    source:
+      type: geojson
+      data:
+        type: FeatureCollection
+        features:
+          - { type: Feature, properties: { pop: 500 }, geometry: { type: Point, coordinates: [10.05, 42.0] } }
+          - { type: Feature, properties: { pop: 5000 }, geometry: { type: Point, coordinates: [10.15, 42.0] } }
+          - { type: Feature, properties: { pop: 20000 }, geometry: { type: Point, coordinates: [10.25, 42.0] } }
+          - { type: Feature, properties: { pop: 50000 }, geometry: { type: Point, coordinates: [10.35, 42.0] } }
+    classify:
+      field: pop
+      breaks: [1000, 10000]
+      palette: Blues
+      radius: [5, 9, 13]
+    </script>
+  </ml-map>
+  <pre id="log"></pre>
+  <script>
+    // Runs before the element is defined (module scripts are deferred), so
+    // the query's attributes are on the tag when it upgrades and the first
+    // ml-map:load is in the log.
+    const el = document.getElementById("map");
+    const query = new URLSearchParams(location.search);
+    if (query.get("camera") === "host") el.setAttribute("camera", "host");
+    if (query.has("quiet")) el.setAttribute("quiet", "");
+
+    window.__events = [];
+    const log = document.getElementById("log");
+    for (const type of ["ml-map:load", "ml-map:error", "ml-map:update-applied", "ml-map:update-rejected", "ml-map:state-change"]) {
+      el.addEventListener(type, (event) => {
+        window.__events.push({ type, detail: event.detail });
+        const d = event.detail ?? {};
+        const what =
+          type === "ml-map:update-applied"
+            ? JSON.stringify(d.summary)
+            : type === "ml-map:update-rejected"
+              ? `${d.kind}: ${d.errors?.[0]?.message}`
+              : type === "ml-map:state-change"
+                ? JSON.stringify(d.values)
+                : (d.error?.message ?? "");
+        log.textContent += `${type} ${what}\n`;
+      });
+    }
+
+    const clone = (value) => JSON.parse(JSON.stringify(value));
+    const ALT_STYLE = "/examples/verification/live-update/alt-style.json";
+
+    /** The canned documents, each a function of the document as applied now. */
+    const docs = {
+      /** towns first (AE1): the layer order becomes towns, areas, routes, grades. */
+      reordered(doc) {
+        const next = clone(doc);
+        const towns = next.layers.find((l) => l.id === "towns");
+        next.layers = [towns, ...next.layers.filter((l) => l !== towns)];
+        return next;
+      },
+      /** the towns source points at the other file (AE2) */
+      edition2024(doc) {
+        const next = clone(doc);
+        next.sources.towns.url = "./live-update/2024.geojson";
+        return next;
+      },
+      /** a paint-only edit: the towns' colour (AE6, AE10) */
+      recolour(doc, colour = "#2a9d8f") {
+        const next = clone(doc);
+        next.layers.find((l) => l.id === "towns").paint["circle-color"] = colour;
+        return next;
+      },
+      /** the document's center moves east (AE6) */
+      recentred(doc) {
+        const next = clone(doc);
+        next.config.center = [10.6, 42.5];
+        return next;
+      },
+      /** an invalid document: a layer type that does not exist (AE3) */
+      invalid(doc) {
+        const next = clone(doc);
+        next.layers.find((l) => l.id === "routes").type = "lien";
+        return next;
+      },
+      /** new breaks for the graded circles (AE11) */
+      reclassified(doc) {
+        const next = clone(doc);
+        next.layers.find((l) => l.id === "grades").classify.breaks = [2000, 8000];
+        return next;
+      },
+      /** a different basemap: the two-map rebuild (AE4) */
+      basemap(doc) {
+        const next = clone(doc);
+        next.config.mapStyle = ALT_STYLE;
+        return next;
+      },
+    };
+
+    /**
+     * Hand the element a document and resolve with the next ml-map:update-*
+     * event it dispatches for it — listened for before the assignment.
+     */
+    function apply(next) {
+      return new Promise((resolve) => {
+        const done = (event) => {
+          el.removeEventListener("ml-map:update-applied", done);
+          el.removeEventListener("ml-map:update-rejected", done);
+          resolve({ type: event.type, detail: event.detail });
+        };
+        el.addEventListener("ml-map:update-applied", done);
+        el.addEventListener("ml-map:update-rejected", done);
+        el.config = next;
+      });
+    }
+
+    /** A highlight layer the host adds outside the document (AE5). */
+    function addHostLayer() {
+      const map = el.getMap();
+      if (map.getLayer("host-highlight")) return;
+      map.addSource("host-highlight", {
+        type: "geojson",
+        data: { type: "Feature", properties: {}, geometry: { type: "Point", coordinates: [10.2, 42.15] } },
+      });
+      map.addLayer({
+        id: "host-highlight",
+        type: "circle",
+        source: "host-highlight",
+        paint: { "circle-radius": 18, "circle-color": "#ffb703", "circle-opacity": 0.6 },
+      });
+    }
+
+    /**
+     * The escape hatch (AE9, F5): the host swaps the style itself, carrying
+     * the document's sources and layers into the new style as MapLibre
+     * requires for any runtime-added layer. Resolves after `style.load`.
+     */
+    async function hostSetStyle() {
+      const map = el.getMap();
+      const other = await (await fetch(ALT_STYLE)).json();
+      const documentLayerIds = new Set(el.getDocument().layers.map((l) => l.id));
+      await new Promise((resolve) => {
+        map.once("style.load", () => resolve());
+        map.setStyle(other, {
+          transformStyle: (previous, next) => {
+            const kept = previous.layers.filter((l) => documentLayerIds.has(l.id) || l.id === "host-highlight");
+            const sources = { ...next.sources };
+            for (const l of kept) if (l.source && previous.sources[l.source]) sources[l.source] = previous.sources[l.source];
+            return { ...next, sources, layers: [...next.layers, ...kept] };
+          },
+        });
+      });
+    }
+
+    /** Record the map's camera on every move: where it was when it was last seen moving. */
+    const lastSeen = { center: null, zoom: null };
+    function trackCamera() {
+      const map = el.getMap();
+      map.on("move", () => {
+        const c = map.getCenter();
+        lastSeen.center = [c.lng, c.lat];
+        lastSeen.zoom = map.getZoom();
+      });
+    }
+
+    window.__live = { el, docs, apply, addHostLayer, hostSetStyle, trackCamera, lastSeen, clone };
+
+    const press = (id, fn) => document.getElementById(id).addEventListener("click", fn);
+    press("reorder", () => apply(docs.reordered(el.getDocument())));
+    press("edition", () => apply(docs.edition2024(el.getDocument())));
+    const colours = ["#2a9d8f", "#e9c46a", "#d62828"];
+    let n = 0;
+    press("recolour", () => apply(docs.recolour(el.getDocument(), colours[n++ % colours.length])));
+    press("recentre", () => apply(docs.recentred(el.getDocument())));
+    press("break", () => apply(docs.invalid(el.getDocument())));
+    press("reclassify", () => apply(docs.reclassified(el.getDocument())));
+    press("year", () => el.setState({ year: 2020 }));
+    press("host-layer", addHostLayer);
+    press("basemap", () => apply(docs.basemap(el.getDocument())));
+    press("host-style", hostSetStyle);
+  </script>
+  <script type="module" src="/cdn/@maplibre-yaml/core@0.10.0/register.js"></script>
+</body>
+</html>

@@ -1,0 +1,16 @@
+{
+  "version": 8,
+  "name": "verification-local-alt",
+  "sources": {},
+  "layers": [
+    {
+      "id": "background",
+      "type": "background",
+      "paint": {
+        "background-color": "#dfe3ee"
+      }
+    }
+  ],
+  "_comment": "A second source-less basemap for the live-documents fixture (examples/verification/live-update.html): a document that switches mapStyle to this file forces the two-map rebuild (AE4), and the host setStyle button swaps to it through transformStyle (AE9). Same glyphs endpoint as local-style.json.",
+  "glyphs": "/glyphs/{fontstack}/{range}.pbf"
+}

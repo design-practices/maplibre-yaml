@@ -10,7 +10,6 @@ import { YAMLParser, YAML_PARSE_OPTIONS } from "@maplibre-yaml/core";
 import { parse as parseYaml } from "yaml";
 import { toDiagnostics, trustNotes, holdWhileTyping, summarize, type Diagnostic } from "./diagnostics.mjs";
 import { decodeShare, shareLink, hostsOf, safeSrc } from "./share.mjs";
-import { cameraKey, withCamera } from "./camera.mjs";
 import { schemaNameFor } from "./schema-assist.mjs";
 import type { EditorHandle } from "./editor";
 
@@ -54,7 +53,6 @@ export function start(): void {
   let preview: MapLike | null = null;
   let previewKind: Kind | null = null;
   let lastRendered: string | null = null;
-  let lastCamKey: string | null = null;
   let lastKind: Kind = "map";
   let renders = 0;
   let runtimeProblems = 0;
@@ -180,22 +178,12 @@ export function start(): void {
       preview.setAttribute("base", "/");
       pane.append(preview);
       previewKind = kind;
-      lastCamKey = null;
     }
-    if (kind === "map") {
-      const key = cameraKey(doc);
-      const map = preview!.getMap?.();
-      if (map && lastCamKey !== null && key === lastCamKey) {
-        const c = map.getCenter();
-        doc = withCamera(doc, {
-          center: [c.lng, c.lat],
-          zoom: map.getZoom(),
-          bearing: map.getBearing(),
-          pitch: map.getPitch(),
-        });
-      }
-      lastCamKey = key;
-    }
+    // The camera is the element's business (live documents, 0.10): a
+    // changed document applies to the running map in place and leaves the
+    // camera where the reader put it unless the document's own view
+    // changed. The playground no longer copies the live camera into the
+    // document before handing it over.
     runtimeProblems = 0;
     preview!.config = doc;
     lastRendered = source;
@@ -237,8 +225,7 @@ export function start(): void {
   // ---- opening a document -----------------------------------------------
 
   function setText(next: string): void {
-    lastCamKey = null; // a new document opens on its own view
-    pane.scrollTop = 0; // and a story opens on its first chapter
+    pane.scrollTop = 0; // a story opens on its first chapter
     if (editor) editor.setValue(next);
     else pendingText = next;
     typingLine = null;
