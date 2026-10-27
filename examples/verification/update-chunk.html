@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Live documents: the update engine downloads on the first update only</title>
+  <!--
+    0.10 (ml-4ug, live documents): a plain CDN page — one module script, an
+    import map that maps ONLY maplibre-gl — renders without downloading the
+    update engine (dist/chunks/update.js). The engine is fetched once, on the
+    first `el.config = …` change, and never again; a change whose chunk fetch
+    fails is refused with `ml-map:update-rejected` (kind "chunk") and the map
+    stays as it was — `reload()` asks for the file again.
+
+    The e2e server mounts packages/core at /cdn/@maplibre-yaml/core@<version>/,
+    the way unpkg/jsDelivr serve the published package. On a real page:
+      <script type="module" src="https://unpkg.com/@maplibre-yaml/core@0.10/register.js"></script>
+
+    PASS = two red dots and a blue line on the local basemap; the Network
+    panel shows no chunks/ file until the "Recolour" button is pressed, after
+    which chunks/update.js appears exactly once, the dots turn gold and
+    `window.__events` holds an `ml-map:update-applied` entry. Pressing it
+    again (a second recolour) adds another entry and no request.
+    Serve from the repo root:  pnpm verify:serve
+    Then open: http://localhost:4174/examples/verification/update-chunk.html
+  -->
+  <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; }
+    header { padding: 8px 16px; background: #1d3557; color: white; font-size: 13px; display: flex; gap: 12px; align-items: center; }
+    ml-map { display: block; height: 420px; }
+  </style>
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }
+  </script>
+</head>
+<body>
+  <header>
+    CDN build, plain HTML — PASS = no chunks/ request until the first update; then chunks/update.js once.
+    <button id="recolour" type="button">Recolour</button>
+  </header>
+  <ml-map id="map">
+    <script type="text/yaml">
+type: map
+id: update-chunk
+config:
+  center: [10.2, 42.15]
+  zoom: 9.6
+  mapStyle: "/examples/verification/configs/local-style.json"
+layers:
+  - id: dot
+    type: circle
+    source:
+      type: geojson
+      data:
+        type: FeatureCollection
+        features:
+          - { type: Feature, properties: {}, geometry: { type: Point, coordinates: [10.1, 42.1] } }
+          - { type: Feature, properties: {}, geometry: { type: Point, coordinates: [10.3, 42.2] } }
+    paint: { circle-radius: 8, circle-color: "#d62828" }
+  - id: route
+    type: line
+    source:
+      type: geojson
+      data:
+        type: FeatureCollection
+        features:
+          - { type: Feature, properties: {}, geometry: { type: LineString, coordinates: [[10.1, 42.1], [10.3, 42.2]] } }
+    paint: { line-color: "#1d3557", line-width: 3 }
+    </script>
+  </ml-map>
+  <script>
+    // Every ml-map:* event the element dispatches, in order, for a human
+    // reading the console (`window.__events`) and for the e2e spec's
+    // secondary check. Registered before the element is defined so the first
+    // ml-map:load is in the log too.
+    window.__events = [];
+    const el = document.getElementById("map");
+    for (const type of ["ml-map:load", "ml-map:error", "ml-map:update-applied", "ml-map:update-rejected", "ml-map:state-change"]) {
+      el.addEventListener(type, (event) => {
+        window.__events.push({ type, detail: event.detail });
+      });
+    }
+    // A paint-only edit of the dots: the smallest in-place update there is.
+    const colours = ["#e9c46a", "#2a9d8f", "#d62828"];
+    let n = 0;
+    document.getElementById("recolour").addEventListener("click", () => {
+      const next = JSON.parse(JSON.stringify(el.getDocument()));
+      next.layers.find((layer) => layer.id === "dot").paint["circle-color"] = colours[n++ % colours.length];
+      el.config = next;
+    });
+  </script>
+  <script type="module" src="/cdn/@maplibre-yaml/core@0.10.0/register.js"></script>
+</body>
+</html>
