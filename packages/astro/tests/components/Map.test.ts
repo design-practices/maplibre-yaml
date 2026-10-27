@@ -167,3 +167,17 @@ describe("Map Component Type Safety", () => {
     expect(props.config).toEqual(mapBlock);
   });
 });
+
+describe("Map live-document props (U10)", () => {
+  it("accepts id and camera", () => {
+    const props: import("../../src/types").MapProps = {
+      src: "/configs/map.yaml",
+      id: "quakes",
+      camera: "host",
+    };
+    expect(props.id).toBe("quakes");
+    expect(props.camera).toBe("host");
+    const owners: Array<import("../../src/types").MapProps["camera"]> = ["document", "host", undefined];
+    expect(owners).toHaveLength(3);
+  });
+});
