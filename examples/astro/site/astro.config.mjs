@@ -8,13 +8,17 @@ import maplibreYaml from "@maplibre-yaml/astro/integration";
 // - Astro 4 needs the content layer (the glob() loaders in
 //   src/content.config.ts) switched on; Astro 5+ has it built in and rejects
 //   the flag.
-// - Astro 6's dev server does not scan .astro <script>s for browser
-//   dependencies (Astro 7 does), so the modules behind <ClientRouter /> are
-//   found only when the first page using it loads. Vite then re-optimizes,
-//   answers modules the page already requested with "504 (Outdated Optimize
-//   Dep)" and reloads it mid-navigation. Listing them here pre-bundles them
-//   when the server starts. (The integration does the same for maplibre-gl and
-//   @maplibre-yaml/core on every major.)
+// - On Astro 6 and 7 the dev server's dependency scan never reaches the
+//   modules behind <ClientRouter />: its script imports
+//   `astro:transitions/client`, which Astro excludes from the scan
+//   (`astro:*`), so `astro/virtual-modules/transitions-*.js` are found only
+//   when the first page using the router loads. Vite then re-optimizes, and
+//   when the re-bundle rewrites an already-served dependency (with core 0.10
+//   it reorders the chunk imports of @maplibre-yaml/core/register) it answers
+//   the page's requests with "504 (Outdated Optimize Dep)" and reloads it
+//   mid-navigation. Listing them here pre-bundles them when the server
+//   starts, so nothing is discovered late. (The integration does the same for
+//   maplibre-gl and @maplibre-yaml/core on every major.)
 const astroMajor = Number(createRequire(import.meta.url)("astro/package.json").version.split(".")[0]);
 
 /** @type {import("astro").AstroUserConfig} */
@@ -24,7 +28,7 @@ const config = {
   integrations: [maplibreYaml()],
 };
 if (astroMajor === 4) config.experimental = /** @type {any} */ ({ contentLayer: true });
-if (astroMajor === 6) {
+if (astroMajor >= 6) {
   config.vite = {
     optimizeDeps: {
       include: [
