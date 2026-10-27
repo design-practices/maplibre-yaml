@@ -1651,6 +1651,22 @@ export class LayerManager {
   }
 
   /**
+   * Stop every pipeline — polling and the by-view loaders — because the map
+   * is being replaced by a fallback rebuild (KTD8): no second set of fetches
+   * while the next map loads its own. Not resumed; the map is torn down.
+   */
+  pause(): void {
+    this.pollingManager.pauseAll();
+    for (const loader of this.formatLoaders.values()) loader.suspend?.();
+  }
+
+  /** The counterpart of {@link pause}: the rebuild failed and this map stays. */
+  resume(): void {
+    this.pollingManager.resumeAll();
+    for (const loader of this.formatLoaders.values()) loader.resume?.();
+  }
+
+  /**
    * Pause data refresh for a layer (polling)
    */
   pauseRefresh(layerId: string): void {

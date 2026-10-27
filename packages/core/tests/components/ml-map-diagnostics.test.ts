@@ -24,12 +24,15 @@ vi.mock("maplibre-gl", () => {
 // map's load (the CSS probe runs then, ml-aot.10).
 const loadHandlers: Array<() => void> = [];
 vi.mock("../../src/renderer/map-renderer", () => ({
-  MapRenderer: vi.fn().mockImplementation(() => ({
+  MapRenderer: vi.fn().mockImplementation((_container, config, layers, options, sources) => ({
     getMap: vi.fn(() => ({ on: vi.fn(), off: vi.fn() })),
     destroy: vi.fn(),
     on: vi.fn((name: string, fn: () => void) => {
       if (name === "load") loadHandlers.push(fn);
     }),
+    // Live documents (0.10): a changed config updates the running map in place.
+    getDocument: () => ({ config, layers, sources: sources ?? {}, options }),
+    update: vi.fn(async () => ({ outcome: "applied", summary: { added: [], removed: [], moved: [], replaced: [], propertiesSet: [], sourcesReplaced: [], cameraMoved: false, rebuild: false, failures: [] } })),
   })),
 }));
 

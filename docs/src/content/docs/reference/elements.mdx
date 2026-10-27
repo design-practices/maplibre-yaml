@@ -134,6 +134,9 @@ listener.
 | `ml-map:layer-visibility` | `{ layerId, visible }` | A params-panel checkbox toggled a layer |
 | `ml-map:camera-fit` | `{ source, bounds }` | The `fitTo` camera framed its source's data (once, on the first data load for fetched sources) |
 | `ml-map:layer-classified` | `{ layerId, classify }` | A `classify:` layer's classes as drawn — once when the layers settle, and again when fetched data computes or refreshes them. `classify` is the record the emitted style carries in `metadata["maplibre-yaml:classify"]` (breaks, colours, stats) |
+| `ml-map:update-applied` | `{ summary }` | A changed document was applied to the running map (live documents, 0.10). `summary` names what changed by id — `added`, `removed`, `moved`, `replaced`, `propertiesSet`, `sourcesReplaced`, `cameraMoved`, `failures` — and `rebuild: true` when a basemap change rebuilt the map (then `added` names every document layer) |
+| `ml-map:update-rejected` | `{ kind, errors }` | A changed document was refused and the running map kept. `kind` is `validation`, `fetch` (a `src` that didn't load), `chunk` (the update engine's file didn't download) or `style` (a new basemap that never loaded); `errors` carries the diagnostics |
+| `ml-map:state-change` | `{ values, changed }` | The document's `state:` values changed — `setState()`, a params-panel write, or an update's new defaults. `values` is every current value; `changed` the keys that changed |
 
 ### `<ml-map>` slots
 

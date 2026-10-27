@@ -14,6 +14,7 @@ interface FakeRenderer {
   options: any;
   sources: any;
   addLayer: ReturnType<typeof vi.fn>;
+  update: ReturnType<typeof vi.fn>;
   emit(name: string, payload?: any): void;
 }
 const renderers: FakeRenderer[] = [];
@@ -33,6 +34,14 @@ vi.mock("../../src/renderer/map-renderer", () => ({
       getMap: vi.fn(() => ({ on: vi.fn(), off: vi.fn() })),
       destroy: vi.fn(),
       isMapLoaded: vi.fn(() => false),
+      // Live documents (0.10): a base change is an update of the running map.
+      getDocument: () => ({ config: fake.config, layers: fake.layers, sources: fake.sources ?? {}, options: fake.options }),
+      update: vi.fn(async (next: any) => {
+        fake.config = next.config;
+        fake.layers = next.layers;
+        fake.sources = next.sources;
+        return { outcome: "applied", summary: { added: [], removed: [], moved: [], replaced: [], propertiesSet: [], sourcesReplaced: [], cameraMoved: false, rebuild: false, failures: [] } };
+      }),
       on: vi.fn((name: string, fn: (payload: any) => void) => {
         handlers.set(name, [...(handlers.get(name) ?? []), fn]);
       }),
@@ -138,7 +147,7 @@ describe("<ml-map base>", () => {
     expect(fetchMock).toHaveBeenCalledWith("/my-repo/configs/map.yaml");
   });
 
-  it("the base property reflects the attribute, and changing it re-renders", async () => {
+  it("the base property reflects the attribute, and changing it re-resolves the document as an update (KTD11)", async () => {
     const el = await mount();
     expect(el.base).toBeNull();
     expect(latest().sources.pts.url).toBe("/data/pts.geojson");
@@ -146,17 +155,21 @@ describe("<ml-map base>", () => {
     el.base = "/my-repo/";
     expect(el.getAttribute("base")).toBe("/my-repo/");
     await tick();
-    expect(renderers).toHaveLength(2);
+    // Live documents (0.10): the same map, every URL-bearing source counted as changed.
+    expect(renderers).toHaveLength(1);
+    expect(latest().update).toHaveBeenCalledTimes(1);
+    expect(latest().update.mock.calls[0]![1]).toEqual({ failedSources: new Set(), urlsRebased: true });
     expect(latest().sources.pts.url).toBe("/my-repo/data/pts.geojson");
 
     // An equivalent spelling is not a change.
     el.setAttribute("base", "/my-repo");
     await tick();
-    expect(renderers).toHaveLength(2);
+    expect(latest().update).toHaveBeenCalledTimes(1);
 
     el.base = null;
     expect(el.hasAttribute("base")).toBe(false);
     await tick();
+    expect(latest().update).toHaveBeenCalledTimes(2);
     expect(latest().sources.pts.url).toBe("/data/pts.geojson");
   });
 

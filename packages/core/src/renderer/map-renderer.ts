@@ -57,6 +57,7 @@ import type {
   UpdateResult,
   UpdateSummary,
 } from './update/types';
+import { needsRebuild } from './update/rebuild';
 import { getDecoder } from '../formats/decoders';
 import { createStrings, type Strings } from '../i18n';
 import { mapLanguage } from './popup-builder';
@@ -456,6 +457,13 @@ export interface MapRendererOptions {
    * so a hidden layer stays hidden and unchecked across a rebuild.
    */
   initialVisibility?: Record<string, boolean>;
+  /**
+   * The camera to build the map at instead of the document's (KTD8): a
+   * fallback rebuild carries the previous map's view across. The document's
+   * own camera keys and `fitTo` stay in the applied document, unapplied, so
+   * the next update diffs against the document, not the carried view.
+   */
+  initialCamera?: { center: [number, number]; zoom: number; bearing: number; pitch: number };
 }
 
 /** One host-supplied chrome element and the corner it mounts into. */
@@ -535,23 +543,6 @@ function withDocumentOptions(options: MapRendererOptions, next: DocumentOptions)
   const merged: Record<string, unknown> = { ...options };
   for (const key of DOCUMENT_OPTION_KEYS) delete merged[key];
   return { ...merged, ...next } as MapRendererOptions;
-}
-
-/** `config:` keys an update applies in place: the camera (KTD13), `fitTo`, and the options with a setter (KTD7). */
-const IN_PLACE_CONFIG_KEYS: ReadonlySet<string> = new Set(['center', 'zoom', 'bearing', 'pitch', 'fitTo', 'minZoom', 'maxZoom', 'maxBounds']);
-
-/**
- * Whether `next` forces a rebuild (KTD7), decided in the entry before the
- * engine chunk is awaited: a changed `mapStyle`, or any Map constructor
- * option without a setter. Mirrors `fallbackReason` in update/diff.ts,
- * which the chunk runs (and names the key).
- */
-function needsRebuild(applied: MapConfig, next: MapConfig): boolean {
-  const a = applied as Record<string, unknown>;
-  const b = next as Record<string, unknown>;
-  return Object.keys({ ...a, ...b }).some(
-    (key) => !IN_PLACE_CONFIG_KEYS.has(key) && JSON.stringify(a[key]) !== JSON.stringify(b[key])
-  );
 }
 
 const NO_HINTS: DiffHints = { failedSources: new Set(), urlsRebased: false };
@@ -685,6 +676,10 @@ export class MapRenderer {
     this.applied = { config, layers, sources: sources ?? {}, options: documentOptions(options) };
     this.options = options;
     this.pendingState = options.initialState ? { ...options.initialState } : null;
+    // A fallback rebuild's carried view (KTD8): built there, with the
+    // document's camera kept in `applied` (above) and its `fitTo` not applied.
+    const carried = options.initialCamera;
+    if (carried) config = { ...config, ...carried };
 
     // When a `controls.attribution` control is configured, MapLibre's built-in
     // attribution must be disabled at construction time so the two don't
@@ -739,6 +734,10 @@ export class MapRenderer {
     const extent = fitTo && fit?.kind === 'tile-bounds' ? options.prefetchedExtents?.[fitTo.source] : undefined;
     if (extent) fit = { kind: 'bounds', bounds: [[extent[0], extent[1]], [extent[2], extent[3]]] as Bounds };
     if (fitTo && fit) this.fitTarget = { fitTo, fit };
+    if (carried) {
+      fit = null;
+      this.fitApplied = true;
+    }
     const initialFit =
       fit && fit.kind === 'bounds'
         ? {
@@ -2235,6 +2234,39 @@ export class MapRenderer {
    */
   getDocument(): AppliedDocument {
     return this.applied;
+  }
+
+  /** Who owns the camera from the next update on (KTD13): `<ml-map camera>` changed on a running map. */
+  setCameraOwner(owner: 'document' | 'host'): void {
+    this.options = { ...this.options, camera: owner };
+  }
+
+  /** The sources whose last load failed, for `hints.failedSources` (KTD11): `reload()` retries them. */
+  failedSources(): ReadonlySet<string> {
+    return this.layerManager.failedSources();
+  }
+
+  /** Stop this map's pipelines (polling, by-view loaders): a fallback rebuild is replacing it (KTD8). */
+  pause(): void {
+    this.layerManager.pause();
+  }
+
+  /** The counterpart of {@link pause}: the rebuild failed and this map stays. */
+  resume(): void {
+    this.layerManager.resume();
+  }
+
+  /**
+   * What a fallback rebuild seeds the next map with (KTD8): the `state:`
+   * values a reader wrote (`setState`, the panel; not the document's defaults
+   * or the panel's seeds, which the next document provides again) and the
+   * panel's visibility overrides, as the next renderer's `initialState` and
+   * `initialVisibility`.
+   */
+  rebuildSeed(): { initialState: Record<string, unknown>; initialVisibility: Record<string, boolean> } {
+    const initialState: Record<string, unknown> = { ...this.pendingState };
+    for (const [key, entry] of this.stateValues) if (entry.provenance === 'user') initialState[key] = entry.value;
+    return { initialState, initialVisibility: Object.fromEntries(this.visibility) };
   }
 
   /**

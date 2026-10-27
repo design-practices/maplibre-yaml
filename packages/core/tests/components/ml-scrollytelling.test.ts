@@ -19,7 +19,7 @@ vi.mock("maplibre-gl", () => {
 
 const fakeMaps: any[] = [];
 vi.mock("../../src/renderer/map-renderer", () => ({
-  MapRenderer: vi.fn().mockImplementation(() => {
+  MapRenderer: vi.fn().mockImplementation((_container, config, layers, options, sources) => {
     const calls: unknown[][] = [];
     const map = {
       calls,
@@ -30,6 +30,9 @@ vi.mock("../../src/renderer/map-renderer", () => ({
       rotateTo: vi.fn(),
       getBearing: () => 0,
       getCenter: () => ({ lng: 0, lat: 0 }),
+      getZoom: () => 2,
+      getPitch: () => 0,
+      resize: vi.fn(),
       getLayer: () => undefined,
       setFilter: vi.fn(),
       setPaintProperty: vi.fn(),
@@ -40,12 +43,27 @@ vi.mock("../../src/renderer/map-renderer", () => ({
     };
     fakeMaps.push(map);
     const handlers = new Map<string, (payload?: unknown) => void>();
-    return {
+    const renderer = {
       handlers,
+      config,
+      layers,
+      options,
       getMap: () => map,
       destroy: vi.fn(),
       on: (name: string, fn: () => void) => handlers.set(name, fn),
+      // Live documents (0.10): the story re-sets the inner map's config per render; the map updates in place.
+      getDocument: () => ({ config: renderer.config, layers: renderer.layers, sources: sources ?? {}, options: renderer.options }),
+      update: vi.fn(async (next: any) => {
+        renderer.config = next.config;
+        renderer.layers = next.layers;
+        return { outcome: "applied", summary: { added: [], removed: [], moved: [], replaced: [], propertiesSet: [], sourcesReplaced: [], cameraMoved: false, rebuild: false, failures: [] } };
+      }),
+      failedSources: () => new Set<string>(),
+      // A base change that moves `mapStyle` is a basemap change: a rebuild (KTD8).
+      pause: vi.fn(),
+      rebuildSeed: () => ({ initialState: {}, initialVisibility: {} }),
     };
+    return renderer;
   }),
 }));
 

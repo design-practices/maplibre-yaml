@@ -7,7 +7,8 @@
  * every other path (ml-jh6); an element that connects empty waits a task for
  * a programmatic config before reporting "No configuration provided", and a
  * property set before the element is even defined is not lost (ml-mpm); and
- * re-assigning a JSON-equal config does not rebuild the map (ml-i10).
+ * re-assigning a JSON-equal config does not rebuild the map (ml-i10), while
+ * a changed one updates the running map in place (live documents, 0.10).
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
@@ -16,20 +17,30 @@ vi.mock("maplibre-gl", () => {
   return { default: { Map }, Map };
 });
 
-// The renderer double records its `on()` handlers so a test can fire `load`.
+// The renderer double records its `on()` handlers so a test can fire `load`,
+// and takes `update()` (live documents, 0.10) so a changed document reaches
+// the running map instead of rebuilding it.
 vi.mock("../../src/renderer/map-renderer", () => ({
-  MapRenderer: vi.fn().mockImplementation((container, config, layers, options) => ({
-    container,
-    config,
-    layers,
-    options,
-    handlers: new Map<string, (payload?: unknown) => void>(),
-    getMap: vi.fn(() => ({ on: vi.fn(), off: vi.fn() })),
-    destroy: vi.fn(),
-    on: vi.fn(function (this: any, name: string, fn: () => void) {
-      this.handlers.set(name, fn);
-    }),
-  })),
+  MapRenderer: vi.fn().mockImplementation((container, config, layers, options, sources) => {
+    const r: any = {
+      container,
+      config,
+      layers,
+      options,
+      handlers: new Map<string, (payload?: unknown) => void>(),
+      getMap: vi.fn(() => ({ on: vi.fn(), off: vi.fn() })),
+      getDocument: () => ({ config: r.config, layers: r.layers, sources: sources ?? {}, options: r.options }),
+      update: vi.fn(async (next: any) => {
+        r.config = next.config;
+        return { outcome: "applied", summary: { added: [], removed: [], moved: [], replaced: [], propertiesSet: [], sourcesReplaced: [], cameraMoved: false, rebuild: false, failures: [] } };
+      }),
+      destroy: vi.fn(),
+      on: vi.fn(function (this: any, name: string, fn: () => void) {
+        this.handlers.set(name, fn);
+      }),
+    };
+    return r;
+  }),
 }));
 
 import { MLMap } from "../../src/components/ml-map";
@@ -295,29 +306,37 @@ describe("ml-i10: an equal config does not rebuild the map", () => {
     expect(constructed()).toHaveLength(1);
   });
 
-  it("a changed document rebuilds", async () => {
+  it("a changed document updates the running map in place (live documents, 0.10)", async () => {
     const el = await mounted(validBlock());
+    const applied: unknown[] = [];
+    el.addEventListener("ml-map:update-applied", (e) => applied.push((e as CustomEvent).detail));
     el.config = { ...validBlock(), config: { ...validBlock().config, zoom: 4 } } as any;
     await settle();
-    expect(constructed()).toHaveLength(2);
-    expect(constructed()[0].destroy).toHaveBeenCalled();
+    expect(constructed()).toHaveLength(1);
+    expect(constructed()[0].destroy).not.toHaveBeenCalled();
+    expect(constructed()[0].update).toHaveBeenCalledTimes(1);
+    expect(constructed()[0].update.mock.calls[0][0].config.zoom).toBe(4);
+    expect(applied).toHaveLength(1);
+    expect((applied[0] as any).summary.rebuild).toBe(false);
   });
 
-  it("the same object mutated in place and re-assigned rebuilds", async () => {
+  it("the same object mutated in place and re-assigned updates in place", async () => {
     const doc = validBlock();
     const el = await mounted(doc);
     doc.config.zoom = 3;
     el.config = doc as any;
     await settle();
-    expect(constructed()).toHaveLength(2);
+    expect(constructed()).toHaveLength(1);
+    expect(constructed()[0].update).toHaveBeenCalledTimes(1);
   });
 
-  it("an equal config after null re-renders (null forgets the applied value)", async () => {
+  it("an equal config after null goes through update again (null forgets the applied value)", async () => {
     const el = await mounted(validBlock());
     el.config = null;
     el.config = validBlock() as any;
     await settle();
-    expect(constructed()).toHaveLength(2);
+    expect(constructed()).toHaveLength(1);
+    expect(constructed()[0].update).toHaveBeenCalledTimes(1);
   });
 });
 

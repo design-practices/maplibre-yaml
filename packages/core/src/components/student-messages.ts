@@ -958,3 +958,30 @@ function directoryOf(url: string): string {
     return url.slice(0, url.lastIndexOf("/") + 1);
   }
 }
+
+/**
+ * A changed document was refused and the running map kept (live documents,
+ * KTD9): the first problem, and how many more. An author hint — the
+ * `ml-map:update-rejected` event carries them all.
+ */
+export function describeRejectedUpdate(errors: ReadonlyArray<{ path?: string; message: string }>): string {
+  const first = errors[0];
+  const where = first?.path ? `${first.path}: ` : "";
+  const more = errors.length > 1 ? ` (and ${errors.length - 1} more)` : "";
+  return `The map kept its last document — the new one has a problem${more}: ${where}${first?.message ?? "unknown"}`;
+}
+
+/** `src` changed but the file didn't load while a map was running (KTD12): the map is kept. */
+export function describeFetchRejection(src: string, resolved: string, reason: string): string {
+  return `The map kept its last document: src="${src}" didn't load (${reason}). The browser looked for it at ${resolved}.`;
+}
+
+/** A basemap change whose new style never loaded (KTD8): the old map is kept. */
+export function describeStyleRejection(key: string, url: string | undefined, reason: string): string {
+  return `The map kept its last basemap: the new \`${key}\`${url ? ` (${url})` : ""} didn't load — ${reason}`;
+}
+
+/** A document layer's id is already a layer the page added through the map (KTD1): the document never adopts it. */
+export function describeHostLayerCollision(layerId: string): string {
+  return `Layer \`${layerId}\` wasn't updated: the page added a layer with that id through getMap() or addLayer(), and the document never adopts a layer it didn't declare. Give one of them another id.`;
+}
