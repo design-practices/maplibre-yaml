@@ -219,6 +219,15 @@ export class LayerManager {
   private sourceRefCounts: Map<string, number>;
   /** Named sources with a refresh/stream pipeline currently running. */
   private activeSourcePipelines: Set<string>;
+  /**
+   * Named-source releases held back until `settleSources()` (live documents,
+   * KTD4): set between `beginSourceSettlement()` and `settleSources()`, so
+   * a layer that loses a source mid-diff never tears it down before the
+   * layer that gains it has claimed it. `null` outside a settlement window.
+   */
+  private pendingReleases: Map<string, number> | null = null;
+  /** `layer\0anchor` pairs already hinted about, so an update does not repeat a `before:` hint (KTD3). */
+  private hintedAnchors = new Set<string>();
   /** First loads a host already started, by source id (consumed once). */
   private pendingData: Map<string, Promise<FeatureCollection>>;
   /** Sources already told their `merge` updates carry keyless features (once each). */
@@ -390,19 +399,114 @@ export class LayerManager {
     await this.setupDataUpdates(sourceId, sourceId, source);
   }
 
-  /** Stop a named source's pipeline once nothing references it. */
+  /**
+   * Drop one layer's claim on a named source; the pipeline stops once
+   * nothing references it. Inside a settlement window the release is only
+   * recorded (see {@link beginSourceSettlement}).
+   */
   private releaseSource(sourceId: string): void {
-    const remaining = (this.sourceRefCounts.get(sourceId) ?? 1) - 1;
+    if (this.pendingReleases) {
+      this.pendingReleases.set(sourceId, (this.pendingReleases.get(sourceId) ?? 0) + 1);
+      return;
+    }
+    this.releaseNow(sourceId, 1);
+  }
+
+  /** Drop `count` claims on a named source now. Returns whether it reached zero. */
+  private releaseNow(sourceId: string, count: number): boolean {
+    const remaining = (this.sourceRefCounts.get(sourceId) ?? count) - count;
 
     if (remaining > 0) {
       this.sourceRefCounts.set(sourceId, remaining);
-      return; // siblings still need the data
+      return false; // siblings still need the data
     }
 
     this.sourceRefCounts.delete(sourceId);
     if (this.activeSourcePipelines.delete(sourceId)) {
       this.pollingManager.stop(sourceId);
       this.streamManager.disconnect(sourceId);
+    }
+    // Shared: the data stayed as long as a sibling drew from it. Nothing
+    // draws it now: a file read by view stops reading on every move, and
+    // its "zoom in" line goes with its last layer (ml-cnv.32).
+    this.sourceData.delete(sourceId);
+    this.formatLoaders.get(sourceId)?.suspend?.();
+    return true;
+  }
+
+  /**
+   * Hold named-source releases until {@link settleSources} (live documents,
+   * KTD4). Claims still count immediately, so during the window a source's
+   * count is never below its true value and nothing is torn down early.
+   */
+  beginSourceSettlement(): void {
+    this.pendingReleases ??= new Map();
+  }
+
+  /**
+   * Apply the releases held since {@link beginSourceSettlement}. Returns the
+   * named sources whose count reached zero: their pipelines are stopped,
+   * their MapLibre source is left for the caller (see {@link removeSource}).
+   */
+  settleSources(): string[] {
+    const pending = this.pendingReleases;
+    this.pendingReleases = null;
+    const zeroed: string[] = [];
+    for (const [sourceId, count] of pending ?? []) {
+      if (this.releaseNow(sourceId, count)) zeroed.push(sourceId);
+    }
+    return zeroed;
+  }
+
+  /** How many document layers draw a named source (pending releases not yet subtracted). */
+  sourceRefCount(sourceId: string): number {
+    return this.sourceRefCounts.get(sourceId) ?? 0;
+  }
+
+  /** Whether this manager added `layerId` — a document layer, as opposed to a host's. */
+  ownsLayer(layerId: string): boolean {
+    return this.claimedLayerIds.has(layerId);
+  }
+
+  /**
+   * Remove a named source the document no longer declares (live documents,
+   * U2). Refused — the source is left in place — while a document layer
+   * still draws it, or while any layer on the map the document did not
+   * declare does (KTD4: a host's layer over a document source).
+   */
+  removeSource(sourceId: string): void {
+    const refs = this.sourceRefCount(sourceId);
+    if (refs > 0) {
+      throw new Error(`Source "${sourceId}" is still drawn by ${refs} document layer${refs === 1 ? "" : "s"}, so it is left in place.`);
+    }
+    const users = this.styleLayers()
+      .filter((l) => l.source === sourceId)
+      .map((l) => l.id);
+    if (users.length > 0) {
+      throw new Error(
+        `Source "${sourceId}" is still used by ${users.map((id) => `"${id}"`).join(", ")}, ` +
+          `which the document did not declare, so it is left in place. Remove that layer before removing the source.`
+      );
+    }
+    if (this.activeSourcePipelines.delete(sourceId)) {
+      this.pollingManager.stop(sourceId);
+      this.streamManager.disconnect(sourceId);
+    }
+    this.formatLoaders.get(sourceId)?.destroy();
+    this.formatLoaders.delete(sourceId);
+    this.sourceData.delete(sourceId);
+    this.namedSources.delete(sourceId);
+    this.keylessWarned.delete(sourceId);
+    this.pendingData.delete(sourceId);
+    if (this.map.getSource(sourceId)) this.map.removeSource(sourceId);
+  }
+
+  /** The style's layers, as `{ id, source }` records; empty when there is no style to read. */
+  private styleLayers(): { id: string; source?: string }[] {
+    try {
+      return (this.map.getStyle?.()?.layers ?? []) as { id: string; source?: string }[];
+    } catch {
+      return [];
     }
   }
 
@@ -411,7 +515,13 @@ export class LayerManager {
     return this.activeSourcePipelines.has(sourceId);
   }
 
-  async addLayer(layer: Layer): Promise<void> {
+  /**
+   * Add a document layer. `beforeId` (live documents, U2) is where an update
+   * puts it — the next document layer — and wins over the layer's own
+   * `before:` while the map has it; otherwise `before:` is honoured as on
+   * first render.
+   */
+  async addLayer(layer: Layer, beforeId?: string): Promise<void> {
     // A document that repeats a layer id (review F3): the first one wins, as
     // in 0.8.0, and the repeat is refused here -- synchronously, before any
     // await, so the first in document order claims the id even when the
@@ -427,12 +537,88 @@ export class LayerManager {
     }
     this.claimedLayerIds.add(layer.id);
     try {
-      await this.addClaimedLayer(layer);
+      await this.addClaimedLayer(layer, beforeId);
     } catch (error) {
-      // A layer that failed to add holds no id: a later retry is not a repeat.
-      this.claimedLayerIds.delete(layer.id);
+      // A layer that failed to add holds no id, no source claim and no inline
+      // source: a later retry is not a repeat, and a named source's count
+      // reflects the layers that draw it (live documents, KTD4).
+      this.removeLayer(layer.id);
       throw error;
     }
+  }
+
+  /**
+   * Replace a document layer in place (live documents, U2): removed and
+   * added again through the same claim path as a fresh add, so the
+   * `hover.highlight` paint wrapping and the `generateId` rule
+   * (ml-aot.142) apply to the replacement. Tolerates a layer the host
+   * already removed from the map. With no `beforeId` the layer keeps its
+   * slot on the map (its current successor, host layers included).
+   */
+  async replaceLayer(layer: Layer, beforeId?: string): Promise<void> {
+    const anchor = beforeId ?? this.successorOf(layer.id);
+    this.removeLayer(layer.id);
+    await this.addLayer(layer, anchor);
+  }
+
+  /**
+   * Move a document layer before `beforeId`, or to the top (live documents,
+   * KTD3). Host layers — anything this manager did not add — are never
+   * moved; an anchor the map lacks means the top.
+   */
+  moveLayer(layerId: string, beforeId?: string): void {
+    if (!this.claimedLayerIds.has(layerId)) {
+      throw new Error(`Layer "${layerId}" was not declared by the document, so it is not moved.`);
+    }
+    if (!this.map.getLayer(layerId)) {
+      throw new Error(`Layer "${layerId}" is not on the map, so it cannot be moved.`);
+    }
+    const anchor = beforeId !== undefined && this.map.getLayer(beforeId) ? beforeId : undefined;
+    this.map.moveLayer(layerId, anchor);
+  }
+
+  /**
+   * Set one live-settable property of a document layer (live documents,
+   * U2): `paint`, `layout`, `filter` (`undefined` clears), `zoom`
+   * (`minzoom` / `maxzoom`; `undefined` restores the layer defaults) or
+   * `visibility`. Values are the next document's; nothing is read back from
+   * the map (R10).
+   */
+  setLayerProperty(
+    layerId: string,
+    target: "paint" | "layout" | "filter" | "zoom" | "visibility",
+    property: string,
+    value: unknown
+  ): void {
+    if (!this.map.getLayer(layerId)) {
+      throw new Error(`Layer "${layerId}" is not on the map, so "${property}" cannot be set.`);
+    }
+    switch (target) {
+      case "paint":
+        // The property name is the document's, not one of MapLibre's keyed unions.
+        this.map.setPaintProperty(layerId, property as any, value);
+        return;
+      case "layout":
+        this.map.setLayoutProperty(layerId, property as any, value);
+        return;
+      case "filter":
+        this.map.setFilter(layerId, (value ?? null) as any);
+        return;
+      case "zoom":
+        if (property === "minzoom") this.map.setLayerZoomRange(layerId, (value as number | undefined) ?? 0, null as any);
+        else this.map.setLayerZoomRange(layerId, null as any, (value as number | undefined) ?? 24);
+        return;
+      case "visibility":
+        this.map.setLayoutProperty(layerId, "visibility", value === "none" ? "none" : "visible");
+        return;
+    }
+  }
+
+  /** The id of the layer right above `layerId` on the map; undefined on top or when absent. */
+  private successorOf(layerId: string): string | undefined {
+    const layers = this.styleLayers();
+    const index = layers.findIndex((l) => l.id === layerId);
+    return index >= 0 ? layers[index + 1]?.id : undefined;
   }
 
   /**
@@ -454,15 +640,34 @@ export class LayerManager {
       // No style to read: no did-you-mean.
     }
     const near = suggest(before, [...styleLayers, ...this.claimedLayerIds], 3);
-    this.callbacks.onLayerHint?.(
+    this.hintOnce(
       layer.id,
+      before,
       `Layer \`${layer.id}\`: \`before: ${before}\` names no layer on this map, so the layer is drawn on top instead.` +
         (near ? ` Did you mean \`${near}\`?` : "")
     );
     return undefined;
   }
 
-  private async addClaimedLayer(layer: Layer): Promise<void> {
+  /**
+   * An author hint about a layer's `before:` anchor, once per layer and
+   * anchor for the life of this manager: a live update re-adds and
+   * re-places layers, and the same hint on every update is noise (KTD3).
+   */
+  hintOnce(layerId: string, anchor: string, message: string): void {
+    const key = `${layerId}\0${anchor}`;
+    if (this.hintedAnchors.has(key)) return;
+    this.hintedAnchors.add(key);
+    this.callbacks.onLayerHint?.(layerId, message);
+  }
+
+  /** `beforeId` when the map has it, else the layer's own `before:` handling. */
+  private resolveBefore(layer: Layer, beforeId: string | undefined): string | undefined {
+    if (beforeId !== undefined && typeof this.map.getLayer === "function" && this.map.getLayer(beforeId)) return beforeId;
+    return this.beforeOrTop(layer);
+  }
+
+  private async addClaimedLayer(layer: Layer, beforeId?: string): Promise<void> {
     // Background layers are sourceless by spec — resolving a source for one
     // dereferenced `layer.source.type` on undefined and threw, so a
     // schema-valid background layer killed the whole document (ml-chf).
@@ -528,7 +733,7 @@ export class LayerManager {
       layerSpec.layout.visibility = "none";
     }
 
-    this.map.addLayer(layerSpec, this.beforeOrTop(layer));
+    this.map.addLayer(layerSpec, this.resolveBefore(layer, beforeId));
 
     // A named source refreshes once for the whole source, not once per layer.
     if (isSourceRef) {
@@ -1134,15 +1339,9 @@ export class LayerManager {
       this.sourceData.delete(sourceId);
       this.formatLoaders.get(sourceId)?.destroy();
       this.formatLoaders.delete(sourceId);
-    } else {
+    } else if (this.sourceRefCounts.has(sourceId)) {
       // Shared: the data stays as long as a sibling still draws from it.
       this.releaseSource(sourceId);
-      if (!this.sourceRefCounts.has(sourceId)) {
-        this.sourceData.delete(sourceId);
-        // Nothing draws it now: a file read by view stops reading on every
-        // move, and its "zoom in" line goes with its last layer (ml-cnv.32).
-        this.formatLoaders.get(sourceId)?.suspend?.();
-      }
     }
   }
 
@@ -1177,5 +1376,7 @@ export class LayerManager {
     this.sourceData.clear();
     this.layerToSource.clear();
     this.claimedLayerIds.clear();
+    this.pendingReleases = null;
+    this.hintedAnchors.clear();
   }
 }

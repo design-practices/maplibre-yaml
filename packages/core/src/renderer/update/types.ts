@@ -280,4 +280,23 @@ export interface UpdateHost {
   onError(error: Error, context?: MapErrorContext): void;
   /** Detach and re-attach `@maplibre-yaml/effects` (KTD6b). */
   reattachEffects(): void;
+  /**
+   * The renderer's per-layer preparation before `layerManager.addLayer`,
+   * the same first render does (`MapRenderer.addLayer`: the version gate,
+   * protocol registration, image references, the basemap text font).
+   * Returns the layer to add; `undefined` when the renderer skips it with
+   * its own warning; throws when the layer cannot be added.
+   */
+  prepareLayer(layer: Layer): Layer | undefined;
+  /** The per-layer lifecycle events first render fires, so hosts see update adds and removes alike. */
+  emit(event: "layer:added" | "layer:removed", payload: { layerId: string }): void;
+}
+
+/** What `applyOps` needs beside the host: both documents, the operations and the summary to complete. */
+export interface ApplyRequest {
+  applied: AppliedDocument;
+  next: AppliedDocument;
+  ops: readonly UpdateOp[];
+  /** The differ's summary; `applyOps` appends failures and reconciled adds to it. */
+  summary: UpdateSummary;
 }

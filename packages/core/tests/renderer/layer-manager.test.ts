@@ -1080,4 +1080,238 @@ describe("LayerManager", () => {
       manager.destroy();
     });
   });
+  describe("live documents (U2): replaceLayer, moveLayer, setLayerProperty, settlement", () => {
+    /** A map double with a real layer order and source table. */
+    const styleMap = (basemap: string[] = ["land"]) => {
+      const layers: any[] = basemap.map((id) => ({ id, type: "fill", source: "basemap" }));
+      const sources: Record<string, any> = { basemap: { type: "vector" } };
+      const find = (id: string) => layers.findIndex((l) => l.id === id);
+      return {
+        order: () => layers.map((l) => l.id),
+        getStyle: vi.fn(() => ({ layers: layers.map((l) => ({ ...l })), sources: { ...sources } })),
+        getLayer: vi.fn((id: string) => layers[find(id)]),
+        addLayer: vi.fn((spec: any, before?: string) => {
+          if (before === undefined) layers.push({ ...spec });
+          else {
+            const index = find(before);
+            if (index < 0) throw new Error(`Layer with id "${before}" does not exist on this map.`);
+            layers.splice(index, 0, { ...spec });
+          }
+        }),
+        removeLayer: vi.fn((id: string) => {
+          if (find(id) >= 0) layers.splice(find(id), 1);
+        }),
+        moveLayer: vi.fn((id: string, before?: string) => {
+          const [entry] = layers.splice(find(id), 1);
+          if (before === undefined) layers.push(entry);
+          else layers.splice(find(before), 0, entry);
+        }),
+        addSource: vi.fn((id: string, spec: any) => {
+          sources[id] = { ...spec, setData: vi.fn() };
+        }),
+        removeSource: vi.fn((id: string) => {
+          delete sources[id];
+        }),
+        getSource: vi.fn((id: string) => sources[id]),
+        setPaintProperty: vi.fn(),
+        setLayoutProperty: vi.fn(),
+        setFilter: vi.fn(),
+        setLayerZoomRange: vi.fn(),
+      };
+    };
+    const circle = (id: string, extra: Record<string, unknown> = {}) =>
+      ({
+        id,
+        type: "circle",
+        visible: true,
+        toggleable: false,
+        source: { type: "geojson", data: { type: "FeatureCollection", features: [] } },
+        paint: { "circle-color": "#f00" },
+        ...extra,
+      }) as any;
+    const namedGeojson = (extra: Record<string, unknown> = {}) => ({
+      type: "geojson" as const,
+      data: { type: "FeatureCollection" as const, features: [] },
+      ...extra,
+    });
+
+    let map: ReturnType<typeof styleMap>;
+    let hints: string[];
+
+    beforeEach(() => {
+      map = styleMap();
+      hints = [];
+      manager = new LayerManager(map as any, { ...callbacks, onLayerHint: (_id, message) => hints.push(message) });
+    });
+
+    it("addLayer takes an explicit before id that wins over the layer's own before:", async () => {
+      await manager.addLayer(circle("a"));
+      await manager.addLayer(circle("b"));
+      await manager.addLayer(circle("x", { before: "b" }), "a");
+      expect(map.order()).toEqual(["land", "x", "a", "b"]);
+    });
+
+    it("an explicit before id the map lacks falls back to the layer's own before: handling", async () => {
+      await manager.addLayer(circle("a"));
+      await manager.addLayer(circle("x", { before: "a" }), "missing");
+      await manager.addLayer(circle("y"), "missing");
+      expect(map.order()).toEqual(["land", "x", "a", "y"]);
+    });
+
+    it("ownsLayer tells document layers from host layers", async () => {
+      await manager.addLayer(circle("a"));
+      map.addLayer({ id: "h", type: "line", source: "basemap" });
+      expect(manager.ownsLayer("a")).toBe(true);
+      expect(manager.ownsLayer("h")).toBe(false);
+      manager.removeLayer("a");
+      expect(manager.ownsLayer("a")).toBe(false);
+    });
+
+    it("replaceLayer re-adds through the claim path: hover.highlight wraps paint and the source gets ids", async () => {
+      await manager.addLayer(circle("a"));
+      await manager.addLayer(circle("b"));
+      map.addSource.mockClear();
+
+      await manager.replaceLayer(circle("a", { interactive: { hover: { highlight: true } } }), "b");
+
+      expect(map.removeLayer).toHaveBeenCalledWith("a");
+      expect(map.removeSource).toHaveBeenCalledWith("a-source");
+      expect(map.addSource).toHaveBeenCalledWith("a-source", expect.objectContaining({ generateId: true }));
+      const [spec, before] = map.addLayer.mock.calls.at(-1)!;
+      expect(before).toBe("b");
+      expect(spec.paint["circle-color"]).toEqual(["case", ["boolean", ["feature-state", "hover"], false], expect.anything(), "#f00"]);
+      expect(manager.ownsLayer("a")).toBe(true);
+      expect(map.order()).toEqual(["land", "a", "b"]);
+    });
+
+    it("replaceLayer with no before id keeps the layer's slot on the map", async () => {
+      await manager.addLayer(circle("a"));
+      await manager.addLayer(circle("b"));
+      map.addLayer({ id: "h", type: "line", source: "basemap" });
+
+      await manager.replaceLayer(circle("b", { type: "fill", paint: {} }));
+
+      expect(map.order()).toEqual(["land", "a", "b", "h"]);
+    });
+
+    it("replaceLayer re-adds a layer the host removed from the map", async () => {
+      await manager.addLayer(circle("a"));
+      await manager.addLayer(circle("b"));
+      map.removeLayer("a");
+      map.removeLayer.mockClear();
+
+      await manager.replaceLayer(circle("a"), "b");
+
+      expect(map.order()).toEqual(["land", "a", "b"]);
+      expect(manager.ownsLayer("a")).toBe(true);
+    });
+
+    it("moveLayer moves only a document layer, before an anchor the map has or to the top", async () => {
+      await manager.addLayer(circle("a"));
+      await manager.addLayer(circle("b"));
+      map.addLayer({ id: "h", type: "line", source: "basemap" });
+
+      manager.moveLayer("b", "a");
+      expect(map.order()).toEqual(["land", "b", "a", "h"]);
+      manager.moveLayer("b", "missing");
+      expect(map.order()).toEqual(["land", "a", "h", "b"]);
+      manager.moveLayer("a");
+      expect(map.order()).toEqual(["land", "h", "b", "a"]);
+      expect(() => manager.moveLayer("h", "a")).toThrow(/not declared by the document/);
+      expect(map.order()).toEqual(["land", "h", "b", "a"]);
+    });
+
+    it("setLayerProperty routes each target to its setter", async () => {
+      await manager.addLayer(circle("a"));
+      manager.setLayerProperty("a", "paint", "circle-color", "#0f0");
+      manager.setLayerProperty("a", "layout", "circle-sort-key", 2);
+      manager.setLayerProperty("a", "filter", "filter", ["==", "x", 1]);
+      manager.setLayerProperty("a", "filter", "filter", undefined);
+      manager.setLayerProperty("a", "zoom", "minzoom", 3);
+      manager.setLayerProperty("a", "zoom", "maxzoom", undefined);
+      manager.setLayerProperty("a", "visibility", "visibility", "none");
+      expect(map.setPaintProperty).toHaveBeenCalledWith("a", "circle-color", "#0f0");
+      expect(map.setLayoutProperty).toHaveBeenCalledWith("a", "circle-sort-key", 2);
+      expect(map.setFilter).toHaveBeenCalledWith("a", ["==", "x", 1]);
+      expect(map.setFilter).toHaveBeenCalledWith("a", null);
+      expect(map.setLayerZoomRange).toHaveBeenCalledWith("a", 3, null);
+      expect(map.setLayerZoomRange).toHaveBeenCalledWith("a", null, 24);
+      expect(map.setLayoutProperty).toHaveBeenCalledWith("a", "visibility", "none");
+      expect(() => manager.setLayerProperty("nope", "paint", "circle-color", "#000")).toThrow(/not on the map/);
+    });
+
+    it("releases deferred by beginSourceSettlement settle only at settleSources, so a swap keeps the pipeline", async () => {
+      manager.registerSources({
+        s1: namedGeojson({ url: "https://example.com/s1.geojson", refresh: { refreshInterval: 5000, updateStrategy: "replace" } }),
+        s2: namedGeojson(),
+      });
+      await manager.addLayer(circle("a", { source: "s1" }));
+      await manager.addLayer(circle("b", { source: "s2" }));
+      expect(manager.isRefreshing("s1")).toBe(true);
+
+      manager.beginSourceSettlement();
+      await manager.replaceLayer(circle("a", { source: "s2" }), "b");
+      expect(manager.isRefreshing("s1")).toBe(true); // nothing torn down mid-diff
+      expect(manager.sourceRefCount("s1")).toBe(1); // the release is pending
+      await manager.replaceLayer(circle("b", { source: "s1" }));
+      const settled = manager.settleSources();
+
+      expect(settled).toEqual([]);
+      expect(manager.sourceRefCount("s1")).toBe(1);
+      expect(manager.sourceRefCount("s2")).toBe(1);
+      expect(manager.isRefreshing("s1")).toBe(true);
+      expect(map.removeSource).not.toHaveBeenCalled();
+    });
+
+    it("settleSources stops the pipeline of a source that reached zero and names it", async () => {
+      manager.registerSources({
+        s1: namedGeojson({ url: "https://example.com/s1.geojson", refresh: { refreshInterval: 5000, updateStrategy: "replace" } }),
+      });
+      await manager.addLayer(circle("a", { source: "s1" }));
+      manager.beginSourceSettlement();
+      manager.removeLayer("a");
+      expect(manager.isRefreshing("s1")).toBe(true);
+      expect(manager.settleSources()).toEqual(["s1"]);
+      expect(manager.isRefreshing("s1")).toBe(false);
+      expect(manager.sourceRefCount("s1")).toBe(0);
+      // Outside a settlement window releases are immediate, as before.
+      await manager.addLayer(circle("a", { source: "s1" }));
+      manager.removeLayer("a");
+      expect(manager.isRefreshing("s1")).toBe(false);
+    });
+
+    it("a failed add rolls back its named-source claim", async () => {
+      manager.registerSources({ s1: namedGeojson() });
+      await manager.addLayer(circle("a", { source: "s1" }));
+      map.addLayer.mockImplementationOnce(() => {
+        throw new Error("boom");
+      });
+      await expect(manager.addLayer(circle("b", { source: "s1" }))).rejects.toThrow("boom");
+      expect(manager.sourceRefCount("s1")).toBe(1);
+      expect(manager.ownsLayer("b")).toBe(false);
+      expect(manager.getSourceIdForLayer("b")).toBeUndefined();
+    });
+
+    it("removeSource refuses a source a document layer or a host layer still draws, and removes an unused one", async () => {
+      manager.registerSources({ s1: namedGeojson(), s2: namedGeojson() });
+      await manager.addLayer(circle("a", { source: "s1" }));
+      map.addLayer({ id: "h", type: "line", source: "s2" });
+
+      expect(() => manager.removeSource("s1")).toThrow(/still drawn by/);
+      expect(() => manager.removeSource("s2")).toThrow(/"h"/);
+      expect(map.removeSource).not.toHaveBeenCalled();
+
+      manager.removeLayer("a");
+      manager.removeSource("s1");
+      expect(map.removeSource).toHaveBeenCalledWith("s1");
+      expect(map.getSource("s1")).toBeUndefined();
+    });
+
+    it("the before: hint fires once per layer and anchor across re-adds", async () => {
+      await manager.addLayer(circle("a", { before: "nope" }));
+      await manager.replaceLayer(circle("a", { before: "nope" }));
+      expect(hints).toHaveLength(1);
+      expect(hints[0]).toMatch(/before: nope/);
+    });
+  });
 });
