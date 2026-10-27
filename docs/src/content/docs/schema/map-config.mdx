@@ -451,6 +451,20 @@ Choosing "flat" in the panel lowers every building to 3 metres.
   are replaced by one notice, while the layer checkboxes still work.
 - The panel's changes fire `ml-map:parameter-change` and
   `ml-map:layer-visibility` ([`<ml-map>` events](/reference/elements/#ml-map-events)).
+- **A page script reads and writes the same values** with the element's
+  `getState()` and `setState()`: `el.setState({ scenario: "flat" })` lowers
+  the buildings and moves the panel's select to "flat". `setState` takes
+  declared keys only; a key the `state:` block doesn't declare throws, and
+  nothing is written. Every write, from a script or from the panel, fires one
+  `ml-map:state-change` with `values` (every current value) and `changed`
+  (the keys that changed); a panel write also fires `ml-map:parameter-change`
+  for its key, as before ([`<ml-map>` methods](/reference/elements/#ml-map-methods)).
+- **A reader's choice survives a changed document.** When a new document
+  changes a key's `default`, the map takes the new default unless a reader
+  wrote that key (`setState` or the panel), in which case the reader's value
+  stays; a key the new document no longer declares is removed and named in
+  `changed`. The values also survive a basemap change and any style load,
+  including `getMap().setStyle()`.
 - An export for a maplibre-gl older than 5.6 replaces each value with its
   default ([Export classes](/guides/export-classes/)).
 

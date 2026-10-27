@@ -100,8 +100,9 @@ YAML in its own file keeps the page short, and lets you check the file with
 Paths *inside* the YAML (`url: "data/points.geojson"`) resolve against the
 page, not the YAML file
 ([Loading data › How paths are read](/guides/data-sources/#relative-paths)).
-Changing `src` loads the new document, and `reload()` loads the same one
-again.
+Changing `src` fetches the new document and applies it to the running map
+in place ([Change the map after it loads](#change-the-map-after-it-loads));
+`reload()` fetches the same one again and applies what changed.
 
 Give every `<ml-map>` `display: block` and a height. A custom element is
 inline and zero-height by default, so without them the map is invisible, and
@@ -143,7 +144,7 @@ positioning CSS:
     zoom: map.getZoom(),
   }));
   document.querySelector(".my-controls").addEventListener("click", (e) => {
-    const map = el.getMap(); // read at click time: reload() makes a new map
+    const map = el.getMap(); // read at click time: a basemap change makes a new map
     const action = e.target.closest("[data-action]")?.dataset.action;
     if (action === "zoom-in") map.zoomIn();
     if (action === "reset") map.jumpTo(home);
@@ -172,9 +173,55 @@ anything MapLibre can do works:
 ```
 
 Layers you add with MapLibre's own `map.addLayer()` are yours to manage; keep
-their ids different from the document's. `getMap()` returns the map without
-waiting (`null` before it loads), and `getRenderer()` returns the
+their ids different from the document's. A new document never moves or
+removes them. `getMap()` returns the map without waiting (`null` before it
+loads) and keeps returning the same map through document changes (only a
+basemap change builds a new one), and `getRenderer()` returns the
 [`MapRenderer`](/integrations/vanilla-js/) behind the element.
+
+### Change the map after it loads
+
+Assign a different document to `config` (or change `src`) and the running
+map changes in place: layers and sources that differ are added, removed or
+updated by id, the legend and panel follow, and the camera moves only if the
+document's camera changed. The map object, your listeners and your own
+layers stay. `update()` does the same and resolves with what happened:
+
+```html
+<script type="module">
+  const el = document.querySelector("ml-map");
+  await el.mapReady();
+
+  el.addEventListener("ml-map:update-applied", ({ detail }) => {
+    console.log("changed", detail.summary); // added, removed, propertiesSet, ...
+  });
+  el.addEventListener("ml-map:update-rejected", ({ detail }) => {
+    console.warn(detail.kind, detail.errors); // the map is as it was
+  });
+
+  const doc = structuredClone(el.getDocument()); // the document the map shows
+  doc.layers[0].paint["circle-color"] = "#2563eb";
+  const { outcome } = await el.update(doc); // "applied"
+</script>
+```
+
+An invalid document is refused: `ml-map:update-rejected` carries the
+diagnostics, the map stays as it was, and the notice shows a hint while you
+develop. A changed `mapStyle` rebuilds the map at the current camera and
+fires `ml-map:load` again; everything else applies in place.
+
+For a page whose readers pan the map themselves (a dashboard whose data
+refreshes), add `camera="host"` so a new document never moves the view:
+
+```html
+<ml-map src="map.yaml" camera="host" style="display: block; height: 400px;"></ml-map>
+```
+
+A document's `state:` values are read with `getState()` and written with
+`setState({ scenario: "flat" })`; each write fires `ml-map:state-change`
+([State and parameters](/schema/map-config/#runtime-state-and-parameters)).
+The rules in full, your own layers included, are under
+[Updating the document](/reference/elements/#updating-the-document).
 
 ### React to map events \{#event-reference}
 
@@ -192,7 +239,7 @@ more. Each carries its data on `event.detail`:
 </script>
 ```
 
-All eighteen events, with each `detail`, are under
+Every event, with its `detail`, is under
 [`<ml-map>` events](/reference/elements/#ml-map-events).
 
 ### When something goes wrong
@@ -234,8 +281,8 @@ it. See [Story maps in plain HTML](/integrations/scrollytelling-html/).
 
 ## Reference \{#component-api-reference}
 
-Every attribute (`src`, `config`, `base`, `debug`, `quiet`), property,
-method, event, slot and styling hook of `<ml-map>` is in the
+Every attribute (`src`, `config`, `base`, `camera`, `debug`, `quiet`),
+property, method, event, slot and styling hook of `<ml-map>` is in the
 [`<ml-map>` reference](/reference/elements/#ml-map). What a map document can
 contain is in the [YAML reference](/reference/yaml/map/).
 
@@ -317,11 +364,14 @@ string:
 </script>
 ```
 
-The document is validated like a YAML file; an invalid one shows the error
-card. A *changed* `config` builds a fresh map (and resets the camera); one
-equal to the document already shown does nothing. A `config` assigned right
-after the element upgrades renders without a passing "No configuration
-provided" error.
+The document is validated like a YAML file; an invalid first document shows
+the error card. A *changed* `config` is applied to the running map in place:
+the map and its camera stay, and only what differs changes
+([Change the map after it loads](#change-the-map-after-it-loads)); an invalid
+one is refused with `ml-map:update-rejected` and the map kept. One equal to
+the document already shown does nothing. A `config` assigned right after the
+element upgrades renders without a passing "No configuration provided"
+error.
 
 ### With npm and a bundler \{#npm-with-build-tools}
 

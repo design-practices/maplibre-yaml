@@ -29,9 +29,10 @@ Draws one `type: map` document.
 
 | Attribute | Value | What it does |
 |-----------|-------|--------------|
-| `src` | URL | The YAML document to load. Changing it loads the new document |
-| `config` | JSON string | The document as JSON. Changing it re-renders the map |
+| `src` | URL | The YAML document to load. Changing it fetches the new document and applies it to the running map in place ([Updating the document](#updating-the-document)) |
+| `config` | JSON string | The document as JSON. Changing it applies the new document to the running map in place |
 | `base` | path | Where the paths in `src` and in the document start, for a site under a subpath (`"/my-repo/"`). Full `https://` URLs are never changed ([Sites under a subpath](/guides/publishing/#html-pages-the-base-attribute)) |
+| `camera` | `document` (default) or `host` | Who owns the camera when the document changes. `document`: a changed `center`, `zoom`, `bearing` or `pitch` eases the map there, and an added or re-targeted `fitTo` frames its source once. `host`: an update never moves the camera, and a basemap rebuild keeps the current view, for a page whose viewport is per-user |
 | `debug` | boolean | Show author hints on the page wherever it is served, not only while developing ([Reading what the map tells you](/troubleshooting/#reading-what-the-map-tells-you)) |
 | `quiet` | boolean | Keep the notice ("Part of this map couldn't load", author hints) and the zero-height hint off the page. The error card and "Loading map…" still show; the console keeps every message |
 
@@ -82,8 +83,9 @@ legend, and for the label language of a Protomaps basemap
 
 | Property | Type | What it does |
 |----------|------|--------------|
-| `config` | object or JSON string (set); object or `null` (get) | The document. Set before or after the element connects, it is validated like every other path; a value JSON-equal to the one shown is a no-op. Get returns the document being shown |
-| `base` | string or `null` | Reflects the `base` attribute; setting it re-renders the map |
+| `config` | object or JSON string (set); object or `null` (get) | The document. Set before or after the element connects, it is validated like every other path; a value JSON-equal to the one shown is a no-op, and a different one is applied to the running map in place ([Updating the document](#updating-the-document)). Get returns the document being shown |
+| `base` | string or `null` | Reflects the `base` attribute; setting it re-resolves the document's paths and applies the result as an update |
+| `camera` | `"document"` or `"host"` | Reflects the `camera` attribute. Can be changed on a running map; it governs the next update on |
 | `debug` | boolean | Reflects the `debug` attribute |
 | `quiet` | boolean | Reflects the `quiet` attribute |
 | `MLMap.fitToWaitMs` (static) | number | How long a map with `fitTo` on a `url:` source waits for the data before its first paint, so it opens already framed. Default `1500` (ms); `0` turns the wait off. Set it before maps render |
@@ -92,12 +94,16 @@ legend, and for the label language of a Protomaps basemap
 
 | Method | Returns | What it does |
 |--------|---------|--------------|
-| `mapReady()` | `Promise<maplibregl.Map>` | Resolves with the MapLibre map once the document has loaded (at once if it already has); rejects when the document fails (`ml-map:error`) |
-| `getMap()` | `maplibregl.Map \| null` | The MapLibre map, or `null` before a render. `reload()` and a new document make a new map, so read it when you need it |
+| `mapReady()` | `Promise<maplibregl.Map>` | Resolves with the MapLibre map once the document has loaded (at once if it already has); rejects when the document fails (`ml-map:error`). During a basemap rebuild it waits for the new map |
+| `getMap()` | `maplibregl.Map \| null` | The MapLibre map, or `null` before a render. The same object through every update; only a basemap change (`mapStyle`) builds a new one, and `ml-map:load` fires again when it does, so a page that keeps a reference refreshes it on that event |
 | `getRenderer()` | `MapRenderer \| null` | The renderer behind the element ([JavaScript API](/integrations/vanilla-js/)) |
 | `isLoaded()` | `boolean` | Whether the map has finished loading |
-| `reload()` | `Promise<void>` | Render again from `src` or the inline YAML; slot children are kept |
-| `addLayer(layer)` | `Promise<void>` | Add a layer (the same shape as a document layer) |
+| `update(doc)` | `Promise<UpdateResult>` | Apply a document (an object or its JSON string) to the running map in place: what setting `config` does, with the outcome. Resolves `{ outcome: "applied", summary }` once the map shows the document, `"rejected"` with `errors` (the map untouched), `"fallback"` when a basemap change rebuilt the map (or there was no map yet), or `"superseded"` when a later document replaced this one before it applied. The trust the map was built with (the renderer's `capabilities`) applies to the updated document: an update neither raises nor lowers it ([Updating the document](#updating-the-document)) |
+| `getDocument()` | `MapBlock \| null` | The document the running map shows: the same shape `config` returns and `update()` takes. (`getRenderer().getDocument()` returns the renderer's normalized model instead, which is not the element's `update()` input) |
+| `setState(values)` | `void` | Write `state:` values. Each goes through the map's global state, the params panel follows, and one `ml-map:state-change` fires. Declared keys only: a key the document's `state:` block does not declare throws, and nothing is written. Needs maplibre-gl 5.6 or later ([State and parameters](/schema/map-config/#runtime-state-and-parameters)) |
+| `getState()` | `Record<string, unknown>` | The current `state:` values: the document's defaults, the panel's seeds and every write since. `{}` with no running map |
+| `reload()` | `Promise<void>` | Fetch `src` (or re-read the inline YAML) again and apply what changed to the running map as an update. Sources whose last load failed are retried even when the document is unchanged. From an error card, a valid document renders fresh. Slot children are kept |
+| `addLayer(layer)` | `Promise<void>` | Add a layer of your own (the same shape as a document layer). An update never moves or removes it |
 | `removeLayer(layerId)` | `void` | Remove a layer |
 | `setLayerVisibility(layerId, visible)` | `void` | Show or hide a layer |
 | `updateLayerData(layerId, geojson)` | `void` | Replace a GeoJSON layer's data |
@@ -107,6 +113,68 @@ Live data refreshes on the document's own `refreshInterval`; there is no
 method to pause it or force a refresh. Each refresh fires
 `ml-map:layer-data-loading` and `ml-map:layer-data-loaded`
 ([Live data](/guides/live-data/)).
+
+### Updating the document
+
+A different document, whether assigned to `config`, loaded by a changed
+`src` or `base`, fetched by `reload()` or passed to `update()`, is applied to
+the running map in place. The element validates the whole document first,
+then changes only what differs from the document the map shows: layers and
+sources are matched by id, a changed paint, layout, filter or zoom value goes
+through MapLibre's setter, a change MapLibre cannot apply live replaces the
+layer in document position (its `type`, `source` or `source-layer`) or the
+source and its layers (a source's kind, or an option fixed at construction
+such as `cluster` or `promoteId`), inline data is swapped with `setData`, and
+the legend, params panel, markers, popups and controls follow. The map, its camera and your listeners stay as
+they were. `ml-map:update-applied` reports what changed, by id.
+
+- **The document owns only the keys it declares.** Layers you added through
+  `addLayer()` or `getMap().addLayer()` are never moved or removed, and keep
+  their absolute position in the stack; a document layer that moves does not
+  carry them with it. A paint or layout value you set on a document layer
+  through `getMap()` is overwritten only when the document's own value for
+  that property changed. A document source still used by one of your layers
+  is left in place when the document drops it, and listed in
+  `summary.failures`; so is a document layer whose id collides with one of
+  yours. To re-apply changes of your own after an update, do it on
+  `ml-map:update-applied`; `summary.propertiesSet` names the affected layers.
+- **The camera follows the document only when the document's camera
+  changed**: a changed `center`, `zoom`, `bearing` or `pitch` eases the map
+  there, and an added or re-targeted `fitTo` frames its source once (the same
+  `fitTo` over new data does not re-fit). A camera key the new document
+  drops causes no move. `camera="host"` turns this off for a page whose
+  viewport is per-user.
+- **An invalid document keeps the map.** A document that fails validation,
+  a `src` that doesn't load, or an update engine file that doesn't download
+  fires `ml-map:update-rejected` with the diagnostics and leaves the map,
+  its camera and the document it shows untouched; while you develop, the
+  notice shows a hint. The error card replaces the map only when there is
+  no running map to keep.
+- **A basemap change rebuilds.** A changed `mapStyle` (or a map option
+  MapLibre cannot change after construction, such as an interaction handler)
+  builds a new map at the current camera, carries the current `state:`
+  values and the panel's layer toggles across, and swaps it in once it has
+  loaded: the page never shows a blank map. `ml-map:load` fires again for the
+  new map, `getMap()` returns the new object from then on, and the update's
+  `summary.rebuild` is `true`. If the new basemap never loads, the old map
+  stays and the update is rejected with `kind: "style"`.
+- **Last document wins.** One update applies at a time. A document that
+  arrives while one is being applied waits, and only the newest waiting one
+  runs; the ones it replaced resolve `superseded` and fire no event.
+- **Trust is fixed per map.** The element always renders a document
+  untrusted (it never passes `capabilities` to the renderer), and an update
+  neither raises nor lowers that. A host that renders documents from more
+  than one author through [`MapRenderer`](/integrations/vanilla-js/)
+  constructs it untrusted too.
+- **`getMap().setStyle()` is MapLibre's.** Calling it without
+  `transformStyle` removes the document's layers and sources, as it does any
+  runtime-added layer; that is MapLibre's behaviour and the element does not
+  put them back. The library reapplies only the document's `state:` values
+  after any style load, so `global-state` expressions in the new style keep
+  working. To change the basemap, change `mapStyle` in the document instead.
+
+The update engine is a separate file next to the script (`chunks/update.js`),
+downloaded on the first update ([Hosting the files yourself](/getting-started/installation/#hosting-the-files-yourself)).
 
 ### `<ml-map>` events
 
@@ -134,9 +202,9 @@ listener.
 | `ml-map:layer-visibility` | `{ layerId, visible }` | A params-panel checkbox toggled a layer |
 | `ml-map:camera-fit` | `{ source, bounds }` | The `fitTo` camera framed its source's data (once, on the first data load for fetched sources) |
 | `ml-map:layer-classified` | `{ layerId, classify }` | A `classify:` layer's classes as drawn — once when the layers settle, and again when fetched data computes or refreshes them. `classify` is the record the emitted style carries in `metadata["maplibre-yaml:classify"]` (breaks, colours, stats) |
-| `ml-map:update-applied` | `{ summary }` | A changed document was applied to the running map (live documents, 0.10). `summary` names what changed by id — `added`, `removed`, `moved`, `replaced`, `propertiesSet`, `sourcesReplaced`, `cameraMoved`, `failures` — and `rebuild: true` when a basemap change rebuilt the map (then `added` names every document layer) |
-| `ml-map:update-rejected` | `{ kind, errors }` | A changed document was refused and the running map kept. `kind` is `validation`, `fetch` (a `src` that didn't load), `chunk` (the update engine's file didn't download) or `style` (a new basemap that never loaded); `errors` carries the diagnostics |
-| `ml-map:state-change` | `{ values, changed }` | The document's `state:` values changed — `setState()`, a params-panel write, or an update's new defaults. `values` is every current value; `changed` the keys that changed |
+| `ml-map:update-applied` | `{ summary }` | A changed document was applied to the running map ([Updating the document](#updating-the-document)). `summary` names what changed by id: `added`, `removed`, `moved` and `replaced` layers, `propertiesSet` as `{ layerId, property }` records, `sourcesReplaced`, `cameraMoved`, and `failures` as `{ op, message }` records; `rebuild` is `true` when a basemap change rebuilt the map (then `added` names every document layer, and `ml-map:load` has fired for the new map) |
+| `ml-map:update-rejected` | `{ kind, errors }` | A changed document was refused and the running map kept as it was. `kind` is `validation`, `fetch` (a `src` that didn't load), `chunk` (the update engine's file didn't download) or `style` (a new basemap that never loaded); `errors` carries the diagnostics, each `{ kind, message, path? }` |
+| `ml-map:state-change` | `{ values, changed }` | The document's `state:` values changed: `setState()`, a params-panel write, or an update whose document declares new defaults. `values` is every current value by key; `changed` lists the keys that changed (a key the new document no longer declares is in `changed` and gone from `values`). Fires once per write, alongside one `ml-map:parameter-change` per key for a panel write |
 
 ### `<ml-map>` slots
 
@@ -155,10 +223,10 @@ Children with one of these `slot` values are placed over the map
 - **Mounted on load.** Slot children are hidden until the map loads, then
   moved into their corner. They stay the same elements, so listeners you
   attached keep working.
-- **They survive a new map.** `reload()`, a new `config` or `src`, and an
-  error card park slot children back on the element; the next render mounts
-  them again. Slot children added after load are picked up on the next
-  render.
+- **They survive a new document and a new map.** An in-place update leaves
+  slot children where they are. A basemap rebuild and an error card park them
+  back on the element, and the next render mounts them again. Slot children
+  added after load are picked up on the next render.
 - **Pointer events.** Empty corner areas pass gestures through to the map;
   your slot content receives clicks.
 - An unknown slot name logs a warning, and the child is left where it is.

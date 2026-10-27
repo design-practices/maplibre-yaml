@@ -8,7 +8,9 @@ frameworks render it like any other tag. There is no wrapper component to
 install: register the element once, import MapLibre's CSS, and point `src` at
 a YAML file. Render the element in your components; the
 [JavaScript API](/integrations/vanilla-js/) (`MapRenderer`) is not the
-framework path.
+framework path. A re-render with a changed `config` updates the map in
+place, so the element fits a framework's data flow without a key or a
+remount.
 
 ## Quick start \{#setting-up}
 
@@ -313,18 +315,101 @@ export function ConfigMap({ config }: { config: MapBlock }) {
 }
 ```
 
-A *changed* `config` builds a fresh map, which also resets the camera. An
-equal one does nothing, so a component that rebuilds the same document on
-every render doesn't rebuild the map. For very large inline GeoJSON, keep the
-value stable (module-level or memoized): the comparison serializes it. An
-invalid document shows the "Configuration Error" card, as a YAML file would.
+A *changed* `config` is applied to the running map in place: layers and
+sources that differ change by id, the camera moves only if the document's
+camera changed, and the map object and your listeners stay (a changed
+`mapStyle` rebuilds the map, at the current camera). An equal one does
+nothing, so a component that rebuilds the same document on every render
+doesn't touch the map. For very large inline GeoJSON, keep the value stable
+(module-level or memoized): the comparison serializes it. An invalid first
+document shows the "Configuration Error" card, as a YAML file would; an
+invalid later one is refused with `ml-map:update-rejected` and the map kept
+([Updating the document](/reference/elements/#updating-the-document)).
+
+### Read and change the map with a `useMlMap` hook
+
+A component that shows the document's `state:` values, or changes the
+document from a form, wants them as React state. This hook returns the
+MapLibre map, the document the map shows and its `state:` values, kept
+current by `ml-map:load`, `ml-map:update-applied` and `ml-map:state-change`,
+with `setState` and `update` bound to the element. Save it as
+`src/useMlMap.ts` (it is not part of the package):
+
+{/* snippet: examples/react/src/snippets/useMlMap.ts */}
+```ts
+import { useCallback, useEffect, useState, type RefObject } from "react";
+import type { Map as MapLibreMap } from "maplibre-gl";
+import type { MapBlock } from "@maplibre-yaml/core";
+import type { MLMap, MLMapEventMap, UpdateResult } from "@maplibre-yaml/core/register";
+
+// The map, the document it shows and its `state:` values as React state,
+// plus `setState` and `update` bound to the element in `ref`. Works on
+// React 18 and 19; StrictMode's extra mount leaves one set of listeners.
+export function useMlMap(ref: RefObject<MLMap | null>) {
+  const [map, setMap] = useState<MapLibreMap | null>(null);
+  const [doc, setDoc] = useState<MapBlock | null>(null);
+  const [state, setStateValues] = useState<Record<string, unknown>>({});
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    // ml-map:load fires on the first render and after a basemap rebuild (a
+    // new map object); ml-map:update-applied after an in-place update (the
+    // same map, a new document).
+    const sync = () => {
+      setMap(el.getMap());
+      setDoc(el.getDocument());
+      setStateValues(el.getState());
+    };
+    const onState = (event: MLMapEventMap["ml-map:state-change"]) =>
+      setStateValues(event.detail.values);
+    el.addEventListener("ml-map:load", sync);
+    el.addEventListener("ml-map:update-applied", sync);
+    el.addEventListener("ml-map:state-change", onState);
+    if (el.isLoaded()) sync(); // the map loaded before this effect ran
+    return () => {
+      el.removeEventListener("ml-map:load", sync);
+      el.removeEventListener("ml-map:update-applied", sync);
+      el.removeEventListener("ml-map:state-change", onState);
+    };
+  }, [ref]);
+
+  // Declared `state:` keys only: an undeclared key throws.
+  const setState = useCallback(
+    (values: Record<string, unknown>) => ref.current?.setState(values),
+    [ref]
+  );
+  // Resolves with the outcome: applied, rejected (map untouched), fallback
+  // (a basemap change rebuilt the map) or superseded by a later update.
+  const update = useCallback(
+    (next: MapBlock): Promise<UpdateResult> =>
+      ref.current?.update(next) ?? Promise.resolve({ outcome: "rejected" }),
+    [ref]
+  );
+
+  return { map, document: doc, state, setState, update };
+}
+```
+
+In a component, `const { state, setState, update, document } = useMlMap(ref)`
+next to `<ml-map ref={ref} …>`: a `<select>` whose `value` is
+`state.scenario` and whose `onChange` calls `setState({ scenario })` follows
+the map's params panel and drives it, and a form that edits a copy of
+`document` and calls `update(next)` gets back `{ outcome, summary }` (or
+`errors`, with the map untouched). The document's `state:` block declares
+the keys `setState` accepts
+([State and parameters](/schema/map-config/#runtime-state-and-parameters)).
+The React 19 props `onml-map:update-applied`, `onml-map:update-rejected` and
+`onml-map:state-change` listen for the same events without a hook.
 
 ### React 19: object config and event props
 
 React 19 sets custom-element props as properties, so `config` takes the object
 itself, and attaches `on*` props as listeners
-([Respond to a click](#react-events-and-the-map-instance)). React 18 ignores
-the event props, and the typings reject an object `config` there:
+([Respond to a click](#react-events-and-the-map-instance)): one per event,
+`onml-map:update-applied`, `onml-map:update-rejected` and
+`onml-map:state-change` included. React 18 ignores the event props, and the
+typings reject an object `config` there:
 
 {/* snippet: examples/react/src/react19/EventPropsMap.tsx */}
 ```tsx
@@ -503,9 +588,11 @@ reports *Property 'ml-map' does not exist on type 'JSX.IntrinsicElements'*.
 The reference line in the [quick start](#setting-up) adds them
 (`import "@maplibre-yaml/core/react";` in any module works too; it is empty
 at runtime). They adapt to `@types/react` 18 or 19, type `useRef<MLMap>(null)`
-so `mapReady()` and `getMap()` are typed, and accept slot children and an
-inline `<script type="text/yaml">`. `MLMap` and `MLMapEventMap` come from
-`@maplibre-yaml/core/register`.
+so `mapReady()`, `getMap()`, `update()` and `setState()` are typed, type the
+`camera` prop (`"document"` or `"host"`: whether a changed document may move
+the camera), and accept slot children and an inline
+`<script type="text/yaml">`. `MLMap`, `MLMapEventMap` and `UpdateResult`
+come from `@maplibre-yaml/core/register`.
 
 ## Next.js
 

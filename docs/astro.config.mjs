@@ -203,7 +203,7 @@ export default defineConfig({
             { label: "Quick start: Astro site on GitHub Pages", link: "/getting-started/astro/" },
             { label: "Your first map, explained", link: "/getting-started/first-map/" },
             { label: "Installation & versions", link: "/getting-started/installation/" },
-            { label: "Upgrading to 0.9", link: "/getting-started/upgrading/" },
+            { label: "Upgrading to 0.10", link: "/getting-started/upgrading/" },
           ],
         },
         // The fastest way to try the format: no install, nothing to save.
