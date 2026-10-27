@@ -53,6 +53,13 @@ export interface ParamsPanelConfig {
   parameters?: Record<string, ParameterMeta>;
   /** `state:` block — `{ key: { default } }`; supplies each control's value. */
   state?: Record<string, unknown>;
+  /**
+   * The current values by key (the renderer's state with a reader's writes
+   * and the panel's own seeds, KTD6): a key present here wins over `state`,
+   * so a rebuilt panel shows what the map reads, not the document's
+   * default. External value changes reach the panel by a rebuild.
+   */
+  values?: Record<string, unknown>;
   /** Labeled, toggleable layers, in document order. */
   toggleableLayers?: ToggleableLayer[];
   /**
@@ -63,7 +70,13 @@ export interface ParamsPanelConfig {
 }
 
 export interface ParamsPanelCallbacks {
-  onStateChange?: (key: string, value: unknown) => void;
+  /**
+   * A control wrote `value` for `key`. `seed` marks the panel's own write
+   * for a key with no current value (a slider's midpoint, an unchecked
+   * toggle's `false`), made once at build so the displayed value is the
+   * applied one — not a reader's change.
+   */
+  onStateChange?: (key: string, value: unknown, seed?: boolean) => void;
   onToggleLayer?: (layerId: string, visible: boolean) => void;
 }
 
@@ -145,12 +158,13 @@ export class ParamsBuilder {
   }
 
   /**
-   * The state default for a key. Spec shape is `{ key: { default } }`;
-   * bare non-object entries are accepted as raw values, mirroring what the
-   * renderer actually applies to the map — the panel must seed from the
-   * same value the document set.
+   * A key's current value, else its state default. Spec shape is
+   * `{ key: { default } }`; bare non-object entries are accepted as raw
+   * values, mirroring what the renderer actually applies to the map — the
+   * panel must seed from the same value the document set.
    */
   private stateDefault(config: ParamsPanelConfig, key: string): unknown {
+    if (config.values && key in config.values) return config.values[key];
     const entry = config.state?.[key];
     if (typeof entry === "object" && entry !== null) {
       return "default" in entry ? (entry as { default?: unknown }).default : undefined;
@@ -210,7 +224,7 @@ export class ParamsBuilder {
         // No state entry: the browser seeds the slider at its midpoint —
         // write that once so the displayed value IS the applied state,
         // instead of the panel showing a number global-state never saw.
-        if (current === undefined) callbacks.onStateChange?.(key, Number(input.value));
+        if (current === undefined) callbacks.onStateChange?.(key, Number(input.value), true);
         row.appendChild(input);
         row.appendChild(value);
         break;
@@ -257,7 +271,7 @@ export class ParamsBuilder {
           callbacks.onStateChange?.(key, input.checked);
         });
         // No state entry: the unchecked box must MEAN false to the map.
-        if (current === undefined) callbacks.onStateChange?.(key, false);
+        if (current === undefined) callbacks.onStateChange?.(key, false, true);
         row.appendChild(input);
         break;
       }

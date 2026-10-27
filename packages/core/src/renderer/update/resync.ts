@@ -155,12 +155,11 @@ export async function resync(host: UpdateHost, request: UpdateRequest, ops: read
     await guard(host, summary, "optionSet", () => runtime.syncLegend(next.layers, next.options.legend));
   }
 
-  // State defaults that changed or arrived, then the panel that shows them.
+  // State defaults that changed, arrived or went (KTD6), then the panel that shows them.
   if (changed("state")) {
     const before = asObject(applied.options.state);
-    const keys = Object.entries(asObject(next.options.state))
-      .filter(([key, value]) => !same(before[key], value))
-      .map(([key]) => key);
+    const after = asObject(next.options.state);
+    const keys = [...new Set([...Object.keys(before), ...Object.keys(after)])].filter((key) => !same(before[key], after[key]));
     if (keys.length > 0) await guard(host, summary, "optionSet", () => runtime.syncState(next.options.state, keys));
   }
   if (!same(panelInputs(applied), panelInputs(next))) {

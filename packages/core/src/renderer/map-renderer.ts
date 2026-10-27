@@ -443,6 +443,19 @@ export interface MapRendererOptions {
    * supplies it; a host rendering effects itself does the same.
    */
   onReattachEffects?: () => void;
+  /**
+   * `state:` values to apply after the document's defaults on load, as a
+   * reader's writes (live documents, KTD8): a fallback rebuild carries the
+   * previous map's current values across. Keys the document's `state:`
+   * block does not declare are ignored, as `setState` refuses them.
+   */
+  initialState?: Record<string, unknown>;
+  /**
+   * Layer visibility a reader set through the panel, by layer id (KTD8):
+   * applied once the layers are on the map and seeding the panel's toggles,
+   * so a hidden layer stays hidden and unchecked across a rebuild.
+   */
+  initialVisibility?: Record<string, boolean>;
 }
 
 /** One host-supplied chrome element and the corner it mounts into. */
@@ -480,7 +493,20 @@ export interface MapRendererEvents {
   'update:applied': { summary: UpdateSummary };
   /** An update was refused: the running map and document are unchanged. */
   'update:rejected': { kind: RejectionKind; errors: NonNullable<UpdateResult['errors']> };
+  /** The document's `state:` values changed (`setState`, a panel write, an update's defaults): all of them, and the keys that changed. */
+  'state:change': { values: Record<string, unknown>; changed: string[] };
 }
+
+/** Who set a `state:` value (KTD6): the document, the panel's midpoint seed, or a reader (`setState` or a panel write). */
+type StateProvenance = 'default' | 'seed' | 'user';
+
+/** A `state:` entry's default: `{ default }` per the spec, a bare value for programmatic callers, `undefined` when it declares nothing. */
+function stateDefault(entry: unknown): unknown {
+  return entry && typeof entry === 'object' ? (entry as { default?: unknown }).default : entry;
+}
+
+/** The declared-absence line for a runtime below the state floor. */
+const NO_STATE_SETTER = 'the running maplibre-gl has no setGlobalStateProperty (needs >= 5.6)';
 
 /**
  * Main class for rendering maps from configuration
@@ -606,6 +632,12 @@ export class MapRenderer {
   private queuedUpdate: PendingUpdate | null = null;
   /** Bumped per started update; stale continuations compare against it. */
   private updateGeneration = 0;
+  /** The document's current `state:` values with who set them (KTD6); written again after every `style.load` (ml-u0l). */
+  private stateValues = new Map<string, { value: unknown; provenance: StateProvenance }>();
+  /** Layer visibility a reader set through the panel (provenance `user`): seeds the panel's toggles across a rebuild. */
+  private visibility = new Map<string, boolean>();
+  /** `initialState` and `setState` writes made before the map loads, applied after the defaults in the load handler. */
+  private pendingState: Record<string, unknown> | null;
 
 
   /**
@@ -652,6 +684,7 @@ export class MapRenderer {
     this.strings = createStrings(config.locale);
     this.applied = { config, layers, sources: sources ?? {}, options: documentOptions(options) };
     this.options = options;
+    this.pendingState = options.initialState ? { ...options.initialState } : null;
 
     // When a `controls.attribution` control is configured, MapLibre's built-in
     // attribution must be disabled at construction time so the two don't
@@ -1020,6 +1053,19 @@ export class MapRenderer {
       // doing nothing (the declared-absence posture, R5/U8).
       const setState = this.stateSetter();
       this.applyStateDefaults(options.state);
+      // Then what a reader or a previous map set (KTD8): `initialState` and
+      // writes queued before load, declared keys only, as the reader's own.
+      const queued = this.pendingState;
+      if (queued) {
+        this.pendingState = null;
+        for (const key in queued) if (!(key in (options.state ?? {}))) delete queued[key];
+        if (this.writeState(queued, 'user')) this.emitStateChange(Object.keys(queued));
+      }
+      for (const [layerId, visible] of Object.entries(options.initialVisibility ?? {})) {
+        if (!layers.some((layer) => layer.id === layerId)) continue;
+        this.visibility.set(layerId, visible);
+        this.pendingVisibility.set(layerId, visible);
+      }
 
       // Map-level 3D (U15). Projection and sky first — neither depends on a
       // source. Terrain needs its raster-dem source to exist: named sources
@@ -1237,6 +1283,13 @@ export class MapRenderer {
     let styleLoaded = false;
     this.map.on('style.load', () => {
       styleLoaded = true;
+      // A new style resets global state (ml-u0l): every current value is
+      // written again — after the renderer's own setStyle calls (a Protomaps
+      // basemap, its labels left out, its fallback) and a host's alike. On
+      // first load nothing is current yet; the load handler applies the
+      // defaults once.
+      const setState = this.stateSetter();
+      if (setState) for (const [key, { value }] of this.stateValues) setState.call(this.map, key, value);
     });
     const classify = (
       e: { sourceId?: unknown; tile?: unknown; layer?: { id?: unknown } },
@@ -1748,15 +1801,15 @@ export class MapRenderer {
       const l = layer as unknown as Record<string, unknown>;
       if (typeof l['label'] !== 'string' || l['toggleable'] === false) return [];
       // Hidden is hidden however it was spelled: `visible: false` or the
-      // spec-native `layout: { visibility: "none" }` passthrough. (A panel
-      // rebuilt by an update seeds from the document; U5's visibility
-      // overrides with provenance keep a reader's toggle across it, KTD6.)
+      // spec-native `layout: { visibility: "none" }` passthrough — unless
+      // the reader toggled it, which outlives a rebuild (KTD6).
       const layout = l['layout'] as Record<string, unknown> | undefined;
+      const id = String(l['id']);
       return [
         {
-          id: String(l['id']),
+          id,
           label: l['label'],
-          visible: l['visible'] !== false && layout?.['visibility'] !== 'none',
+          visible: this.visibility.get(id) ?? (l['visible'] !== false && layout?.['visibility'] !== 'none'),
         },
       ];
     });
@@ -1765,6 +1818,7 @@ export class MapRenderer {
         ? { parameters: options.parameters as Record<string, ParameterMeta> }
         : {}),
       ...(options.state ? { state: options.state } : {}),
+      values: this.getState(),
       toggleableLayers,
       stateSupported: typeof setState === 'function',
     };
@@ -1778,20 +1832,15 @@ export class MapRenderer {
       strings: this.strings,
       language: mapLanguage(this.map),
     })).build(mount, panelConfig, {
-      onStateChange: (key, value) => {
-        if (this.destroyed) return;
-        try {
-          setState?.call(this.map, key, value);
-        } catch (error) {
-          // A host setStyle() in flight makes MapLibre throw "Style is not
-          // done loading" — a dropped write during a swap, not a crash.
-          console.warn('[maplibre-yaml] state write dropped:', error);
-          return;
-        }
+      onStateChange: (key, value, seed) => {
+        // One `parameter:change` per key (compatibility) and one `state:change`.
+        if (this.destroyed || !this.writeState({ [key]: value }, seed ? 'seed' : 'user')) return;
         this.emit('parameter:change', { key, value });
+        this.emitStateChange([key]);
       },
       onToggleLayer: (layerId, visible) => {
         if (this.destroyed) return;
+        this.visibility.set(layerId, visible);
         // The panel is interactive before the layer chain settles (images
         // load first) — a toggle made in that window is DEFERRED, not
         // dropped; one made against a layer that never landed warns.
@@ -1813,11 +1862,7 @@ export class MapRenderer {
       Object.keys(panelConfig.parameters ?? {}).length > 0 &&
       typeof setState !== 'function'
     ) {
-      console.warn(
-        '[maplibre-yaml] this document declares `parameters:`, but the ' +
-          'running maplibre-gl has no setGlobalStateProperty (needs >= 5.6); ' +
-          'the panel shows a notice instead of controls.',
-      );
+      console.warn(`[maplibre-yaml] this document declares \`parameters:\`, but ${NO_STATE_SETTER}; the panel shows a notice instead of controls.`);
     }
   }
 
@@ -1835,36 +1880,102 @@ export class MapRenderer {
   }
 
   /**
-   * Apply the document's `state:` defaults (`{ key: { default } }`) through
-   * `setGlobalStateProperty`, all of them or only `keys`. On a runtime
-   * without it a declared block warns once instead of silently doing
-   * nothing (the declared-absence posture, R5/U8).
+   * Apply the document's `state:` defaults (`{ key: { default } }`) on
+   * load. On a runtime without `setGlobalStateProperty` a declared block
+   * warns once instead of silently doing nothing (the declared-absence
+   * posture, R5/U8).
    */
-  private applyStateDefaults(state: Record<string, unknown> | undefined, keys?: readonly string[]): void {
+  private applyStateDefaults(state: Record<string, unknown> | undefined): void {
     if (!state || Object.keys(state).length === 0) return;
-    const setState = this.stateSetter();
-    if (typeof setState !== 'function') {
-      console.warn(
-        '[maplibre-yaml] this document declares `state:`, but the running ' +
-          'maplibre-gl has no setGlobalStateProperty (needs >= 5.6); ' +
-          '`global-state` expressions will read null.',
-      );
+    if (typeof this.stateSetter() !== 'function') {
+      console.warn(`[maplibre-yaml] this document declares \`state:\`, but ${NO_STATE_SETTER}; \`global-state\` expressions will read null.`);
       return;
     }
-    for (const [key, entry] of Object.entries(state)) {
-      if (keys && !keys.includes(key)) continue;
-      // Spec shape is { default: value }. An object without `default`
-      // declares nothing — skip it rather than hand the object itself
-      // to the runtime as the state value. Bare (non-object) entries
-      // are accepted as raw values for programmatic callers.
-      if (entry && typeof entry === 'object') {
-        if (!('default' in entry)) continue;
-        const value = (entry as { default?: unknown }).default;
-        if (value !== undefined) setState.call(this.map, key, value);
-      } else if (entry !== undefined) {
-        setState.call(this.map, key, entry);
+    this.syncState(state, Object.keys(state));
+  }
+
+  /**
+   * The next document's defaults for `keys` (KTD6): a changed or new
+   * default replaces the current value unless a reader set it; a key the
+   * document no longer declares (or that declares nothing) is forgotten.
+   *
+   * @returns The keys whose current value changed.
+   */
+  private syncState(state: Record<string, unknown> | undefined, keys: readonly string[]): string[] {
+    const changed: string[] = [];
+    const defaults: Record<string, unknown> = {};
+    for (const key of keys) {
+      const value = stateDefault(state?.[key]);
+      if (value === undefined) {
+        if (this.stateValues.delete(key)) changed.push(key);
+      } else if (this.stateValues.get(key)?.provenance !== 'user') {
+        defaults[key] = value;
+        changed.push(key);
       }
     }
+    this.writeState(defaults, 'default');
+    return changed;
+  }
+
+  /**
+   * Record `values` as current under `provenance` and write them to the
+   * map's global state.
+   *
+   * @returns Whether the runtime has `setGlobalStateProperty` (>= 5.6).
+   */
+  private writeState(values: Record<string, unknown>, provenance: StateProvenance): boolean {
+    const setState = this.stateSetter();
+    if (typeof setState !== 'function') return false;
+    for (const [key, value] of Object.entries(values)) {
+      this.stateValues.set(key, { value, provenance });
+      try {
+        setState.call(this.map, key, value);
+      } catch (error) {
+        // A host setStyle() in flight makes MapLibre throw "Style is not
+        // done loading": the value is current and lands on `style.load`.
+        console.warn('[maplibre-yaml] state write deferred to the next style load:', error);
+      }
+    }
+    return true;
+  }
+
+  private emitStateChange(changed: string[]): void {
+    if (changed.length) this.emit('state:change', { values: this.getState(), changed });
+  }
+
+  /**
+   * The document's current `state:` values (live documents, KTD6): its
+   * defaults, the panel's seeds and every write since, by key.
+   */
+  getState(): Record<string, unknown> {
+    const values: Record<string, unknown> = {};
+    for (const [key, entry] of this.stateValues) values[key] = entry.value;
+    return values;
+  }
+
+  /**
+   * Write `state:` values (live documents, R12): each goes through
+   * `setGlobalStateProperty`, the params panel follows, and one
+   * `state:change` fires. A key the document's `state:` block does not
+   * declare refuses the whole call — nothing is written — and a write made
+   * before the map loads is applied once it does, after the defaults.
+   *
+   * @throws When a key is undeclared, or the running maplibre-gl has no
+   *   `setGlobalStateProperty` (below 5.6).
+   */
+  setState(values: Record<string, unknown>): void {
+    const declared = this.applied.options.state ?? {};
+    const undeclared = Object.keys(values).filter((key) => !(key in declared));
+    if (undeclared.length) {
+      throw new Error(`[maplibre-yaml] setState: the document's \`state:\` block declares no ${undeclared.map((key) => `"${key}"`).join(', ')}`);
+    }
+    if (!this.isLoaded) {
+      this.pendingState = { ...this.pendingState, ...values };
+      return;
+    }
+    if (!this.writeState(values, 'user')) throw new Error(`[maplibre-yaml] setState: ${NO_STATE_SETTER}`);
+    this.emitStateChange(Object.keys(values));
+    if (this.paramsMount) this.syncParamsPanel(this.applied.layers, this.applied.options);
   }
 
   /** The classify runtime over `layers` and `sources`, wired to the legend, the event bus and the error path. */
@@ -2215,7 +2326,14 @@ export class MapRenderer {
       syncMarkers: (markers) => this.syncMarkers(markers),
       syncPopups: (popups) => this.syncPopups(popups),
       syncClassify: (layers, sources, layerIds) => this.syncClassify(layers, sources, layerIds),
-      syncState: (state, keys) => this.applyStateDefaults(state, keys),
+      syncState: (state, keys) => {
+        const changed = this.syncState(state, keys);
+        this.emitStateChange(changed);
+        // The panel shows what the map reads: a changed default redraws it
+        // now (the engine rebuilds it again from the next document when
+        // its own inputs changed).
+        if (changed.length && this.paramsMount) this.syncParamsPanel(this.applied.layers, this.applied.options);
+      },
       setTitle: (title, description) => this.setTitle(title, description),
       loadImages: (images) =>
         loadDocumentImages(this.map, images, (name, url) => this.emit('image:error', { name, url })),

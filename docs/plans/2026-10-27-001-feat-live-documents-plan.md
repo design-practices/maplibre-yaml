@@ -308,7 +308,7 @@ Everything else on a layer (`paint`, `layout`, `filter`, `minzoom`, `maxzoom`, `
 **Deferred to implementation, with defaults** (none blocks U1 to U3; the maintainer may override before the unit named)
 
 - Where the ml-u0l fix lands (before U5): default is inside U5 as one unit, closing ml-u0l with U5's PR. The alternative is a 0.9.x patch carrying only the `style.load` reapply, which ships the bug fix to current users weeks earlier and shrinks U5; it needs its own small PR, changeset and test.
-- The entry budget allowance (before U4): default 4 KB gzip over the 0.9.2 baseline, with the list of entry-resident additions in the U4 PR body.
+- The entry budget allowance: decided 2026-10-27 at 10 KB gzip over the 0.9.2 baseline (U1 to U4 used 4,065 B of it; U5 and U6 add entry code; the bundle-diet tier is expected to bring the entry back below 0.9.2). The list of entry-resident additions goes in the U6 PR body.
 - Whether R10 gains one sentence naming the host-layer rules (host layers keep absolute position; a document source still used by a host layer is left in place and reported): default yes, in U9's reference text, since KTD3 and KTD4 already decide the behaviour.
 - Whether to spike `transformStyle` as the basemap-swap mechanism before U6 instead of building the two-map fallback: default no for 0.10 (KTD16); the spike is the first 0.11 candidate.
 

@@ -322,7 +322,12 @@ export interface RuntimeHost {
   syncPopups(popups: StandalonePopupConfig[] | undefined): void;
   /** Re-seed classify templates for `layerIds` from the next document and catch up (`layersReady`). */
   syncClassify(layers: Layer[], sources: Record<string, LayerSource>, layerIds: readonly string[]): void;
-  /** Apply the next document's `state:` defaults for `changedKeys` (U5 adds provenance). */
+  /**
+   * Bring the current `state:` values in line with the next document for
+   * `changedKeys` — defaults that changed, arrived or went — under the
+   * provenance rule (KTD6: a reader's value stays), and fire one
+   * `state:change` naming what changed.
+   */
   syncState(state: Record<string, unknown> | undefined, changedKeys: readonly string[]): void;
   /** Rename and re-describe the map (`locale["Map.Title"]`, the canvas's `aria-*`). */
   setTitle(title: string | undefined, description: string | undefined): void;
