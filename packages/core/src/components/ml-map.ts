@@ -516,8 +516,11 @@ export class MLMap extends BaseElement {
   /**
    * Every line reported for the current render, shown or not — so turning
    * `debug` on (or `quiet` off) later can rebuild the notice (ml-aot.57).
+   * `about` names the layer, its data, or the source a line describes
+   * (`layer:<id>`, `data:<layerId>`, `source:<id>`), so an update that
+   * retries or replaces it withdraws the line once it succeeds (KTD11).
    */
-  private noticeEntries: Array<{ message: string; kind: NoticeKind }> = [];
+  private noticeEntries: Array<{ message: string; kind: NoticeKind; about?: string }> = [];
   /** The current document's `onPage` warnings, shown once its map renders. */
   private documentNotices: string[] = [];
   /**
@@ -1182,6 +1185,10 @@ export class MLMap extends BaseElement {
     if (result.outcome === "applied") {
       for (const message of this.documentNotices) this.reportProblem(message, { kind: "hint" });
       const summary = result.summary ?? emptySummary();
+      // A layer added or replaced starts over; so does a replaced source.
+      // Their old lines go; a retried load's line goes when its data lands.
+      for (const id of [...summary.added, ...summary.replaced]) this.withdrawNotices(`layer:${id}`, `data:${id}`);
+      for (const id of summary.sourcesReplaced) this.withdrawNotices(`source:${id}`);
       this.dispatchEvent(
         new CustomEvent("ml-map:update-applied", {
           bubbles: true,
@@ -1222,6 +1229,14 @@ export class MLMap extends BaseElement {
     if (!hint) return;
     this.rejectionHint = null;
     this.noticeEntries = this.noticeEntries.filter((entry) => entry.message !== hint);
+    this.rebuildNotice();
+  }
+
+  /** Take every line about `about` off the notice: what it described was retried or replaced and succeeded. */
+  private withdrawNotices(...about: string[]): void {
+    const kept = this.noticeEntries.filter((entry) => !entry.about || !about.includes(entry.about));
+    if (kept.length === this.noticeEntries.length) return;
+    this.noticeEntries = kept;
     this.rebuildNotice();
   }
 
@@ -1645,10 +1660,11 @@ export class MLMap extends BaseElement {
         if (!terminal && context?.kind === "layer" && context.layerId) {
           // A document layer whose id the page already used (KTD1): an
           // author hint, not a draw failure.
+          const about = `layer:${context.layerId}`;
           if (/already on the map but was not declared/.test(error.message)) {
-            this.reportProblem(describeHostLayerCollision(context.layerId), { kind: "hint" });
+            this.reportProblem(describeHostLayerCollision(context.layerId), { kind: "hint", about });
           } else {
-            this.reportProblem(describeLayerProblem(context.layerId, error.message));
+            this.reportProblem(describeLayerProblem(context.layerId, error.message), { about });
           }
         } else if (!terminal && context?.kind === "classify") {
           // The message is the whole notice (renderer/classify-runtime).
@@ -1663,7 +1679,8 @@ export class MLMap extends BaseElement {
               pageUrl: this.ownerDocument.baseURI,
               base: this.base,
               ...(context.basemap ? { basemap: true } : {}),
-            })
+            }),
+            { about: `source:${context.sourceId}` }
           );
         }
       },
@@ -1813,15 +1830,17 @@ export class MLMap extends BaseElement {
    * @param options.kind - `"failure"` (default: something didn't load) always
    *   shows; `"hint"` (a did-you-mean, a misplaced key) shows only while the
    *   author is developing, per {@link showAuthorHints} (ml-aot.57).
+   * @param options.about - what the line describes (see `noticeEntries`),
+   *   so a successful retry or replacement withdraws it.
    */
   private reportProblem(
     message: string,
-    options: { log?: boolean; kind?: NoticeKind } = {}
+    options: { log?: boolean; kind?: NoticeKind; about?: string } = {}
   ): void {
     if (options.log) console.error(`[maplibre-yaml] ${consoleText(message)}`);
     const kind = options.kind ?? "failure";
     if (!this.noticeEntries.some((e) => e.message === message)) {
-      this.noticeEntries.push({ message, kind });
+      this.noticeEntries.push({ message, kind, ...(options.about ? { about: options.about } : {}) });
     }
     this.showNoticeLine(message, kind);
   }
@@ -2040,8 +2059,10 @@ export class MLMap extends BaseElement {
       );
     });
 
-    // Layer data loaded
+    // Layer data loaded — a retried load that succeeded takes its line off
+    // the notice (a `reload()` after a reader failed, KTD11).
     renderer.on("layer:data-loaded", ({ layerId, featureCount }) => {
+      this.withdrawNotices(`data:${layerId}`);
       this.dispatchEvent(
         new CustomEvent("ml-map:layer-data-loaded", {
           bubbles: true,
@@ -2060,7 +2081,7 @@ export class MLMap extends BaseElement {
           filePage: isFilePage(this.ownerDocument),
           base: this.base,
         }),
-        { log: true }
+        { log: true, about: `data:${layerId}` }
       );
       this.dispatchEvent(
         new CustomEvent("ml-map:layer-data-error", {

@@ -693,6 +693,51 @@ layers:
     expect(hints.urlsRebased).toBe(false);
   });
 
+  it("a data notice is withdrawn when reload() retries the source and it loads; an untouched layer's notice stays", async () => {
+    const el = document.createElement("ml-map") as MLMap;
+    el.innerHTML = `<script type="text/yaml">${YAML()}  - { id: roads, type: line, source: pts }\n</script>`;
+    document.body.appendChild(el);
+    await settle();
+    first().load();
+    // Two readers failed: one line each on the notice (always shown: a failure, not a hint).
+    first().emit("layer:data-error", { layerId: "pts", error: new Error("The FlatGeobuf reader couldn't be downloaded") });
+    first().emit("layer:data-error", { layerId: "roads", error: new Error("The FlatGeobuf reader couldn't be downloaded") });
+    const notice = () => el.querySelector(".ml-map-notice")?.textContent ?? "";
+    expect(notice()).toContain("layer pts");
+    expect(notice()).toContain("layer roads");
+
+    // reload() retries the failed source; the attempt alone withdraws nothing.
+    first().failedSources.mockReturnValue(new Set(["pts"]));
+    await el.reload();
+    await settle();
+    expect(first().update).toHaveBeenCalledTimes(1);
+    expect(notice()).toContain("layer pts");
+
+    // Its data lands: that layer's line goes; the other layer's stays.
+    first().emit("layer:data-loaded", { layerId: "pts", featureCount: 3 });
+    expect(notice()).not.toContain("layer pts");
+    expect(notice()).toContain("layer roads");
+    first().emit("layer:data-loaded", { layerId: "roads", featureCount: 1 });
+    expect(el.querySelector(".ml-map-notice")).toBeNull();
+  });
+
+  it("an applied update's added, replaced and replaced-source lines are withdrawn; others stay", async () => {
+    const { el } = await mounted();
+    first().options.onError(new Error("layers.pts: color expected"), false, { kind: "layer", layerId: "pts" });
+    first().options.onError(new Error("tiles 404"), false, { kind: "source", sourceId: "pts" });
+    first().options.onError(new Error("layers.other: bad"), false, { kind: "layer", layerId: "other" });
+    const notice = () => el.querySelector(".ml-map-notice")?.textContent ?? "";
+    expect(notice()).toContain("Layer pts");
+    expect(notice()).toContain("Source pts");
+    expect(notice()).toContain("Layer other");
+    first().update.mockResolvedValueOnce({ outcome: "applied", summary: { ...emptySummary(), replaced: ["pts"], sourcesReplaced: ["pts"] } });
+    el.config = block({}, { zoom: 4 }) as any;
+    await settle();
+    expect(notice()).not.toContain("Layer pts");
+    expect(notice()).not.toContain("Source pts");
+    expect(notice()).toContain("Layer other");
+  });
+
   it("reload() of a src document carries the failed sources too", async () => {
     globalThis.fetch = vi.fn(async () => ok(YAML())) as any;
     const el = document.createElement("ml-map") as MLMap;
