@@ -47,7 +47,17 @@ import type {
   ProjectionConfig,
 } from '../schemas/map.schema';
 import { applyProjection, applySky, applyTerrain, type Scene3DMap } from './scene-3d';
-import type { AppliedDocument, DocumentOptions } from './update/types';
+import type {
+  AppliedDocument,
+  DiffHints,
+  DocumentOptions,
+  RejectionKind,
+  RuntimeHost,
+  UpdateHost,
+  UpdateResult,
+  UpdateSummary,
+} from './update/types';
+import { getDecoder } from '../formats/decoders';
 import { createStrings, type Strings } from '../i18n';
 import { mapLanguage } from './popup-builder';
 import { applyAccessibleName } from './accessible-name';
@@ -418,6 +428,21 @@ export interface MapRendererOptions {
    * there once the COG reader reports it.
    */
   prefetchedExtents?: Record<string, [number, number, number, number]>;
+  /**
+   * Who owns the camera across updates (live documents, KTD13). `document`
+   * (the default): a changed `center`, `zoom`, `bearing` or `pitch` eases
+   * the map there and an added or re-targeted `fitTo` frames its source
+   * once. `host`: the engine never moves the camera; the host re-applies
+   * the document camera itself on `update:applied` when it wants it.
+   */
+  camera?: 'document' | 'host';
+  /**
+   * Detach and re-attach `@maplibre-yaml/effects` (live documents, KTD6b):
+   * called by an update that adds or removes an `effect:` block, or rebuilds
+   * or moves an effect-bearing layer, so the `::fx-` layers follow. `<ml-map>`
+   * supplies it; a host rendering effects itself does the same.
+   */
+  onReattachEffects?: () => void;
 }
 
 /** One host-supplied chrome element and the corner it mounts into. */
@@ -451,6 +476,10 @@ export interface MapRendererEvents {
    * and again whenever fetched data (re)computes them.
    */
   'layer:classified': { layerId: string; classify: ClassifyRecord };
+  /** An update applied in place (live documents): what it did, by id. */
+  'update:applied': { summary: UpdateSummary };
+  /** An update was refused: the running map and document are unchanged. */
+  'update:rejected': { kind: RejectionKind; errors: NonNullable<UpdateResult['errors']> };
 }
 
 /**
@@ -473,6 +502,39 @@ function documentOptions(options: MapRendererOptions): DocumentOptions {
     if (options[key] !== undefined) (picked as Record<string, unknown>)[key] = options[key];
   }
   return picked;
+}
+
+/** The renderer options with the document's blocks replaced by `next`'s: the host's own keep their values. */
+function withDocumentOptions(options: MapRendererOptions, next: DocumentOptions): MapRendererOptions {
+  const merged: Record<string, unknown> = { ...options };
+  for (const key of DOCUMENT_OPTION_KEYS) delete merged[key];
+  return { ...merged, ...next } as MapRendererOptions;
+}
+
+/** `config:` keys an update applies in place: the camera (KTD13), `fitTo`, and the options with a setter (KTD7). */
+const IN_PLACE_CONFIG_KEYS: ReadonlySet<string> = new Set(['center', 'zoom', 'bearing', 'pitch', 'fitTo', 'minZoom', 'maxZoom', 'maxBounds']);
+
+/**
+ * Whether `next` forces a rebuild (KTD7), decided in the entry before the
+ * engine chunk is awaited: a changed `mapStyle`, or any Map constructor
+ * option without a setter. Mirrors `fallbackReason` in update/diff.ts,
+ * which the chunk runs (and names the key).
+ */
+function needsRebuild(applied: MapConfig, next: MapConfig): boolean {
+  const a = applied as Record<string, unknown>;
+  const b = next as Record<string, unknown>;
+  return Object.keys({ ...a, ...b }).some(
+    (key) => !IN_PLACE_CONFIG_KEYS.has(key) && JSON.stringify(a[key]) !== JSON.stringify(b[key])
+  );
+}
+
+const NO_HINTS: DiffHints = { failedSources: new Set(), urlsRebased: false };
+
+/** One queued update (KTD5): the next document, its hints, and the caller waiting on it. */
+interface PendingUpdate {
+  next: AppliedDocument;
+  hints: DiffHints;
+  resolve: (result: UpdateResult) => void;
 }
 
 export class MapRenderer {
@@ -529,7 +591,21 @@ export class MapRenderer {
    * Not public: `getDocument()` is its reader, and the update engine the
    * only writer.
    */
-  protected readonly applied: AppliedDocument;
+  protected applied: AppliedDocument;
+  /** The options this map was built with; the document's blocks follow `applied` across updates. */
+  private options: MapRendererOptions;
+  /** `fitTo`: the camera's source, as the constructor or the last update resolved it. */
+  private fitTarget: { fitTo: FitToConfig; fit: FitResolution } | null = null;
+  /** The params panel's mount and builder, kept so an update rebuilds into the same corner slot. */
+  private paramsMount: HTMLElement | null = null;
+  private paramsBuilder: ParamsBuilder | null = null;
+  /** The `description:` element the canvas points at, replaced by an update. */
+  private descriptionEl: HTMLElement | null = null;
+  /** The update in flight and the one waiting behind it (KTD5: one in flight, at most one queued). */
+  private updateInFlight: Promise<UpdateResult> | null = null;
+  private queuedUpdate: PendingUpdate | null = null;
+  /** Bumped per started update; stale continuations compare against it. */
+  private updateGeneration = 0;
 
 
   /**
@@ -575,6 +651,7 @@ export class MapRenderer {
     // strings (namespaced `maplibre-yaml.*`, which MapLibre ignores).
     this.strings = createStrings(config.locale);
     this.applied = { config, layers, sources: sources ?? {}, options: documentOptions(options) };
+    this.options = options;
 
     // When a `controls.attribution` control is configured, MapLibre's built-in
     // attribution must be disabled at construction time so the two don't
@@ -628,6 +705,7 @@ export class MapRenderer {
     // A COG whose header the host already read (ml-aot.120): framed now.
     const extent = fitTo && fit?.kind === 'tile-bounds' ? options.prefetchedExtents?.[fitTo.source] : undefined;
     if (extent) fit = { kind: 'bounds', bounds: [[extent[0], extent[1]], [extent[2], extent[3]]] as Bounds };
+    if (fitTo && fit) this.fitTarget = { fitTo, fit };
     const initialFit =
       fit && fit.kind === 'bounds'
         ? {
@@ -709,7 +787,7 @@ export class MapRenderer {
     } as any);
     // Accessible name and description on the canvas (every supported
     // maplibre-gl major; MapLibre's own role/label are extended, not fought).
-    applyAccessibleName(this.map, {
+    this.descriptionEl = applyAccessibleName(this.map, {
       ...(options.title !== undefined ? { title: options.title } : {}),
       ...(options.description !== undefined ? { description: options.description } : {}),
       strings: this.strings,
@@ -737,35 +815,7 @@ export class MapRenderer {
     // COG sources (ml-cnv.2): once a source's metadata has loaded, its reader
     // knows the file's extent (fitTo) and whether it is cloud-optimized (an
     // author hint when not).
-    const cogSources = new Set(sourceIdsReading('cog', sources, layers));
-    if (cogSources.size > 0 || (fitTo && fit && fit.kind === 'tile-bounds')) {
-      const hinted = new Set<string>();
-      this.map.on('sourcedata', (e: { sourceId?: string; sourceDataType?: string }) => {
-        if (this.destroyed || e.sourceDataType !== 'metadata' || !e.sourceId) return;
-        const source = this.map.getSource(e.sourceId) as { url?: unknown; bounds?: unknown } | undefined;
-        if (!source) return;
-        if (fitTo && fit && fit.kind === 'tile-bounds' && e.sourceId === fitTo.source && !this.fitApplied) {
-          const b = source.bounds;
-          if (Array.isArray(b) && b.length === 4 && b.every((n) => typeof n === 'number')) {
-            const bounds: Bounds = [[b[0], b[1]], [b[2], b[3]]] as Bounds;
-            this.fitApplied = true;
-            this.map.fitBounds(bounds, {
-              padding: this.fitPadding(fitTo),
-              ...(fitTo.maxZoom !== undefined ? { maxZoom: fitTo.maxZoom } : {}),
-              animate: false,
-            });
-            this.emit('camera:fit', { source: fitTo.source, bounds });
-          }
-        }
-        if (cogSources.has(e.sourceId) && !hinted.has(e.sourceId) && typeof source.url === 'string') {
-          const hint = cogHintFor(source.url);
-          if (hint) {
-            hinted.add(e.sourceId);
-            options.onError?.(new Error(hint), false, { kind: 'source-hint', sourceId: e.sourceId });
-          }
-        }
-      });
-    }
+    this.watchSourceData(new Set(sourceIdsReading('cog', sources, layers)));
 
     this.attributionGuard = installAttributionGuard(this.map);
 
@@ -858,50 +908,7 @@ export class MapRenderer {
         }
         // A fetched `fitTo` source frames the camera on its FIRST load only:
         // after that the user owns the camera, and a refresh must not yank it.
-        if (fitTo && fit && fit.kind === 'deferred' && !this.fitApplied) {
-          const data = this.layerManager.getSourceData(fitTo.source);
-          // A source read by view (FlatGeobuf or GeoParquet `load: viewport`,
-          // ml-cnv.3/.4) holds only the part in view: frame the file's own extent.
-          const bounds =
-            this.layerManager.getSourceExtent?.(fitTo.source) ??
-            (data ? geojsonBounds(data) : null);
-          if (bounds) {
-            this.fitApplied = true;
-            const fitOptions = {
-              padding: this.fitPadding(fitTo),
-              ...(fitTo.maxZoom !== undefined ? { maxZoom: fitTo.maxZoom } : {}),
-              animate: false,
-            };
-            // ...and never further out than it is read: a citywide file
-            // framed at zoom 9.9 opened blank under a `minzoom` of 10, and at
-            // zoom 10 its view held 855,773 features — over the 150,000 one
-            // read takes — so it opened on the "zoom in" line. Centred on the
-            // extent, at the outermost zoom whose view the reader's index or
-            // row-group statistics say is read (or the source's minzoom when
-            // none is near; the author's maxZoom still caps it).
-            const minzoom = this.layerManager.getViewMinzoom?.(fitTo.source);
-            const camera =
-              minzoom !== undefined ? this.map.cameraForBounds?.(bounds, fitOptions) : undefined;
-            if (minzoom !== undefined && camera?.center && camera.zoom !== undefined) {
-              const center = camera.center as { lng: number; lat: number };
-              const container = this.map.getContainer?.();
-              const fits = this.layerManager.getViewZoomThatFits?.(
-                fitTo.source,
-                [center.lng, center.lat],
-                camera.zoom,
-                container?.clientWidth ?? 0,
-                container?.clientHeight ?? 0
-              );
-              let zoom = Math.max(camera.zoom, fits ?? minzoom);
-              if (fitTo.maxZoom !== undefined) zoom = Math.min(zoom, Math.max(fitTo.maxZoom, minzoom, camera.zoom));
-              if (zoom > camera.zoom) this.map.jumpTo({ center: camera.center, zoom });
-              else this.map.fitBounds(bounds, fitOptions);
-            } else {
-              this.map.fitBounds(bounds, fitOptions);
-            }
-            this.emit('camera:fit', { source: fitTo.source, bounds });
-          }
-        }
+        this.fitDeferred();
         // Refreshed data means new features. Feature-state is keyed by id and
         // survives setData, so a retained highlight id would light up whichever
         // feature now holds it — a different one. Drop it; the next mousemove
@@ -960,28 +967,7 @@ export class MapRenderer {
       // highlighted layer draws from, so they get feature ids (ml-aot.142).
       namedSourcesNeedingIds: namedSourcesNeedingIds(layers),
     });
-    const classifyRuntime = new ClassifyRuntime(
-      this.map,
-      layers as never,
-      sources as Record<string, unknown> | undefined,
-      (sourceId) => this.layerManager.getSourceData?.(sourceId),
-      (layerId, record) => {
-        this.redrawLegend();
-        this.emit('layer:classified', { layerId, classify: record });
-      },
-      {
-        readsByView: (sourceId) => this.layerManager.readsByView?.(sourceId) ?? false,
-        onRefused: (layerId, sourceId, error) => {
-          console.warn(`[maplibre-yaml] ${consoleText(error.message)}`);
-          options.onError?.(error, false, { kind: 'classify', layerId, sourceId });
-        },
-        // An author hint: the console always, the page while developing.
-        onFieldProblem: (layerId, message) => {
-          console.warn(`[maplibre-yaml] ${consoleText(message)}`);
-          options.onError?.(new Error(message), false, { kind: 'classify-field', layerId });
-        },
-      }
-    );
+    const classifyRuntime = this.createClassify(layers, sources);
     if (classifyRuntime.active) this.classify = classifyRuntime;
     this.eventHandler = new EventHandler(this.map, eventCallbacks, options.capabilities);
     this.legendBuilder = new LegendBuilder({ strings: this.strings });
@@ -1032,32 +1018,8 @@ export class MapRenderer {
       // null. `setGlobalStateProperty` exists from maplibre-gl 5.6; on older
       // runtimes a declared `state:` block warns once instead of silently
       // doing nothing (the declared-absence posture, R5/U8).
-      const setState = (this.map as unknown as {
-        setGlobalStateProperty?: (name: string, value: unknown) => void;
-      }).setGlobalStateProperty;
-      if (options.state && Object.keys(options.state).length > 0) {
-        if (typeof setState === 'function') {
-          for (const [key, entry] of Object.entries(options.state)) {
-            // Spec shape is { default: value }. An object without `default`
-            // declares nothing — skip it rather than hand the object itself
-            // to the runtime as the state value. Bare (non-object) entries
-            // are accepted as raw values for programmatic callers.
-            if (entry && typeof entry === 'object') {
-              if (!('default' in entry)) continue;
-              const value = (entry as { default?: unknown }).default;
-              if (value !== undefined) setState.call(this.map, key, value);
-            } else if (entry !== undefined) {
-              setState.call(this.map, key, entry);
-            }
-          }
-        } else {
-          console.warn(
-            '[maplibre-yaml] this document declares `state:`, but the running ' +
-              'maplibre-gl has no setGlobalStateProperty (needs >= 5.6); ' +
-              '`global-state` expressions will read null.',
-          );
-        }
-      }
+      const setState = this.stateSetter();
+      this.applyStateDefaults(options.state);
 
       // Map-level 3D (U15). Projection and sky first — neither depends on a
       // source. Terrain needs its raster-dem source to exist: named sources
@@ -1123,21 +1085,9 @@ export class MapRenderer {
 
       // Standalone markers: DOM pins with the document's popup content run
       // through the same trust gate as every popup sink (U5).
-      if (options.markers && options.markers.length > 0) {
-        this.markersManager = new MarkersManager(this.map, options.capabilities, {
-          onMarkersAdded: (count) => this.emit('markers:added', { count }),
-          onMarkerClick: (index, at) => this.emit('marker:click', { index, at }),
-          onMarkerIconError: (index, icon) =>
-            this.emit('marker:icon-error', { index, icon }),
-        });
-        this.markersManager.add(options.markers as MarkerConfig[]);
-      }
-
+      this.syncMarkers(options.markers);
       // Standalone popups (U14): open at their coordinates, same trust gate.
-      if (options.popups && options.popups.length > 0) {
-        this.popupsManager = new PopupsManager(this.map, options.capabilities);
-        this.popupsManager.add(options.popups);
-      }
+      this.syncPopups(options.popups);
 
       // An inline-data fit was applied by the constructor; announce it now
       // that listeners (attached after construction) can hear it.
@@ -1152,11 +1102,7 @@ export class MapRenderer {
           const assumed =
             (container?.clientWidth ?? 0) < NARROW_MAP_WIDTH ? ATTRIBUTION_RESERVE_NARROW : ATTRIBUTION_RESERVE_WIDE;
           if (measured !== undefined && measured > assumed) {
-            this.map.fitBounds(this.mapReadyFit.bounds as never, {
-              padding: this.fitPadding(fitTo),
-              ...(fitTo.maxZoom !== undefined ? { maxZoom: fitTo.maxZoom } : {}),
-              animate: false,
-            });
+            this.map.fitBounds(this.mapReadyFit.bounds as never, this.fitOptions(fitTo));
           }
         }
         this.emit('camera:fit', this.mapReadyFit);
@@ -1597,6 +1543,21 @@ export class MapRenderer {
    * Add a layer to the map
    */
   async addLayer(layer: Layer): Promise<void> {
+    const prepared = this.prepareLayer(layer);
+    if (!prepared) return;
+    await this.layerManager.addLayer(prepared);
+    this.eventHandler.attachEvents(prepared);
+    this.emit('layer:added', { layerId: prepared.id });
+  }
+
+  /**
+   * The per-layer prelude every add shares — first render, `addLayer`, and
+   * an update's adds and replacements (`UpdateHost.prepareLayer`): the
+   * version gate, image references, protocol registration and the basemap
+   * text font. Returns the layer to add; `undefined` when it is skipped
+   * with its own warning; throws when its protocol can't be used.
+   */
+  private prepareLayer(layer: Layer): Layer | undefined {
     // Version-gated layer types declare absence below their floor (U14,
     // the U8 precedent): one warning per type, the layer skipped, the rest
     // of the document unaffected — instead of MapLibre rejecting it.
@@ -1609,17 +1570,14 @@ export class MapRenderer {
             `skipping layer "${layer.id}" and any other ${layer.type} layers.`
         );
       }
-      return;
+      return undefined;
     }
     noteLayerImageRefs(this.imageRefs, layer);
     // A layer added after load may bring its own PMTiles source (ml-cnv).
     const prepared = prepareProtocols(undefined, [layer]);
     const [unusable] = prepared?.failed.values() ?? [];
     if (unusable) throw unusable;
-    layer = this.withBasemapTextFont(layer);
-    await this.layerManager.addLayer(layer);
-    this.eventHandler.attachEvents(layer);
-    this.emit('layer:added', { layerId: layer.id });
+    return this.withBasemapTextFont(layer);
   }
 
   /**
@@ -1782,7 +1740,7 @@ export class MapRenderer {
    */
   private buildParamsPanel(
     layers: Layer[],
-    options: MapRendererOptions,
+    options: Pick<MapRendererOptions, 'parameters' | 'state'>,
     setState: ((name: string, value: unknown) => void) | undefined
   ): void {
     if (this.paramsBuilt) return;
@@ -1790,7 +1748,9 @@ export class MapRenderer {
       const l = layer as unknown as Record<string, unknown>;
       if (typeof l['label'] !== 'string' || l['toggleable'] === false) return [];
       // Hidden is hidden however it was spelled: `visible: false` or the
-      // spec-native `layout: { visibility: "none" }` passthrough.
+      // spec-native `layout: { visibility: "none" }` passthrough. (A panel
+      // rebuilt by an update seeds from the document; U5's visibility
+      // overrides with provenance keep a reader's toggle across it, KTD6.)
       const layout = l['layout'] as Record<string, unknown> | undefined;
       return [
         {
@@ -1808,15 +1768,16 @@ export class MapRenderer {
       toggleableLayers,
       stateSupported: typeof setState === 'function',
     };
+    // A rebuild with nothing left to show empties the slot it had.
+    this.paramsMount?.replaceChildren();
     if (!hasPanelContent(panelConfig)) return;
 
     this.paramsBuilt = true;
-    const mount = document.createElement('div');
-    this.chromeLayout().mount('top-right', mount);
-    new ParamsBuilder({
+    const mount = (this.paramsMount ??= this.mountParams());
+    (this.paramsBuilder ??= new ParamsBuilder({
       strings: this.strings,
       language: mapLanguage(this.map),
-    }).build(mount, panelConfig, {
+    })).build(mount, panelConfig, {
       onStateChange: (key, value) => {
         if (this.destroyed) return;
         try {
@@ -1858,6 +1819,425 @@ export class MapRenderer {
           'the panel shows a notice instead of controls.',
       );
     }
+  }
+
+  /** The params panel's slot in the corner system, created once. */
+  private mountParams(): HTMLElement {
+    const mount = document.createElement('div');
+    this.chromeLayout().mount('top-right', mount);
+    return mount;
+  }
+
+  /** MapLibre's `setGlobalStateProperty`, when the runtime has one (>= 5.6). */
+  private stateSetter(): ((name: string, value: unknown) => void) | undefined {
+    return (this.map as unknown as { setGlobalStateProperty?: (name: string, value: unknown) => void })
+      .setGlobalStateProperty;
+  }
+
+  /**
+   * Apply the document's `state:` defaults (`{ key: { default } }`) through
+   * `setGlobalStateProperty`, all of them or only `keys`. On a runtime
+   * without it a declared block warns once instead of silently doing
+   * nothing (the declared-absence posture, R5/U8).
+   */
+  private applyStateDefaults(state: Record<string, unknown> | undefined, keys?: readonly string[]): void {
+    if (!state || Object.keys(state).length === 0) return;
+    const setState = this.stateSetter();
+    if (typeof setState !== 'function') {
+      console.warn(
+        '[maplibre-yaml] this document declares `state:`, but the running ' +
+          'maplibre-gl has no setGlobalStateProperty (needs >= 5.6); ' +
+          '`global-state` expressions will read null.',
+      );
+      return;
+    }
+    for (const [key, entry] of Object.entries(state)) {
+      if (keys && !keys.includes(key)) continue;
+      // Spec shape is { default: value }. An object without `default`
+      // declares nothing — skip it rather than hand the object itself
+      // to the runtime as the state value. Bare (non-object) entries
+      // are accepted as raw values for programmatic callers.
+      if (entry && typeof entry === 'object') {
+        if (!('default' in entry)) continue;
+        const value = (entry as { default?: unknown }).default;
+        if (value !== undefined) setState.call(this.map, key, value);
+      } else if (entry !== undefined) {
+        setState.call(this.map, key, entry);
+      }
+    }
+  }
+
+  /** The classify runtime over `layers` and `sources`, wired to the legend, the event bus and the error path. */
+  private createClassify(layers: Layer[], sources: Record<string, LayerSource> | undefined): ClassifyRuntime {
+    return new ClassifyRuntime(
+      this.map,
+      layers as never,
+      sources as Record<string, unknown> | undefined,
+      (sourceId) => this.layerManager.getSourceData?.(sourceId),
+      (layerId, record) => {
+        this.redrawLegend();
+        this.emit('layer:classified', { layerId, classify: record });
+      },
+      {
+        readsByView: (sourceId) => this.layerManager.readsByView?.(sourceId) ?? false,
+        onRefused: (layerId, sourceId, error) => {
+          console.warn(`[maplibre-yaml] ${consoleText(error.message)}`);
+          this.options.onError?.(error, false, { kind: 'classify', layerId, sourceId });
+        },
+        // An author hint: the console always, the page while developing.
+        onFieldProblem: (layerId, message) => {
+          console.warn(`[maplibre-yaml] ${consoleText(message)}`);
+          this.options.onError?.(new Error(message), false, { kind: 'classify-field', layerId });
+        },
+      }
+    );
+  }
+
+  /** Standalone `markers:`: the current ones go, the block's are added (none for an absent block). */
+  private syncMarkers(markers: MarkerConfig[] | undefined): void {
+    this.markersManager?.destroy();
+    this.markersManager = null;
+    if (!markers || markers.length === 0) return;
+    this.markersManager = new MarkersManager(this.map, this.options.capabilities, {
+      onMarkersAdded: (count) => this.emit('markers:added', { count }),
+      onMarkerClick: (index, at) => this.emit('marker:click', { index, at }),
+      onMarkerIconError: (index, icon) => this.emit('marker:icon-error', { index, icon }),
+    });
+    this.markersManager.add(markers);
+  }
+
+  /** Standalone `popups:`: the open ones close, the block's open (none for an absent block). */
+  private syncPopups(popups: StandalonePopupConfig[] | undefined): void {
+    this.popupsManager?.destroy();
+    this.popupsManager = null;
+    if (!popups || popups.length === 0) return;
+    this.popupsManager = new PopupsManager(this.map, this.options.capabilities);
+    this.popupsManager.add(popups);
+  }
+
+  /**
+   * The legend over the next document's layers (live documents): redrawn in
+   * place when it exists (the reader's open/closed choice kept), created
+   * when the document gains one, removed when it loses it or the host's
+   * `legend` slot stands in for it.
+   */
+  private syncLegend(layers: Layer[], legendOption: LegendConfig | false | undefined): void {
+    if (this.options.legendElement) return;
+    const legend = effectiveLegend(legendOption, layers, AUTO_LEGEND);
+    const target = this.legendTarget;
+    if (legend && target && this.autoLegendContainer && target.config?.position === legend.position) {
+      this.legendTarget = { container: target.container, layers, config: legend };
+      this.redrawLegend();
+      return;
+    }
+    this.autoLegendContainer?.remove();
+    this.autoLegendContainer = null;
+    this.legendTarget = null;
+    this.legendBuilt = false;
+    if (legend) this.buildLegend(this.createLegendContainer(legend), layers, legend);
+  }
+
+  /** The params panel rebuilt into its slot from the next document, seeded from current values. */
+  private syncParamsPanel(layers: Layer[], options: DocumentOptions): void {
+    this.paramsBuilt = false;
+    this.buildParamsPanel(layers, options, this.stateSetter());
+  }
+
+  /** The classify runtime re-seeded from the next document, created when the document gains its first classified layer. */
+  private syncClassify(layers: Layer[], sources: Record<string, LayerSource>, layerIds: readonly string[]): void {
+    if (!this.classify) {
+      const runtime = this.createClassify(layers, sources);
+      if (!runtime.active) return;
+      this.classify = runtime;
+    } else {
+      this.classify.reseed(layers as never, sources, layerIds);
+    }
+    void this.classify.layersReady();
+  }
+
+  /** Rename and re-describe the map: MapLibre's own `Map.Title` and the canvas's `aria-*`. */
+  private setTitle(title: string | undefined, description: string | undefined): void {
+    const generic = this.strings('Map.Title');
+    const named = title?.trim() ? title : undefined;
+    const locale = (this.map as unknown as { _locale?: Record<string, unknown> })._locale;
+    if (locale && typeof locale === 'object') locale['Map.Title'] = named ?? generic;
+    const canvas = this.map.getCanvas?.();
+    const described = this.descriptionEl;
+    if (described && canvas) {
+      const ids = (canvas.getAttribute('aria-describedby') ?? '').split(/\s+/).filter((id) => id && id !== described.id);
+      if (ids.length > 0) canvas.setAttribute('aria-describedby', ids.join(' '));
+      else canvas.removeAttribute('aria-describedby');
+    }
+    described?.remove();
+    if (!named) canvas?.setAttribute('aria-label', generic);
+    this.descriptionEl = applyAccessibleName(this.map, {
+      ...(named !== undefined ? { title: named } : {}),
+      ...(description !== undefined ? { description } : {}),
+      strings: this.strings,
+    });
+  }
+
+  /** One 3D, projection or light block applied in place, or cleared when the document dropped it. */
+  private applyScene(option: 'projection' | 'sky' | 'terrain' | 'light', value: unknown): void {
+    const map3d = this.map as unknown as Scene3DMap;
+    switch (option) {
+      case 'projection':
+        applyProjection(map3d, (value ?? { type: 'mercator' }) as ProjectionConfig);
+        return;
+      case 'sky':
+        if (value) applySky(map3d, value as SkyConfig);
+        else map3d.setSky?.call(map3d, undefined as never);
+        return;
+      case 'terrain':
+        if (value) applyTerrain(map3d, value as TerrainConfig, true);
+        else map3d.setTerrain?.call(map3d, null);
+        return;
+      case 'light':
+        // A rejected light (setLight validates) is the update's failure to record, not a warning.
+        this.map.setLight((value ?? {}) as never);
+        return;
+    }
+  }
+
+  /**
+   * A `fitTo` added or re-targeted by an update (KTD13): frame its source
+   * once, now when its extent is known (inline data, a loader's extent,
+   * fetched data already in), else when its data or metadata lands, as
+   * first render does. A typo names no source: the authored camera stands.
+   */
+  private fitToSource(fitTo: FitToConfig, sources: Record<string, LayerSource>): void {
+    const fit = resolveFitTo(fitTo, sources);
+    this.fitTarget = { fitTo, fit };
+    this.fitApplied = false;
+    if (fit.kind === 'unsupported') throw new Error(fit.reason);
+    if (fit.kind === 'bounds') {
+      this.fitApplied = true;
+      this.map.fitBounds(fit.bounds as never, this.fitOptions(fitTo));
+      this.emit('camera:fit', { source: fitTo.source, bounds: fit.bounds });
+    } else if (fit.kind === 'tile-bounds') {
+      const source = this.map.getSource(fitTo.source) as { bounds?: unknown } | undefined;
+      if (source) this.fitTileBounds(fitTo.source, source);
+    } else {
+      this.fitDeferred();
+    }
+  }
+
+  /** `fitBounds` options for a `fitTo`: its padding, its `maxZoom`, no animation. */
+  private fitOptions(fitTo: FitToConfig): { padding: number | FitPadding; maxZoom?: number; animate: false } {
+    return {
+      padding: this.fitPadding(fitTo),
+      ...(fitTo.maxZoom !== undefined ? { maxZoom: fitTo.maxZoom } : {}),
+      animate: false,
+    };
+  }
+
+  /**
+   * Once a source's metadata has loaded: a `fitTo` on a tiled source with an
+   * extent (a COG) frames it, and a COG that isn't cloud-optimized is hinted.
+   * Attached once per map (an update's `fitTo` may name a COG later).
+   */
+  private watchSourceData(cogSources: Set<string>): void {
+    const hinted = new Set<string>();
+    this.map.on('sourcedata', (e: { sourceId?: string; sourceDataType?: string }) => {
+      if (this.destroyed || e.sourceDataType !== 'metadata' || !e.sourceId) return;
+      const source = this.map.getSource(e.sourceId) as { url?: unknown; bounds?: unknown } | undefined;
+      if (!source) return;
+      this.fitTileBounds(e.sourceId, source);
+      if (cogSources.has(e.sourceId) && !hinted.has(e.sourceId) && typeof source.url === 'string') {
+        const hint = cogHintFor(source.url);
+        if (hint) {
+          hinted.add(e.sourceId);
+          this.options.onError?.(new Error(hint), false, { kind: 'source-hint', sourceId: e.sourceId });
+        }
+      }
+    });
+  }
+
+  /** `fitTo` on a tiled source: frame the extent its reader reports, once. */
+  private fitTileBounds(sourceId: string, source: { bounds?: unknown }): void {
+    const target = this.fitTarget;
+    if (!target || target.fit.kind !== 'tile-bounds' || sourceId !== target.fitTo.source || this.fitApplied) return;
+    const { fitTo } = target;
+    const b = source.bounds;
+    if (Array.isArray(b) && b.length === 4 && b.every((n) => typeof n === 'number')) {
+      const bounds: Bounds = [[b[0], b[1]], [b[2], b[3]]] as Bounds;
+      this.fitApplied = true;
+      this.map.fitBounds(bounds, this.fitOptions(fitTo));
+      this.emit('camera:fit', { source: fitTo.source, bounds });
+    }
+  }
+
+  /**
+   * `fitTo` over fetched data: frame the source once its data is in (the
+   * loader's own extent for a source read by view). Whether it fit.
+   */
+  private fitDeferred(): boolean {
+    const target = this.fitTarget;
+    if (!target || target.fit.kind !== 'deferred' || this.fitApplied) return false;
+    const { fitTo } = target;
+    const data = this.layerManager.getSourceData(fitTo.source);
+    // A source read by view (FlatGeobuf or GeoParquet `load: viewport`,
+    // ml-cnv.3/.4) holds only the part in view: frame the file's own extent.
+    const bounds =
+      this.layerManager.getSourceExtent?.(fitTo.source) ??
+      (data ? geojsonBounds(data) : null);
+    if (!bounds) return false;
+    this.fitApplied = true;
+    const fitOptions = this.fitOptions(fitTo);
+    // ...and never further out than it is read: a citywide file
+    // framed at zoom 9.9 opened blank under a `minzoom` of 10, and at
+    // zoom 10 its view held 855,773 features — over the 150,000 one
+    // read takes — so it opened on the "zoom in" line. Centred on the
+    // extent, at the outermost zoom whose view the reader's index or
+    // row-group statistics say is read (or the source's minzoom when
+    // none is near; the author's maxZoom still caps it).
+    const minzoom = this.layerManager.getViewMinzoom?.(fitTo.source);
+    const camera =
+      minzoom !== undefined ? this.map.cameraForBounds?.(bounds, fitOptions) : undefined;
+    if (minzoom !== undefined && camera?.center && camera.zoom !== undefined) {
+      const center = camera.center as { lng: number; lat: number };
+      const container = this.map.getContainer?.();
+      const fits = this.layerManager.getViewZoomThatFits?.(
+        fitTo.source,
+        [center.lng, center.lat],
+        camera.zoom,
+        container?.clientWidth ?? 0,
+        container?.clientHeight ?? 0
+      );
+      let zoom = Math.max(camera.zoom, fits ?? minzoom);
+      if (fitTo.maxZoom !== undefined) zoom = Math.min(zoom, Math.max(fitTo.maxZoom, minzoom, camera.zoom));
+      if (zoom > camera.zoom) this.map.jumpTo({ center: camera.center, zoom });
+      else this.map.fitBounds(bounds, fitOptions);
+    } else {
+      this.map.fitBounds(bounds, fitOptions);
+    }
+    this.emit('camera:fit', { source: fitTo.source, bounds });
+    return true;
+  }
+
+  /**
+   * The normalized document this map shows (KTD15): the shape the
+   * constructor receives and `update()` takes, never the parsed `MapBlock`
+   * (`<ml-map>.getDocument()` returns that). After `update:applied` it is
+   * the next document, failures included: the document is the source of
+   * truth (KTD7).
+   */
+  getDocument(): AppliedDocument {
+    return this.applied;
+  }
+
+  /**
+   * Apply a changed document to the running map in place (live documents,
+   * 0.10): layers, sources, runtime features and the camera follow the
+   * difference between the applied document and `next`; nothing else is
+   * touched, and a host's own layers are never moved or removed (R10).
+   *
+   * @remarks
+   * Resolves when the outcome is final (KTD5): `applied` after the last
+   * operation and re-sync (with `update:applied` fired), `fallback` when
+   * `next` needs a rebuild (`mapStyle`, a constructor-only option) — decided
+   * before anything is awaited, and nothing is mutated: the host rebuilds —,
+   * `rejected` with `kind: 'chunk'` when the engine's file couldn't be
+   * downloaded (`update:rejected` fired, map and document unchanged), or
+   * `superseded` when a later `update()` replaced this one in the queue.
+   * One update applies at a time; an update arriving mid-apply waits, and
+   * only the last waiting one runs, against the document applied by then.
+   * An update made before the map's own `load` waits for it.
+   *
+   * @param next - The normalized document, as the constructor takes it.
+   * @param hints - What the documents don't say (KTD11): sources whose last
+   *   load failed and whether `base` re-resolved URLs. Default: none, so an
+   *   unchanged document is a no-op.
+   */
+  update(next: AppliedDocument, hints: DiffHints = NO_HINTS): Promise<UpdateResult> {
+    if (this.destroyed) return Promise.resolve({ outcome: 'superseded' });
+    if (this.updateInFlight) {
+      this.queuedUpdate?.resolve({ outcome: 'superseded' });
+      return new Promise<UpdateResult>((resolve) => {
+        this.queuedUpdate = { next, hints, resolve };
+      });
+    }
+    return this.startUpdate(next, hints);
+  }
+
+  /** Run one update now, then the queued one if any (last wins, KTD5). */
+  private startUpdate(next: AppliedDocument, hints: DiffHints): Promise<UpdateResult> {
+    const generation = ++this.updateGeneration;
+    const run = this.performUpdate(next, hints, generation).finally(() => {
+      if (this.updateInFlight === run) this.updateInFlight = null;
+      const queued = this.queuedUpdate;
+      if (!queued) return;
+      this.queuedUpdate = null;
+      queued.resolve(this.startUpdate(queued.next, queued.hints) as never);
+    });
+    this.updateInFlight = run;
+    return run;
+  }
+
+  private async performUpdate(next: AppliedDocument, hints: DiffHints, generation: number): Promise<UpdateResult> {
+    // Fallback is decided here, synchronously, before any await (KTD7).
+    if (needsRebuild(this.applied.config, next.config)) {
+      return {
+        outcome: 'fallback',
+        summary: { added: [], removed: [], moved: [], replaced: [], propertiesSet: [], sourcesReplaced: [], cameraMoved: false, rebuild: true, failures: [] },
+      };
+    }
+    const stale = () => this.destroyed || generation !== this.updateGeneration;
+    // An update made before the document loads waits for the renderer's own `load`.
+    if (!this.layersAdded) await new Promise<void>((resolve) => this.on('load', () => resolve()));
+    if (stale()) return { outcome: 'superseded' };
+    let engine: Awaited<ReturnType<typeof getDecoder<'update'>>>;
+    try {
+      engine = await getDecoder('update');
+    } catch (error) {
+      if (stale()) return { outcome: 'superseded' };
+      // The seam rejects with the chunk wording (FormatError, code "chunk"); anything else is the same story to a host.
+      const kind: RejectionKind = 'chunk';
+      const errors = [{ kind, message: error instanceof Error ? error.message : String(error) }];
+      this.emit('update:rejected', { kind, errors });
+      return { outcome: 'rejected', errors };
+    }
+    if (stale()) return { outcome: 'superseded' };
+    const result = await engine.runUpdate(this.updateHost(), { applied: this.applied, next, hints });
+    if (stale()) return { outcome: 'superseded' };
+    if (result.summary.rebuild) return { outcome: 'fallback', summary: result.summary };
+    this.applied = next;
+    this.options = withDocumentOptions(this.options, next.options);
+    if (result.changed) this.emit('update:applied', { summary: result.summary });
+    return { outcome: 'applied', summary: result.summary };
+  }
+
+  /** What the engine chunk reaches the renderer through (KTD10). */
+  private updateHost(): UpdateHost {
+    const runtime: RuntimeHost = {
+      syncLegend: (layers, legend) => this.syncLegend(layers, legend),
+      syncParamsPanel: (layers, options) => this.syncParamsPanel(layers, options),
+      syncMarkers: (markers) => this.syncMarkers(markers),
+      syncPopups: (popups) => this.syncPopups(popups),
+      syncClassify: (layers, sources, layerIds) => this.syncClassify(layers, sources, layerIds),
+      syncState: (state, keys) => this.applyStateDefaults(state, keys),
+      setTitle: (title, description) => this.setTitle(title, description),
+      loadImages: (images) =>
+        loadDocumentImages(this.map, images, (name, url) => this.emit('image:error', { name, url })),
+      applyScene: (option, value) => this.applyScene(option, value),
+      fitTo: (fitTo, sources) => this.fitToSource(fitTo, sources),
+    };
+    return {
+      map: this.map,
+      layerManager: this.layerManager,
+      eventHandler: this.eventHandler,
+      legendBuilder: this.legendBuilder,
+      paramsBuilder: this.paramsBuilder,
+      controlsManager: this.controlsManager,
+      classify: this.classify,
+      strings: this.strings,
+      camera: this.options.camera ?? 'document',
+      runtime,
+      onError: (error, context) => this.options.onError?.(error, false, context),
+      reattachEffects: () => this.options.onReattachEffects?.(),
+      prepareLayer: (layer) => this.prepareLayer(layer),
+      emit: (event, payload) => this.emit(event, payload),
+    };
   }
 
   /** The shared corner system (KTD10), created on first chrome mount. */
@@ -1954,6 +2334,8 @@ export class MapRenderer {
    * Destroy the map and clean up resources
    */
   destroy(): void {
+    this.queuedUpdate?.resolve({ outcome: 'superseded' });
+    this.queuedUpdate = null;
     this.classify?.destroy();
     this.classify = null;
     this.eventHandler.destroy();

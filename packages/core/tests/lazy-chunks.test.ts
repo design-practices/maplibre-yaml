@@ -1,9 +1,10 @@
 /**
- * @file On-demand format readers (ml-7qa.5, 0.9): what the builds emit
+ * @file On-demand readers and the update engine (ml-7qa.5, 0.9; ml-4ug, 0.10): what the builds emit
  *
  * @description
- * The format libraries behind the seam (src/formats/decoders.ts) must not be
- * in the main bundle of either build:
+ * The format libraries behind the seam (src/formats/decoders.ts), and the
+ * live-documents update engine that rides the same seam (KTD10), must not
+ * be in the main bundle of either build:
  *
  * - CDN: `register.browser.js` statically imports nothing but `maplibre-gl`
  *   (a page with no cloud-native source makes no extra request) and reaches
@@ -18,7 +19,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join, dirname, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -50,6 +51,9 @@ const LIBRARY_MARKERS: Record<string, string[]> = {
   geoparquet: ['parquet filter requires rowFormat: "object"', "parquet requires metadata", "invalid zstd data"],
   "geoparquet-brotli": ["copyUncompressedBlockToOutput: not enough bytes", "Invalid size nibble"],
   cog: ["Invalid COG protocol URL", "Server responded with full file", "GDAL_NODATA"],
+  // The update engine (renderer/update): its own wording, which the entry —
+  // which decides fallback and runs the queue — never carries.
+  update: ["so the document's layer is skipped", "names a layer that comes earlier in the document"],
 };
 
 /** geotiff's codecs, in chunks/cog-<codec>.js (ml-cnv.11): never in a main bundle either. */
@@ -87,11 +91,24 @@ function staticClosure(files: string[]): string[] {
 describe("the seam", () => {
   it("names the readers this version loads on demand", () => {
     expect([...SEAM_NAMES].sort()).toEqual(
-      ["cog", "flatgeobuf", "geoparquet", "geoparquet-brotli", "pmtiles", "protomaps-basemap"]
+      ["cog", "flatgeobuf", "geoparquet", "geoparquet-brotli", "pmtiles", "protomaps-basemap", "update"]
     );
     // Every on-demand library has markers, so the "not in the main bundle"
     // checks below cover all of them.
     expect(Object.keys(LIBRARY_MARKERS).sort()).toEqual([...SEAM_NAMES].sort());
+  });
+
+  it("the update engine's sources import core modules as types only, and never emitter/ or export/ (KTD10)", () => {
+    const dir = join(PKG_ROOT, "src/renderer/update");
+    const files = readdirSync(dir).filter((f) => f.endsWith(".ts"));
+    expect(files.length).toBeGreaterThanOrEqual(4); // types, diff, apply, resync, index
+    for (const file of files) {
+      const code = readFileSync(join(dir, file), "utf8").replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+      const values = [...code.matchAll(/^import\s+(?!type\b)[^;]*?from\s*["']([^"']+)["']/gm)].map((m) => m[1]!);
+      // Value imports stay inside the engine (./diff, ./apply, ./resync): nothing from the main bundle.
+      expect(values.filter((s) => !s.startsWith("./")), file).toEqual([]);
+      expect(/["'][^"']*\/(emitter|export)\//.test(code), `${file} reaches emitter/ or export/`).toBe(false);
+    }
   });
 
   it("describes where each build puts the readers as tsup.config.ts does (ml-cnv.19)", () => {
@@ -133,6 +150,17 @@ describe.skipIf(!built)("CDN build: register.browser.js + chunks/", () => {
       expect(staticImports(code).filter((s) => s !== "maplibre-gl"), file).toEqual([]);
       for (const marker of LIBRARY_MARKERS[name] ?? []) expect(code.includes(marker), `${file}: ${marker}`).toBe(true);
     }
+  });
+
+  it("the update engine chunk imports nothing at all and carries no main-bundle wording (KTD10)", () => {
+    const code = read("chunks/update.js");
+    expect(staticImports(code)).toEqual([]);
+    expect(dynamicImports(code)).toEqual([]);
+    // Wording only the entry has: the fallback decision and the queue live there, not in the chunk.
+    for (const marker of ["setGlobalStateProperty (needs >= 5.6)", "overrides `attributionControl: true`", "Failed to create map"]) {
+      expect(code.includes(marker), `chunks/update.js has entry wording: ${marker}`).toBe(false);
+    }
+    expect(main.includes("so the document's layer is skipped")).toBe(false);
   });
 
   it("the COG chunk keeps its heavy codecs in their own files next to it (ml-cnv.11)", () => {

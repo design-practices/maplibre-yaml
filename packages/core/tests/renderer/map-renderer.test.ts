@@ -879,6 +879,141 @@ describe("MapRenderer", () => {
     });
   });
 
+  describe("update() (live documents, U4)", () => {
+    const config = {
+      center: [0, 0] as [number, number],
+      zoom: 2,
+      mapStyle: "https://example.com/style.json",
+    };
+    const layer = (color: string) => ({
+      id: "a",
+      type: "circle" as const,
+      source: { type: "geojson" as const, data: { type: "FeatureCollection" as const, features: [] } },
+      paint: { "circle-color": color },
+    });
+    const document = (color: string) => ({ config, layers: [layer(color)], sources: {}, options: {} });
+
+    /** A loaded renderer over one layer; the simple mock reports every added layer as present. */
+    async function loaded(options = {}) {
+      renderer = new MapRenderer(container, config, [layer("#f00")], options);
+      const map = renderer.getMap() as any;
+      const present = new Set<string>();
+      map.addLayer.mockImplementation((spec: { id: string }) => present.add(spec.id));
+      map.getLayer.mockImplementation((id: string) => (present.has(id) ? { id } : undefined));
+      map.setPaintProperty = vi.fn();
+      const ready = new Promise<void>((resolve) => renderer.on("load", resolve));
+      map.emit("load");
+      await ready;
+      return map;
+    }
+
+    it("getDocument() returns the normalized document the renderer was built with (KTD15)", () => {
+      const sources = { pts: { type: "geojson" as const, data: { type: "FeatureCollection" as const, features: [] } } };
+      renderer = new MapRenderer(container, config, [layer("#f00")], { title: "T", onError: () => {} }, sources);
+      expect(renderer.getDocument()).toEqual({ config, layers: [layer("#f00")], sources, options: { title: "T" } });
+    });
+
+    it("applies a paint change through the engine chunk, then getDocument() returns the next document", async () => {
+      const map = await loaded();
+      const applied = vi.fn();
+      renderer.on("update:applied", applied);
+      const next = document("#0f0");
+      const result = await renderer.update(next);
+      expect(result.outcome).toBe("applied");
+      expect(result.summary?.propertiesSet).toEqual([{ layerId: "a", property: "circle-color" }]);
+      expect(map.setPaintProperty).toHaveBeenCalledWith("a", "circle-color", "#0f0");
+      expect(applied).toHaveBeenCalledTimes(1);
+      expect(applied.mock.calls[0][0].summary).toBe(result.summary);
+      expect(renderer.getDocument()).toBe(next);
+    });
+
+    it("an unchanged document resolves applied with no operations and fires no event", async () => {
+      await loaded();
+      const applied = vi.fn();
+      renderer.on("update:applied", applied);
+      const result = await renderer.update(document("#f00"));
+      expect(result.outcome).toBe("applied");
+      expect(result.summary?.propertiesSet).toEqual([]);
+      expect(applied).not.toHaveBeenCalled();
+    });
+
+    it("three rapid updates: the second is superseded, the third applies against the first's result, two events fire", async () => {
+      const map = await loaded();
+      const applied = vi.fn();
+      renderer.on("update:applied", applied);
+      const [first, second, third] = await Promise.all([
+        renderer.update(document("#111")),
+        renderer.update(document("#222")),
+        renderer.update(document("#333")),
+      ]);
+      expect(first.outcome).toBe("applied");
+      expect(second).toEqual({ outcome: "superseded" });
+      expect(third.outcome).toBe("applied");
+      expect(third.summary?.propertiesSet).toEqual([{ layerId: "a", property: "circle-color" }]);
+      expect(applied).toHaveBeenCalledTimes(2);
+      const colors = map.setPaintProperty.mock.calls.map((c: unknown[]) => c[2]);
+      expect(colors).toEqual(["#111", "#333"]);
+      expect(renderer.getDocument().layers[0].paint["circle-color"]).toBe("#333");
+    });
+
+    it("a mapStyle change is classified as a fallback before anything is awaited, and mutates nothing", async () => {
+      const map = await loaded();
+      const applied = vi.fn();
+      renderer.on("update:applied", applied);
+      const next = { ...document("#0f0"), config: { ...config, mapStyle: "https://example.com/other.json" } };
+      // Decided before the engine chunk is awaited: update-chunk-failure.test.ts
+      // proves it with the chunk failing; here, the outcome and the untouched map.
+      const result = await renderer.update(next);
+      expect(result).toEqual({ outcome: "fallback", summary: expect.objectContaining({ rebuild: true }) });
+      expect(map.setPaintProperty).not.toHaveBeenCalled();
+      expect(applied).not.toHaveBeenCalled();
+      expect(renderer.getDocument().layers[0].paint["circle-color"]).toBe("#f00");
+    });
+
+    it("getDocument() returns the next document after update:applied even when a setter failed", async () => {
+      const map = await loaded();
+      const onError = vi.fn();
+      renderer = new MapRenderer(container, config, [layer("#f00")], { onError });
+      const map2 = renderer.getMap() as any;
+      map2.addLayer.mockImplementation(() => undefined);
+      map2.getLayer.mockImplementation(() => ({ id: "a" }));
+      map2.setPaintProperty = vi.fn(() => {
+        throw new Error("paint rejected");
+      });
+      const ready = new Promise<void>((resolve) => renderer.on("load", resolve));
+      map2.emit("load");
+      await ready;
+      onError.mockClear();
+      void map;
+      const next = document("#0f0");
+      const result = await renderer.update(next);
+      expect(result.outcome).toBe("applied");
+      expect(result.summary?.failures).toEqual([{ op: "layerSetProperty", message: "paint rejected" }]);
+      expect(onError).toHaveBeenCalledTimes(1);
+      expect(onError.mock.calls[0][1]).toBe(false);
+      expect(onError.mock.calls[0][2]).toEqual({ kind: "layer", layerId: "a" });
+      expect(renderer.getDocument()).toBe(next);
+    });
+
+    it("an update made before the document loads waits for it", async () => {
+      renderer = new MapRenderer(container, config, [layer("#f00")]);
+      const map = renderer.getMap() as any;
+      const present = new Set<string>();
+      map.addLayer.mockImplementation((spec: { id: string }) => present.add(spec.id));
+      map.getLayer.mockImplementation((id: string) => (present.has(id) ? { id } : undefined));
+      map.setPaintProperty = vi.fn();
+      const pending = renderer.update(document("#0f0"));
+      let settled = false;
+      void pending.then(() => (settled = true));
+      await new Promise((r) => setTimeout(r, 10));
+      expect(settled).toBe(false);
+      map.emit("load");
+      const result = await pending;
+      expect(result.outcome).toBe("applied");
+      expect(map.setPaintProperty).toHaveBeenCalledWith("a", "circle-color", "#0f0");
+    });
+  });
+
   describe("destroy", () => {
     it("cleans up all resources", () => {
       const config = {

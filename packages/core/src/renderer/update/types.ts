@@ -13,7 +13,14 @@
  */
 
 import type { Map as MapLibreMap } from "maplibre-gl";
-import type { MapConfig, FitToConfig } from "../../schemas/map.schema";
+import type {
+  MapConfig,
+  FitToConfig,
+  ImageConfig,
+  LegendConfig,
+  MarkerConfig,
+  StandalonePopupConfig,
+} from "../../schemas/map.schema";
 import type { Layer } from "../../schemas/layer.schema";
 import type { LayerSource } from "../../schemas/source.schema";
 import type { MapErrorContext, MapRendererOptions } from "../map-renderer";
@@ -290,6 +297,48 @@ export interface UpdateHost {
   prepareLayer(layer: Layer): Layer | undefined;
   /** The per-layer lifecycle events first render fires, so hosts see update adds and removes alike. */
   emit(event: "layer:added" | "layer:removed", payload: { layerId: string }): void;
+  /** Who owns the camera (KTD13): under `host` the engine never moves it. */
+  readonly camera: "document" | "host";
+  /** The runtime features the renderer builds from its own state (see {@link RuntimeHost}). */
+  readonly runtime: RuntimeHost;
+}
+
+/**
+ * The runtime features the engine cannot rebuild itself — they need the
+ * renderer's private state (the legend's container, the panel's mount and
+ * callbacks, the managers' constructors, the scene helpers) or a value
+ * import the chunk must not make. The engine decides *whether* and in what
+ * order each re-syncs (resync.ts, KTD6b); the renderer supplies *how*. Every
+ * method is a whole-feature rebuild from the next document, never a patch.
+ */
+export interface RuntimeHost {
+  /** Redraw the legend over `layers` under `legend` (create, redraw keeping `<details>.open`, or remove). */
+  syncLegend(layers: Layer[], legend: LegendConfig | false | undefined): void;
+  /** Rebuild the params panel into its mount from `layers` and the option blocks, seeded from current values. */
+  syncParamsPanel(layers: Layer[], options: DocumentOptions): void;
+  /** Destroy the markers and create the next block's (`undefined`: none). */
+  syncMarkers(markers: MarkerConfig[] | undefined): void;
+  /** Destroy the standalone popups and open the next block's (`undefined`: none). */
+  syncPopups(popups: StandalonePopupConfig[] | undefined): void;
+  /** Re-seed classify templates for `layerIds` from the next document and catch up (`layersReady`). */
+  syncClassify(layers: Layer[], sources: Record<string, LayerSource>, layerIds: readonly string[]): void;
+  /** Apply the next document's `state:` defaults for `changedKeys` (U5 adds provenance). */
+  syncState(state: Record<string, unknown> | undefined, changedKeys: readonly string[]): void;
+  /** Rename and re-describe the map (`locale["Map.Title"]`, the canvas's `aria-*`). */
+  setTitle(title: string | undefined, description: string | undefined): void;
+  /** Register `images` on the map (never rejects: a failed image warns). */
+  loadImages(images: Record<string, ImageConfig>): Promise<void>;
+  /** Apply or clear one 3D/projection/light block through the feature-detecting helpers. */
+  applyScene(option: "projection" | "sky" | "terrain" | "light", value: unknown): void;
+  /** Frame `fitTo`'s source once, now or when its data lands, as first render does. */
+  fitTo(fitTo: FitToConfig, sources: Record<string, LayerSource>): void;
+}
+
+/** What `runUpdate` takes: both documents and the renderer's hints (KTD1). */
+export interface UpdateRequest {
+  applied: AppliedDocument;
+  next: AppliedDocument;
+  hints: DiffHints;
 }
 
 /** What `applyOps` needs beside the host: both documents, the operations and the summary to complete. */

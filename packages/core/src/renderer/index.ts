@@ -5,6 +5,15 @@
 
 export { MapRenderer } from "./map-renderer";
 export type { MapRendererOptions, MapRendererEvents, ChromeMount, MapErrorContext } from "./map-renderer";
+// Live documents (0.10): what `MapRenderer.update()` takes and resolves.
+export type {
+  AppliedDocument,
+  DiffHints,
+  DocumentOptions,
+  RejectionKind,
+  UpdateResult,
+  UpdateSummary,
+} from "./update/types";
 
 export { LayerManager } from "./layer-manager";
 export type { LayerManagerCallbacks } from "./layer-manager";

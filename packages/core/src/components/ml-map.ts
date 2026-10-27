@@ -396,6 +396,8 @@ export class MLMap extends BaseElement {
    */
   private effectsAttachment: EffectsAttachment | null = null;
   private effectsWait: (() => void) | null = null;
+  /** The model the effects were last set up from: what an update's re-attach rebuilds (U6 updates it). */
+  private effectsModel: MapModel | null = null;
 
   /**
    * Whether the one-time dev diagnostics have already run for this element.
@@ -1120,6 +1122,10 @@ export class MLMap extends BaseElement {
           legendElement: slots.legendElement,
           ...(sourceData ? { sourceData } : {}),
           ...(prefetchedExtents ? { prefetchedExtents } : {}),
+          // An update that adds, removes, rebuilds or moves an `effect:`
+          // layer (live documents, KTD6b): detach, then attach again from
+          // the document the effects were last set up from.
+          onReattachEffects: () => this.reattachEffects(),
         onLoad: () => {
           // Load event is also emitted via the event system
         },
@@ -1860,6 +1866,7 @@ export class MLMap extends BaseElement {
    * stay static and say so once.
    */
   private setupEffects(model: MapModel): void {
+    this.effectsModel = model;
     const refs: EffectLayerRef[] = [];
     for (const layer of model.style.layers) {
       const effect = layer.runtime["effect"];
@@ -1886,7 +1893,7 @@ export class MLMap extends BaseElement {
       }
     };
 
-    renderer.on("load", () => {
+    const whenLoaded = () => {
       if (getEffectsHost()) {
         attach();
         return;
@@ -1901,7 +1908,16 @@ export class MLMap extends BaseElement {
         this.effectsWait = null;
         attach();
       });
-    });
+    };
+    // Once the document loads — or now, when it already has (an update's re-attach).
+    if (this.documentLoaded) whenLoaded();
+    else renderer.on("load", whenLoaded);
+  }
+
+  /** Detach the effects and attach them again from the last document (an update moved or rebuilt an effect layer). */
+  private reattachEffects(): void {
+    this.teardownEffects();
+    if (this.effectsModel && this.renderer) this.setupEffects(this.effectsModel);
   }
 
   /** Detach effects and drop any pending host subscription. */

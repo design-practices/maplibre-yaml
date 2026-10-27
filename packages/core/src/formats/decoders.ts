@@ -1,13 +1,15 @@
 /**
- * @file The one seam every on-demand format library is reached through
+ * @file The one seam every on-demand library is reached through
  * @module @maplibre-yaml/core/formats/decoders
  *
  * @description
  * The third-party readers behind the cloud-native formats (pmtiles,
- * flatgeobuf, and those still to come) are **not** part of the main bundle.
+ * flatgeobuf, and those still to come) and the library's own update engine
+ * (renderer/update, live documents) are **not** part of the main bundle.
  * Each is one literal `import()` in {@link LOADERS}, and the build turns each
  * into a file of its own that a page downloads only when a document uses
- * that format:
+ * that format — or, for the engine, when a running map is first given a
+ * changed document:
  *
  * - **CDN / plain HTML** (`register.js` → `dist/register.browser.js`): the
  *   library becomes `dist/chunks/<name>.js`, fetched relative to the bundle's
@@ -43,7 +45,10 @@
  *    maplibre-gl there: what a reader needs from maplibre-gl is injected.
  *    (A non-type import of core code from inside a chunk makes esbuild move
  *    the shared code into a third file every page then downloads;
- *    `tests/lazy-chunks.test.ts` fails on that.)
+ *    `tests/lazy-chunks.test.ts` fails on that.) The update engine follows
+ *    the same rule from the other side: it is core code, reached through
+ *    `getDecoder("update")`, and it imports core modules as types only —
+ *    the renderer hands it everything it touches (`UpdateHost`).
  * 4. A failure to download the chunk rejects {@link getDecoder} with a
  *    {@link FormatError} of code `"chunk"` whose message names the file and
  *    says to copy the whole `dist/` folder or use the CDN. Report it on the
@@ -86,6 +91,10 @@ const LOADERS = {
   // fetched only for a GeoParquet file whose footer says brotli.
   "geoparquet-brotli": () => import("./lib/geoparquet-brotli"),
   cog: () => import("./lib/cog") as Promise<CogLibrary>,
+  // The live-documents update engine (renderer/update, 0.10): the differ,
+  // the apply step and the runtime re-sync, awaited by `MapRenderer.update`
+  // on a running map's first changed document.
+  update: () => import("../renderer/update/index"),
 } satisfies Record<string, () => Promise<unknown>>;
 
 /** The library module behind each on-demand name. */
