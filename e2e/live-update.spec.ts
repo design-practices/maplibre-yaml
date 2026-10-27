@@ -150,11 +150,10 @@ test.describe("live documents: acceptance examples (ml-4ug)", () => {
   }) => {
     const errors = await open(page);
     await rememberMap(page);
-    // Every document layer is on the map. (Their first-render stacking is
-    // not asserted: the initial render adds layers concurrently, so a
-    // named-source layer lands below the inline-source ones — see the U8
-    // report; the differ compares documents, never the map.)
-    expect((await documentOrder(page)).sort()).toEqual([...DOC_LAYERS].sort());
+    // Every document layer is on the map, in document order: first render
+    // adds layers concurrently (a named-source layer lands first) and then
+    // runs the same ordering pass an update does (KTD3).
+    expect(await documentOrder(page)).toEqual(DOC_LAYERS);
 
     const outcome = await apply(page, "reordered");
     expect(outcome.type).toBe("ml-map:update-applied");
@@ -296,15 +295,15 @@ test.describe("live documents: acceptance examples (ml-4ug)", () => {
     });
     await jumpTo(page, [10.5, 42.4], 8.2);
     const panned = await camera(page);
-    const orderBefore = await documentOrder(page);
+    expect(await documentOrder(page)).toEqual(DOC_LAYERS);
 
     const outcome = await apply(page, "basemap");
     expect(outcome.type).toBe("ml-map:update-applied");
     expect(outcome.detail.summary!.rebuild).toBe(true);
     expect(outcome.detail.summary!.failures).toEqual([]);
     expect(await sameMap(page)).toBe(false);
-    // The new map object holds the document's layers on the new basemap.
-    expect(await documentOrder(page)).toEqual(orderBefore);
+    // The new map object holds the document's layers, in document order, on the new basemap.
+    expect(await documentOrder(page)).toEqual(DOC_LAYERS);
     expect(
       await page.evaluate(() => (document.getElementById("map") as any).getMap().getPaintProperty("background", "background-color"))
     ).toBe("#dfe3ee");
@@ -448,15 +447,15 @@ test.describe("live documents: acceptance examples (ml-4ug)", () => {
     await expect.poll(() => townsDrawn(page)).toBe(4);
     const stateBefore = await page.evaluate(() => (document.getElementById("map") as any).getState());
     expect(stateBefore).toEqual({ year: 2015 });
-    const orderBefore = await documentOrder(page);
+    expect(await documentOrder(page)).toEqual(DOC_LAYERS);
 
     await page.evaluate(() => (window as any).__live.hostSetStyle());
-    // The same map object, on the other basemap, with the document's layers carried over.
+    // The same map object, on the other basemap, with the document's layers carried over in document order.
     expect(await sameMap(page)).toBe(true);
     expect(
       await page.evaluate(() => (document.getElementById("map") as any).getMap().getPaintProperty("background", "background-color"))
     ).toBe("#dfe3ee");
-    expect(await documentOrder(page)).toEqual(orderBefore);
+    expect(await documentOrder(page)).toEqual(DOC_LAYERS);
     // The filter evaluates against the state values, not null: the same count as before the swap.
     await expect.poll(() => townsDrawn(page), { timeout: 20_000 }).toBe(4);
     expect(await page.evaluate(() => (document.getElementById("map") as any).getState())).toEqual(stateBefore);
@@ -495,13 +494,10 @@ test.describe("live documents: acceptance examples (ml-4ug)", () => {
   });
 
   test("AE10 (document from inline YAML): the first JSON-equal assignment fires no event either", async ({ page }) => {
-    // Known gap (U8 report): a map rendered from inline YAML or `src` holds
-    // no applied-config key, so an equal object reaches the renderer, whose
-    // diff finds nothing (`changed: false`, no `update:applied`), yet
-    // <ml-map> dispatches `ml-map:update-applied` with an empty summary.
-    // Flip this annotation off when ml-map.ts gates the dispatch on
-    // `changed`.
-    test.fail(true, "ml-map dispatches update-applied for an unchanged document when no config key is held (inline YAML / src)");
+    // A map rendered from inline YAML or `src` holds no applied-config key,
+    // so an equal object reaches the renderer, whose diff finds nothing:
+    // <ml-map> forwards the renderer's own `update:applied`, which never
+    // fires for an unchanged document (R8).
     const errors = await open(page);
     const before = await eventTypes(page);
     await page.evaluate(async () => {

@@ -79,6 +79,56 @@ vi.mock("maplibre-gl", () => {
   };
 });
 
+import { documentOrderMoves } from "../../src/renderer/update/order";
+
+describe("first render puts layers in document order (KTD3, live documents)", () => {
+  const EMPTY = { type: "FeatureCollection", features: [] } as const;
+  const config = { center: [0, 0] as [number, number], zoom: 2, mapStyle: "https://example.com/style.json" };
+  const inline = (id: string) => ({ id, type: "circle", source: { type: "geojson", data: EMPTY } }) as any;
+
+  it("a named-source layer among inline-source layers: style order equals document order after load", async () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const layers = [inline("areas"), inline("routes"), { id: "towns", type: "circle", source: "pts" } as any, inline("grades")];
+    const renderer = new MapRenderer(container, config, layers, {}, { pts: { type: "geojson", data: EMPTY } as any });
+    const map = renderer.getMap() as any;
+    // A style that keeps order and its sources, as MapLibre does.
+    const order: string[] = ["land"];
+    const sources: Record<string, unknown> = {};
+    map.addSource.mockImplementation((id: string, spec: any) => {
+      sources[id] = { ...spec, setData: vi.fn() };
+    });
+    map.getSource.mockImplementation((id: string) => sources[id]);
+    map.addLayer.mockImplementation((spec: any, before?: string) => {
+      const at = before ? order.indexOf(before) : -1;
+      if (at >= 0) order.splice(at, 0, spec.id);
+      else order.push(spec.id);
+    });
+    map.getLayer.mockImplementation((id: string) => (order.includes(id) ? { id } : undefined));
+    map.moveLayer = vi.fn((id: string, before?: string) => {
+      order.splice(order.indexOf(id), 1);
+      const at = before ? order.indexOf(before) : -1;
+      if (at >= 0) order.splice(at, 0, id);
+      else order.push(id);
+    });
+    map.getStyle = () => ({ layers: order.map((id) => ({ id })) });
+
+    const loaded = new Promise<void>((resolve) => renderer.on("load", () => resolve()));
+    map.emit("load");
+    await loaded;
+    expect(order.filter((id) => id !== "land")).toEqual(["areas", "routes", "towns", "grades"]);
+    renderer.destroy();
+  });
+
+  it("the shared rule moves only what is out of place: the fixture's named-source layer landing first", () => {
+    const docs = ["areas", "routes", "towns", "grades"].map((id) => ({ id }) as any);
+    expect(documentOrderMoves(docs, ["land", "towns", "areas", "routes", "grades"])).toEqual([{ layerId: "towns", beforeId: "grades" }]);
+    expect(documentOrderMoves(docs, ["land", "areas", "routes", "towns", "grades"])).toEqual([]);
+    // A `before:` naming a basemap layer is honoured for that layer (KTD3).
+    expect(documentOrderMoves([{ id: "a", before: "land" }, { id: "b" }] as any, ["land", "b", "a"])).toEqual([{ layerId: "a", beforeId: "land" }]);
+  });
+});
+
 describe("MapRenderer", () => {
   let container: HTMLElement;
   let renderer: MapRenderer;

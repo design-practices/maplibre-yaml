@@ -1,6 +1,6 @@
 /**
  * The playground's framework-free modules (ml-vjs.17): schema help, the
- * diagnostics adapter, share links, camera keeping, the download, and the
+ * diagnostics adapter, share links, the download, and the
  * starter list. The browser half (editor, live map, quick fix, share
  * round-trip, zip) is e2e/playground.spec.ts.
  */
@@ -13,7 +13,6 @@ import { YAMLParser } from "@maplibre-yaml/core";
 import { createSchemaAssist, schemaNameFor } from "../src/playground/schema-assist.mjs";
 import { toDiagnostics, trustNotes, holdWhileTyping, lineColToOffset, cleanMessage, summarize } from "../src/playground/diagnostics.mjs";
 import { encodeShare, decodeShare, shareLink, hostsOf, safeSrc, SHARE_MAX_LENGTH } from "../src/playground/share.mjs";
-import { cameraKey, withCamera } from "../src/playground/camera.mjs";
 import { rewriteSiteUrls, downloadFiles, downloadZip } from "../src/playground/download.mjs";
 import { unzipSync, strFromU8 } from "fflate";
 import { CURATED, DEFAULT_SRC, galleryStarters, playgroundHref } from "../src/playground/starters.mjs";
@@ -215,17 +214,6 @@ test("share: ?src= only loads docs configs", () => {
   for (const bad of ["https://evil.example/x.yaml", "//evil.example/configs/x.yaml", "/configs/../secret.yaml", "/data/x.yaml", "/configs/x.json", null]) {
     assert.equal(safeSrc(bad), null, String(bad));
   }
-});
-
-// ---- camera keeping -------------------------------------------------------
-
-test("camera: the key changes only with the view, and the live camera replaces it", () => {
-  const a = { config: { center: [0, 0], zoom: 2, mapStyle: "x" }, layers: [] };
-  const b = { config: { center: [0, 0], zoom: 2, mapStyle: "y" }, layers: [{ id: "n" }] };
-  assert.equal(cameraKey(a), cameraKey(b));
-  assert.notEqual(cameraKey(a), cameraKey({ config: { ...a.config, zoom: 3 } }));
-  const kept = withCamera({ config: { center: [0, 0], zoom: 2, bounds: [0, 0, 1, 1], fitTo: "s" } }, { center: [139.7000001, 35.7], zoom: 4.12345, bearing: 10, pitch: 20 });
-  assert.deepEqual(kept.config, { center: [139.7, 35.7], zoom: 4.123, bearing: 10, pitch: 20 });
 });
 
 // ---- download -------------------------------------------------------------

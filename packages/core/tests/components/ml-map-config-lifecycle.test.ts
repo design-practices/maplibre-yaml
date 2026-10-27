@@ -31,8 +31,12 @@ vi.mock("../../src/renderer/map-renderer", () => ({
       getMap: vi.fn(() => ({ on: vi.fn(), off: vi.fn() })),
       getDocument: () => ({ config: r.config, layers: r.layers, sources: sources ?? {}, options: r.options }),
       update: vi.fn(async (next: any) => {
+        const changed = JSON.stringify(next.config) !== JSON.stringify(r.config);
         r.config = next.config;
-        return { outcome: "applied", summary: { added: [], removed: [], moved: [], replaced: [], propertiesSet: [], sourcesReplaced: [], cameraMoved: false, rebuild: false, failures: [] } };
+        const summary = { added: [], removed: [], moved: [], replaced: [], propertiesSet: [], sourcesReplaced: [], cameraMoved: false, rebuild: false, failures: [] };
+        // As the renderer: the event fires only when something changed.
+        if (changed) r.handlers.get("update:applied")?.({ summary });
+        return { outcome: "applied", summary };
       }),
       destroy: vi.fn(),
       on: vi.fn(function (this: any, name: string, fn: () => void) {

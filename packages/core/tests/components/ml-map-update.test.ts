@@ -115,11 +115,16 @@ vi.mock("../../src/renderer/map-renderer", () => ({
       map,
       destroyed: false,
       handlers,
+      // As the renderer: `update:applied` fires only when the document changed.
       update: vi.fn(async (next: any) => {
+        const changed =
+          JSON.stringify([next.config, next.layers, next.sources]) !== JSON.stringify([r.config, r.layers, r.sources ?? {}]);
         r.config = next.config;
         r.layers = next.layers;
         r.sources = next.sources;
-        return { outcome: "applied", summary: emptySummary() };
+        const summary = emptySummary();
+        if (changed) r.emit("update:applied", { summary });
+        return { outcome: "applied", summary };
       }),
       destroy: vi.fn(() => {
         r.destroyed = true;
@@ -239,6 +244,27 @@ describe("a changed document reaches the running map", () => {
     await settle();
     expect(renderers).toHaveLength(1);
     expect(first().update).not.toHaveBeenCalled();
+    expect(seen).toEqual([]);
+  });
+
+  it("an equal document from inline YAML (no applied-config key held) is a no-op too: update runs, nothing changed, no event (R8, AE10)", async () => {
+    const el = document.createElement("ml-map") as MLMap;
+    el.innerHTML = `<script type="text/yaml">type: map
+id: m
+config: { center: [0, 0], zoom: 2, mapStyle: "${STYLE_A}" }
+layers: []
+</script>`;
+    document.body.appendChild(el);
+    await settle();
+    first().load();
+    const seen = record(el, EVENTS);
+    el.config = JSON.parse(JSON.stringify(el.getDocument()));
+    await settle();
+    // The element holds no key for a YAML document, so the renderer diffs it — and finds nothing.
+    expect(first().update).toHaveBeenCalledTimes(1);
+    expect(seen).toEqual([]);
+    const result = await el.update(JSON.parse(JSON.stringify(el.getDocument())));
+    expect(result.outcome).toBe("applied");
     expect(seen).toEqual([]);
   });
 
@@ -730,7 +756,11 @@ layers:
     expect(notice()).toContain("Layer pts");
     expect(notice()).toContain("Source pts");
     expect(notice()).toContain("Layer other");
-    first().update.mockResolvedValueOnce({ outcome: "applied", summary: { ...emptySummary(), replaced: ["pts"], sourcesReplaced: ["pts"] } });
+    first().update.mockImplementationOnce(async () => {
+      const summary = { ...emptySummary(), replaced: ["pts"], sourcesReplaced: ["pts"] };
+      first().emit("update:applied", { summary });
+      return { outcome: "applied", summary };
+    });
     el.config = block({}, { zoom: 4 }) as any;
     await settle();
     expect(notice()).not.toContain("Layer pts");
@@ -807,7 +837,9 @@ describe("state and errors through the element", () => {
     const { el, seen } = await mounted();
     first().update.mockImplementationOnce(async () => {
       first().options.onError(new Error('layers.pts: color expected, "bleu" found'), false, { kind: "layer", layerId: "pts" });
-      return { outcome: "applied", summary: { ...emptySummary(), failures: [{ op: "layerSetProperty", message: "bad colour" }] } };
+      const summary = { ...emptySummary(), failures: [{ op: "layerSetProperty", message: "bad colour" }] };
+      first().emit("update:applied", { summary });
+      return { outcome: "applied", summary };
     });
     el.config = block({}, { zoom: 4 }) as any;
     await settle();

@@ -58,6 +58,7 @@ import type {
   UpdateSummary,
 } from './update/types';
 import { needsRebuild } from './update/rebuild';
+import { documentOrderMoves } from './update/order';
 import { getDecoder } from '../formats/decoders';
 import { createStrings, type Strings } from '../i18n';
 import { mapLanguage } from './popup-builder';
@@ -1186,6 +1187,7 @@ export class MapRenderer {
               );
             });
           return Promise.all(layers.map(addOne)).then(() => {
+            this.orderDocumentLayers(layers);
             this.layersAdded = true;
             if (terrainPending && options.terrain) {
               applyTerrain(map3d, options.terrain, true);
@@ -2234,6 +2236,24 @@ export class MapRenderer {
    */
   getDocument(): AppliedDocument {
     return this.applied;
+  }
+
+  /**
+   * Put the document's layers in document order after first render (KTD3).
+   * Layers are added in parallel so their data fetches overlap, and a layer
+   * on a named source (registered already) reaches the map before one on an
+   * inline source (whose source is added first): the same ordering rule an
+   * update applies settles the stack, once, before `load` fires.
+   */
+  private orderDocumentLayers(layers: Layer[]): void {
+    const onMap = (this.map.getStyle?.()?.layers ?? []).map((layer) => layer.id);
+    for (const { layerId, beforeId } of documentOrderMoves(layers, onMap)) {
+      try {
+        this.layerManager.moveLayer(layerId, beforeId);
+      } catch (error) {
+        console.warn(`[maplibre-yaml] could not order layer "${layerId}":`, error);
+      }
+    }
   }
 
   /** Who owns the camera from the next update on (KTD13): `<ml-map camera>` changed on a running map. */

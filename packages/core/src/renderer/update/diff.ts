@@ -31,6 +31,7 @@ import type {
   UpdateOp,
   UpdateSummary,
 } from "./types";
+import { beforeIdOf, documentOrderMoves } from "./order";
 
 type Obj = Record<string, unknown>;
 
@@ -289,12 +290,6 @@ function positionOf(layers: readonly Layer[], index: number): LayerPosition {
   return beforeId === undefined ? { index } : { index, beforeId };
 }
 
-function beforeIdOf(layers: readonly Layer[], index: number): string | undefined {
-  const anchor = (layers[index] as { before?: unknown }).before;
-  if (typeof anchor === "string" && !layers.some((layer) => layer.id === anchor)) return anchor;
-  return layers[index + 1]?.id;
-}
-
 /** Why a layer present in both documents must be replaced, if it must. */
 function layerReplaceReason(before: Layer, after: Layer, replacedSources: ReadonlySet<string>): string | undefined {
   if (before.type !== after.type) return "type";
@@ -326,29 +321,6 @@ function layerPropertyOps(before: Layer, after: Layer): UpdateOp[] {
   return ops;
 }
 
-/**
- * The longest run of kept layers already in next-document order: everything
- * else moves (KTD3). Minimal, so a reorder of `a, b, c` to `c, a, b` moves
- * only `c`.
- */
-function settledIds(keptInNextOrder: readonly string[], appliedIndex: ReadonlyMap<string, number>): Set<string> {
-  const tails: number[] = [];
-  const tailIds: string[][] = [];
-  for (const id of keptInNextOrder) {
-    const rank = appliedIndex.get(id)!;
-    let lo = 0;
-    let hi = tails.length;
-    while (lo < hi) {
-      const mid = (lo + hi) >> 1;
-      if (tails[mid]! < rank) lo = mid + 1;
-      else hi = mid;
-    }
-    tails[lo] = rank;
-    tailIds[lo] = [...(tailIds[lo - 1] ?? []), id];
-  }
-  return new Set(tailIds[tails.length - 1] ?? []);
-}
-
 /** Layer removes, replacements, adds, property sets and moves, in apply order. */
 function layerOps(applied: AppliedDocument, next: AppliedDocument, replacedSources: ReadonlySet<string>): UpdateOp[] {
   const before = new Map(applied.layers.map((layer, index) => [layer.id, { layer, index }]));
@@ -375,15 +347,10 @@ function layerOps(applied: AppliedDocument, next: AppliedDocument, replacedSourc
     properties.push(...layerPropertyOps(previous.layer, layer));
     if (!same((previous.layer as Obj)["before"], (layer as Obj)["before"])) anchorChanged.add(layer.id);
   });
-  const appliedIndex = new Map(kept.map((id) => [id, before.get(id)!.index]));
-  const settled = settledIds(kept, appliedIndex);
-  const moves: UpdateOp[] = [];
-  next.layers.forEach((layer, index) => {
-    if (!kept.includes(layer.id)) return;
-    if (settled.has(layer.id) && !anchorChanged.has(layer.id)) return;
-    const beforeId = beforeIdOf(next.layers, index);
-    moves.push(beforeId === undefined ? { op: "layerMove", layerId: layer.id } : { op: "layerMove", layerId: layer.id, beforeId });
-  });
+  // The kept layers in applied order are the map's order of them (KTD1: the
+  // map is never read); the shared rule says which must move (KTD3).
+  const keptInAppliedOrder = [...kept].sort((a, b) => before.get(a)!.index - before.get(b)!.index);
+  const moves: UpdateOp[] = documentOrderMoves(next.layers, keptInAppliedOrder, anchorChanged).map((move) => ({ op: "layerMove", ...move }));
   return [...removes, ...structural, ...properties, ...moves];
 }
 

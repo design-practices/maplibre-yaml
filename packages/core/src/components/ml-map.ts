@@ -1183,18 +1183,10 @@ export class MLMap extends BaseElement {
     const result = await renderer.update(next, hints);
     if (this.renderer !== renderer) return result;
     if (result.outcome === "applied") {
+      // `ml-map:update-applied` was forwarded from the renderer's own event,
+      // which fires only when something changed (R8: an equal document is
+      // a no-op on every path, whether or not the element held its key).
       for (const message of this.documentNotices) this.reportProblem(message, { kind: "hint" });
-      const summary = result.summary ?? emptySummary();
-      // A layer added or replaced starts over; so does a replaced source.
-      // Their old lines go; a retried load's line goes when its data lands.
-      for (const id of [...summary.added, ...summary.replaced]) this.withdrawNotices(`layer:${id}`, `data:${id}`);
-      for (const id of summary.sourcesReplaced) this.withdrawNotices(`source:${id}`);
-      this.dispatchEvent(
-        new CustomEvent("ml-map:update-applied", {
-          bubbles: true,
-          detail: { summary },
-        })
-      );
     } else if (result.outcome === "rejected") {
       this._config = previous.config;
       this.effectsModel = previous.effects;
@@ -2017,6 +2009,22 @@ export class MLMap extends BaseElement {
         swap.resolve({ outcome: "fallback", summary });
         this.drainQueued();
       }
+    });
+
+    // An update applied in place (live documents, KTD9): the renderer emits
+    // this only when something changed, so an equal document fires nothing.
+    renderer.on("update:applied", ({ summary }) => {
+      if (this.renderer !== renderer) return;
+      // A layer added or replaced starts over; so does a replaced source.
+      // Their old lines go; a retried load's line goes when its data lands.
+      for (const id of [...summary.added, ...summary.replaced]) this.withdrawNotices(`layer:${id}`, `data:${id}`);
+      for (const id of summary.sourcesReplaced) this.withdrawNotices(`source:${id}`);
+      this.dispatchEvent(
+        new CustomEvent("ml-map:update-applied", {
+          bubbles: true,
+          detail: { summary },
+        })
+      );
     });
 
     // The document's `state:` values (live documents, KTD9)
