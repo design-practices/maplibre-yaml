@@ -560,7 +560,10 @@ Validate runs on JSON and TOML documents the same way. To turn a document
 an API or another tool handed you (say, JSON) into the format you want to
 keep, use \`mlym convert\`: \`npx maplibre-yaml@latest convert map.json --to
 yaml\`; add \`--strict\` in a pipeline to fail instead of silently dropping
-something the target format can't hold.
+something the target format can't hold, and \`-f json\` for one JSON object
+on stdout, \`{ success, from, to, text, losses: [{ kind, message, path, line,
+column }], errors: [...] }\` (\`out\` in place of \`text\` with \`--out\`),
+instead of the losses as prose on stderr.
 
 ## Don't write these
 

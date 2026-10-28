@@ -92,6 +92,8 @@ test("llms.txt's \"Validate loop\" section mentions converting between formats",
   assert.match(loop, /mlym convert/);
   assert.ok(loop.includes("npx maplibre-yaml@latest convert"), "shows the convert command");
   assert.match(loop, /--strict/);
+  // convert's machine-readable output, after (not validate's) -f json.
+  assert.match(loop, /mlym convert[\s\S]*`-f json`[\s\S]*losses/, "names convert -f json for machine-readable losses");
 });
 
 test("llms.txt's \"Don't write these\" carries the TOML rules", () => {

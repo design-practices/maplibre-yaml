@@ -1,7 +1,8 @@
 import { describe, it, expect, afterAll } from 'vitest';
-import { mkdtempSync, writeFileSync, rmSync, cpSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, rmSync, cpSync, chmodSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolveGlobPatterns, resolveTargets, looksLikeDocument } from '../../src/lib/glob.js';
+import { validateFile } from '../../src/lib/validator.js';
 import { resolve, relative, join, basename } from 'pathe';
 
 const FOLDER = resolve('test/fixtures/formats/folder');
@@ -141,12 +142,75 @@ describe('glob', () => {
       expect(await looksLikeDocument(join(dir, 'bom.toml'))).toBe(true);
     });
 
-    it('reads only the first 64 KB: a document that names its type later is skipped', async () => {
+    it('reads the first and the last 64 KB: a JSON document whose sorted keys put type last joins', async () => {
       const dir = tempDir();
-      writeFileSync(join(dir, 'late.json'), '{ "pad": "' + 'x'.repeat(70 * 1024) + '", "type": "map" }');
+      // `jq -S` / `sort_keys=True`: config, id, layers (big inline data), then type.
+      const features = Array.from({ length: 1500 }, (_, i) => ({
+        type: 'Feature',
+        geometry: { type: 'Point', coordinates: [i % 180, 0] },
+        properties: { name: `point ${i}` },
+      }));
+      const sorted = {
+        config: { center: [0, 0], mapStyle: 'https://demotiles.maplibre.org/style.json', zoom: 1 },
+        id: 'big',
+        layers: [{ id: 'dots', source: { data: { features, type: 'FeatureCollection' }, type: 'geojson' }, type: 'circle' }],
+        type: 'map',
+      };
+      const text = JSON.stringify(sorted, null, 2);
+      expect(text.length).toBeGreaterThan(128 * 1024);
+      writeFileSync(join(dir, 'sorted.json'), text);
+      const { files, skipped } = await resolveTargets([dir]);
+      expect(names(files)).toEqual(['sorted.json']);
+      expect(skipped).toEqual([]);
+    });
+
+    it('a large GeoJSON FeatureCollection is still skipped, read at both ends', async () => {
+      const dir = tempDir();
+      const features = Array.from({ length: 1500 }, (_, i) => ({
+        type: 'Feature',
+        geometry: { type: 'Point', coordinates: [i % 180, 0] },
+        properties: { name: `point ${i}` },
+      }));
+      const text = JSON.stringify({ type: 'FeatureCollection', features }, null, 2);
+      expect(text.length).toBeGreaterThan(128 * 1024);
+      writeFileSync(join(dir, 'points.json'), text);
       const { files, skipped } = await resolveTargets([dir]);
       expect(files).toEqual([]);
-      expect(names(skipped)).toEqual(['late.json']);
+      expect(names(skipped)).toEqual(['points.json']);
+    });
+
+    it('a mark only in the middle of a large file is not read: the file is skipped', async () => {
+      const dir = tempDir();
+      const pad = 'x'.repeat(70 * 1024);
+      writeFileSync(join(dir, 'middle.json'), '{ "a": "' + pad + '", "type": "map", "b": "' + pad + '" }');
+      const { files, skipped } = await resolveTargets([dir]);
+      expect(files).toEqual([]);
+      expect(names(skipped)).toEqual(['middle.json']);
+    });
+
+    it('a candidate that vanishes before it is read is skipped', async () => {
+      const dir = tempDir();
+      expect(await looksLikeDocument(join(dir, 'gone.json'))).toBe(false);
+    });
+
+    // chmod 000 does not stop root, and Windows has no such mode.
+    const canChmod = process.platform !== 'win32' && process.getuid?.() !== 0;
+    it.skipIf(!canChmod)('an unreadable candidate joins the run (and fails there), rather than vanishing', async () => {
+      const dir = tempDir();
+      const file = join(dir, 'locked.json');
+      writeFileSync(file, '{ "type": "map" }');
+      chmodSync(file, 0o000);
+      try {
+        expect(await looksLikeDocument(file)).toBe(true);
+        const { files, skipped } = await resolveTargets([dir]);
+        expect(names(files)).toEqual(['locked.json']);
+        expect(skipped).toEqual([]);
+        const result = await validateFile(file);
+        expect(result.valid).toBe(false);
+        expect(result.errors[0]!.message).toContain('Failed to read file');
+      } finally {
+        chmodSync(file, 0o644);
+      }
     });
 
     it('skips maplibre-yaml.config.json by name, whatever it holds', async () => {

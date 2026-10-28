@@ -3,7 +3,7 @@
  */
 
 import pc from 'picocolors';
-import { displayPath } from '@maplibre-yaml/core';
+import { displayPath, type ConvertLoss, type DocumentFormat } from '@maplibre-yaml/core';
 import type { ValidationResult, ValidationError } from '../types.js';
 
 /** ` (line:column)` after a one-line finding that has a line, else nothing. */
@@ -134,6 +134,59 @@ export function formatJSON(results: ValidationResult[]): string {
     },
   };
 
+  return JSON.stringify(output, null, 2);
+}
+
+/** One reason `mlym convert` wrote nothing, as `convert -f json` reports it. */
+export interface ConvertReportError {
+  path: string;
+  message: string;
+  /**
+   * Core's code (`toml-syntax`, `convert-null`, …) when it has one, or the
+   * command's own: `strict` (`--strict` and a loss).
+   */
+  code?: string;
+  line?: number;
+  column?: number;
+  suggestion?: string;
+}
+
+/** What `mlym convert -f json` prints: one object, whatever the outcome. */
+export interface ConvertReport {
+  success: boolean;
+  /** The input's format, or null when it was never read (a missing file). */
+  from: DocumentFormat | null;
+  to: string;
+  /** The converted document, when it went to stdout. */
+  text?: string;
+  /** The file it was written to, with `--out`. */
+  out?: string;
+  losses: ConvertLoss[];
+  errors: ConvertReportError[];
+}
+
+/**
+ * Format a `mlym convert` outcome as JSON. Losses and errors keep the fields
+ * `validate -f json` uses (`path`, `message`, `line`, `column`), so an agent
+ * reads both commands' output the same way.
+ */
+export function formatConvertJSON(report: ConvertReport): string {
+  const output: ConvertReport = {
+    success: report.success,
+    from: report.from,
+    to: report.to,
+    ...(report.text !== undefined ? { text: report.text } : {}),
+    ...(report.out !== undefined ? { out: report.out } : {}),
+    losses: report.losses.map(({ kind, message, path, line, column }) => ({ kind, message, path, line, column })),
+    errors: report.errors.map(({ path, message, code, line, column, suggestion }) => ({
+      path,
+      message,
+      code,
+      line,
+      column,
+      suggestion,
+    })),
+  };
   return JSON.stringify(output, null, 2);
 }
 

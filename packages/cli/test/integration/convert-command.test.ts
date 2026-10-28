@@ -195,4 +195,88 @@ ${exit}`;
     expect(stdout).toBe('');
     expect(stderr).toContain('layers.0.paint.circle-opacity: JSON has no inf');
   });
+  describe('-f json: one JSON object on stdout', () => {
+    const commented = async (dir: string) => {
+      const doc = join(dir, 'map.yaml');
+      const text = (await readFile(join(FIXTURES, 'quick-start.yaml'), 'utf8')).replace('zoom: 1', 'zoom: 1 # whole world');
+      await writeFile(doc, text);
+      return doc;
+    };
+
+    it('reports the text and each loss with its kind and line, and exits 0', async () => {
+      const doc = await commented(await mkdir());
+      const { code, stdout, stderr } = await mlym(`convert "${doc}" --to json -f json`);
+      expect(code).toBe(0);
+      expect(stderr).toBe('');
+      const out = JSON.parse(stdout);
+      expect(out).toMatchObject({ success: true, from: 'yaml', to: 'json', errors: [] });
+      expect(out.out).toBeUndefined();
+      expect(JSON.parse(out.text).config.zoom).toBe(1);
+      expect(out.losses).toEqual([
+        expect.objectContaining({ kind: 'comment', line: 5, message: expect.stringContaining('# whole world') }),
+      ]);
+    });
+
+    it('--strict with a loss: exit 1, still one JSON object, no text, nothing written', async () => {
+      const dir = await mkdir();
+      const doc = await commented(dir);
+      const out = join(dir, 'map.json');
+      const { code, stdout } = await mlym(`convert "${doc}" --to json --strict -f json --out "${out}"`);
+      expect(code).toBe(1);
+      const result = JSON.parse(stdout);
+      expect(result.success).toBe(false);
+      expect(result.text).toBeUndefined();
+      expect(result.out).toBeUndefined();
+      expect(result.losses).toHaveLength(1);
+      expect(result.errors).toEqual([expect.objectContaining({ code: 'strict', message: expect.stringContaining('--strict') })]);
+      expect(await exists(out)).toBe(false);
+    });
+
+    it('invalid input: exit 1, the validation errors with their lines, nothing written', async () => {
+      const { code, stdout } = await mlym(`convert "${join(FIXTURES, 'quick-start-planted.yaml')}" --to toml -f json`);
+      expect(code).toBe(1);
+      const result = JSON.parse(stdout);
+      expect(result).toMatchObject({ success: false, from: 'yaml', to: 'toml' });
+      expect(result.text).toBeUndefined();
+      expect(result.errors).toContainEqual(expect.objectContaining({ path: 'config.zoom', line: 5, column: 9 }));
+    });
+
+    it('a value the target cannot hold: exit 1, its path in errors', async () => {
+      const dir = await mkdir();
+      const doc = join(dir, 'map.toml');
+      const text = (await readFile(join(FIXTURES, 'quick-start.toml'), 'utf8')).replace('circle-opacity = 0.7', 'circle-opacity = inf');
+      await writeFile(doc, text);
+      const { code, stdout } = await mlym(`convert "${doc}" --to json -f json`);
+      expect(code).toBe(1);
+      const result = JSON.parse(stdout);
+      expect(result.success).toBe(false);
+      expect(result.errors).toContainEqual(expect.objectContaining({ path: 'layers.0.paint.circle-opacity', code: 'convert-number' }));
+    });
+
+    it('--out: writes the file and reports its path instead of the text', async () => {
+      const dir = await mkdir();
+      const out = join(dir, 'nested/story.yaml');
+      const { code, stdout } = await mlym(`convert "${join(FIXTURES, 'story.toml')}" --to yaml -f json -o "${out}"`);
+      expect(code).toBe(0);
+      const result = JSON.parse(stdout);
+      expect(result).toMatchObject({ success: true, from: 'toml', to: 'yaml', out });
+      expect(result.text).toBeUndefined();
+      expect(await readFile(out, 'utf8')).toContain('scrollytelling');
+    });
+
+    it('a missing file exits 2 with a JSON error; an unknown --format exits 1', async () => {
+      const dir = await mkdir();
+      const missing = await mlym(`convert "${join(dir, 'nope.yaml')}" --to json -f json`);
+      expect(missing.code).toBe(2);
+      expect(JSON.parse(missing.stdout)).toMatchObject({
+        success: false,
+        to: 'json',
+        errors: [expect.objectContaining({ message: expect.stringContaining('Could not read') })],
+      });
+
+      const unknown = await mlym(`convert "${join(FIXTURES, 'quick-start.yaml')}" --to json -f sarif`);
+      expect(unknown.code).toBe(1);
+      expect(unknown.stderr).toContain('--format must be text or json');
+    });
+  });
 });

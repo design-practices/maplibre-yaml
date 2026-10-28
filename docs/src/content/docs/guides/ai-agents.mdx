@@ -69,7 +69,15 @@ npx maplibre-yaml@latest convert map.json --to toml --out map.toml --strict
 
 `--strict` exits `1` and writes nothing if the target can't keep everything
 (comments, anchors, a `null`); without it, what's lost is listed on stderr
-and the command still exits `0`.
+and the command still exits `0`. Add `-f json` to read the result instead of
+prose: one object on stdout, `{ success, from, to, text, losses, errors }`
+(`out` in place of `text` with `--out`), each loss and error with its
+`path`, `line` and `column` as `validate -f json` gives them
+([the convert JSON output](/cli/reference/#convert-json-output)):
+
+```bash
+npx maplibre-yaml@latest convert map.json --to toml --strict -f json
+```
 
 TOML has traps a generated document can hit:
 

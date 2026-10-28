@@ -127,12 +127,13 @@ directly.
 
 A folder of maps often holds other JSON too: GeoJSON, a `package.json`, a
 `style.json`. So under a folder argument, a `.json` or `.toml` file is
-validated only if its first 64 KB show it is a document: it names a `type`
+validated only if its first 64 KB (for a larger JSON file, also its last
+64 KB, where sorted keys put the root `type`) show it is a document: it names a `type`
 of `map` or `scrollytelling`, has a top-level `pages` key, or carries a
 `$schema` (or a TOML `#:schema` line) under
 `https://docs.maplibre-yaml.org/schema/`. The check reads the text and
-doesn't parse it, so a document with a syntax error still joins the run
-and fails there. The project settings file, `maplibre-yaml.config.json`, is
+doesn't parse it, so a document with a syntax error, or one that can't be
+read, still joins the run and fails there. The project settings file, `maplibre-yaml.config.json`, is
 always skipped. A file you name, or a glob matches, is validated whatever
 it contains.
 
@@ -299,6 +300,7 @@ npx maplibre-yaml@latest convert <file> --to <yaml|json|toml> [options]
 | `--to` | | string | | Required. The format to write: `yaml`, `json` or `toml`. The input's own format reprints the file |
 | `--out` | `-o` | string | stdout | Write to this file instead. It may not be the input file |
 | `--strict` | | boolean | off | Exit `1` and write nothing if anything would be lost |
+| `--format` | `-f` | string | `text` | `json` prints one JSON object on stdout instead ([below](#convert-json-output)) |
 
 What the output can't keep is listed on stderr, so
 `npx maplibre-yaml@latest convert map.yaml --to json > map.json` keeps the
@@ -321,6 +323,40 @@ npx maplibre-yaml@latest convert story.yaml --to toml --strict      # fail on an
 
 [JSON & TOML documents › Convert between formats](/guides/json-and-toml/#convert)
 shows a loss report.
+
+#### JSON output \{#convert-json-output}
+
+With `-f json` the command prints one JSON object on stdout whatever the
+outcome, with the same exit codes and nothing on stderr, so a script or an
+agent reads the losses instead of parsing prose:
+
+```json
+{
+  "success": true,
+  "from": "yaml",
+  "to": "toml",
+  "text": "type = \"map\"\n…",
+  "losses": [
+    { "kind": "comment", "message": "the comment on line 5 is dropped: # whole world", "line": 5, "column": 11 }
+  ],
+  "errors": []
+}
+```
+
+- `text` is the converted document; with `--out` it is written to the file
+  and `out` (its path) replaces `text`.
+- Each loss has a `kind` (`comment`, `anchor`, `merge` or `null`), a
+  `message`, and a `path` or a `line` and `column`.
+- On failure `success` is `false` and there is no `text`. `errors` carries
+  the validation errors, or the values the target can't hold, with `path`,
+  `message`, `line` and `column` as [`validate -f json`](#output-formats)
+  reports them, plus a `code` (`convert-null`, `toml-syntax`, …). A
+  `--strict` refusal is one error of code `strict`, beside the `losses` that
+  caused it.
+
+```bash
+npx maplibre-yaml@latest convert map.yaml --to toml -f json
+```
 
 ---
 

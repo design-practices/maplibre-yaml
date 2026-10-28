@@ -66,7 +66,7 @@ const FOLDER_CANDIDATE_PATTERN = '**/*.{json,toml}';
 /** The CLI's own project config, never a document (see config-loader.ts). */
 const PROJECT_CONFIG_FILE = 'maplibre-yaml.config.json';
 
-/** How much of a JSON or TOML file the folder sniff reads. */
+/** How much of a JSON or TOML file the folder sniff reads, from its start (and, for JSON, its end). */
 const SNIFF_BYTES = 64 * 1024;
 
 /** How many folder candidates are sniffed at once. */
@@ -74,29 +74,48 @@ const SNIFF_CONCURRENCY = 16;
 
 /**
  * Whether a JSON or TOML file under a folder argument is a map or story
- * document, judged from the raw text of its first 64 KB, not a parse
- * (KTD11), by core's {@link looksLikeDocumentText}: a `type` of `map` or
- * `scrollytelling`, a `pages` key, or a `$schema` under
- * docs.maplibre-yaml.org/schema/. A document with a syntax error, or one too
- * large to parse quickly, still joins the run and fails there, rather than
- * vanishing from it.
+ * document, judged from its raw text, not a parse (KTD11), by core's
+ * {@link looksLikeDocumentText}: a `type` of `map` or `scrollytelling`, a
+ * `pages` key, or a `$schema` under docs.maplibre-yaml.org/schema/. A
+ * document with a syntax error, or one too large to parse quickly, still
+ * joins the run and fails there, rather than vanishing from it.
+ *
+ * @remarks
+ * The first 64 KB is read. A JSON file larger than that with no mark there
+ * is also tested on its last 64 KB: a document written with sorted keys
+ * (`jq -S`, Python's `sort_keys=True`) puts its root `type`, `pages` or
+ * `$schema` after `config` and `layers`, which can hold megabytes of inline
+ * data. TOML needs no tail read: a root key comes before the first table.
+ *
+ * A file that is gone by the time it is read (deleted after the folder was
+ * listed) is not a document. Any other read error (permission denied, a
+ * folder named `x.json`, an I/O error) counts as one, so the file joins the
+ * run and fails there with the read error, rather than being silently
+ * skipped.
  */
 export async function looksLikeDocument(file: string): Promise<boolean> {
   const format = extname(file).toLowerCase() === '.toml' ? 'toml' : 'json';
-  let text: string;
   try {
     const handle = await open(file, 'r');
     try {
-      const buffer = Buffer.alloc(SNIFF_BYTES);
-      const { bytesRead } = await handle.read(buffer, 0, SNIFF_BYTES, 0);
-      text = buffer.subarray(0, bytesRead).toString('utf-8');
+      const read = async (position: number): Promise<string> => {
+        const buffer = Buffer.alloc(SNIFF_BYTES);
+        const { bytesRead } = await handle.read(buffer, 0, SNIFF_BYTES, position);
+        return buffer.subarray(0, bytesRead).toString('utf-8');
+      };
+      if (looksLikeDocumentText(stripBom(await read(0)), format)) return true;
+      if (format !== 'json') return false;
+      const { size } = await handle.stat();
+      if (size <= SNIFF_BYTES) return false;
+      // The window may start inside a character or a string: the marks are
+      // short and need no context before them.
+      return looksLikeDocumentText(await read(size - SNIFF_BYTES), format);
     } finally {
       await handle.close();
     }
-  } catch {
-    return false;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException | null)?.code !== 'ENOENT';
   }
-  return looksLikeDocumentText(stripBom(text), format);
 }
 
 /** `fn` over `items`, at most `limit` at a time; the results in `items` order. */
