@@ -19,6 +19,8 @@ interface Positions {
 export interface Normalized {
   errors: ParseError[];
   warnings: ValidationWarning[];
+  /** Each error's path as segments, in the same order as `errors`. */
+  segments: Path[];
 }
 
 const isObject = (v: unknown): v is Rec => v !== null && typeof v === "object" && !Array.isArray(v);
@@ -54,7 +56,7 @@ export function normalizeDates(v: unknown): unknown {
  * materialized document.
  */
 export function normalizeDocument(value: unknown, pos?: Positions): Normalized {
-  const found: Normalized = { errors: [], warnings: [] };
+  const found: Normalized = { errors: [], warnings: [], segments: [] };
   if (!isObject(value)) return found;
   delete value["$schema"];
   for (const path of [["config"], ["runtime", "map"]]) {
@@ -66,6 +68,30 @@ export function normalizeDocument(value: unknown, pos?: Positions): Normalized {
     }
   }
   return found;
+}
+
+/** A value that is already parsed, normalized the way core normalizes a document. */
+export interface NormalizedValue {
+  /** A copy: dates as text, no root `$schema`, nested `locale` tables flattened. */
+  value: unknown;
+  /** Problems that fail the document, each with its path as segments. */
+  issues: { path: Path; message: string }[];
+  warnings: ValidationWarning[];
+}
+
+/**
+ * Normalize a parsed value (an Astro collection entry, a value a host built)
+ * the way core normalizes every document before validation. The input is not
+ * changed.
+ */
+export function normalizeDocumentValue(input: unknown): NormalizedValue {
+  const value = normalizeDates(input);
+  const found = normalizeDocument(value);
+  return {
+    value,
+    issues: found.errors.map((e, i) => ({ path: found.segments[i] ?? [], message: e.message })),
+    warnings: found.warnings,
+  };
 }
 
 /** Throwing entry points: normalize, and throw the first problem. */
@@ -120,9 +146,11 @@ function flattenLocale(table: Rec, at: Path, found: Normalized, pos?: Positions)
           message: `The locale key "${key}" is written twice, as ${spell(first)} and as ${spell(s)}. Keep one.`,
           ...where(s),
         });
+        found.segments.push([...at, key]);
       } else if (segs.length && typeof v !== "string") {
         const got = v === null ? "null" : Array.isArray(v) ? "array" : typeof v;
         found.errors.push({ path: path(key), code: "schema", message: `The locale entry "${key}" must be a string, got ${got}.`, ...where(s, true) });
+        found.segments.push([...at, key]);
       } else {
         flat.set(key, v);
         from.set(key, s);

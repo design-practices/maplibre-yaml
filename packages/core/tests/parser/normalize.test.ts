@@ -269,3 +269,35 @@ describe("date values", () => {
     expect(input.a[0]!.d).toBeInstanceOf(Date);
   });
 });
+
+describe("normalizeDocumentValue (exported for values parsed elsewhere)", () => {
+  it("returns a normalized copy and leaves the input alone", async () => {
+    const { normalizeDocumentValue } = await import("../../src/index");
+    const input = {
+      $schema: "https://docs.maplibre-yaml.org/schema/latest/map.schema.json",
+      type: "map",
+      config: { locale: { Popup: { Close: "Fermer" } } },
+      layers: [{ when: new Date(0) }],
+    };
+    const { value, issues, warnings } = normalizeDocumentValue(input);
+    expect(issues).toEqual([]);
+    expect(warnings).toEqual([]);
+    expect(value).toEqual({
+      type: "map",
+      config: { locale: { "Popup.Close": "Fermer" } },
+      layers: [{ when: "1970-01-01T00:00:00.000Z" }],
+    });
+    expect(input.config.locale.Popup.Close).toBe("Fermer");
+    expect(input.$schema).toBeDefined();
+  });
+
+  it("reports a collision with its path as segments", async () => {
+    const { normalizeDocumentValue } = await import("../../src/index");
+    const { issues } = normalizeDocumentValue({
+      config: { locale: { "Popup.Close": "a", Popup: { Close: "b" } } },
+    });
+    expect(issues).toHaveLength(1);
+    expect(issues[0]!.path).toEqual(["config", "locale", "Popup.Close"]);
+    expect(issues[0]!.message).toContain("written twice");
+  });
+});
