@@ -39,6 +39,10 @@ ml-scrollytelling > script[type="text/x-yaml"],
 ml-scrollytelling > script[type="application/x-yaml"],
 ml-scrollytelling > script[type="application/json"],
 ml-scrollytelling > script[type="text/json"],
+ml-scrollytelling > script[type="application/toml"],
+ml-scrollytelling > script[type="text/toml"],
+ml-scrollytelling > script[type="application/x-toml"],
+ml-scrollytelling > script[type="text/x-toml"],
 ml-scrollytelling > [slot] {
   display: none;
 }

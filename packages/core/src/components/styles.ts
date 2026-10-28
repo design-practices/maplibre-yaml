@@ -39,7 +39,11 @@ export const defaultStyles = `
   ml-map script[type="text/x-yaml"],
   ml-map script[type="application/x-yaml"],
   ml-map script[type="application/json"],
-  ml-map script[type="text/json"] {
+  ml-map script[type="text/json"],
+  ml-map script[type="application/toml"],
+  ml-map script[type="text/toml"],
+  ml-map script[type="application/x-toml"],
+  ml-map script[type="text/x-toml"] {
     display: none;
   }
 `;

@@ -77,6 +77,7 @@ const TYPES = {
   ".json": "application/json; charset=utf-8",
   ".yaml": "text/yaml; charset=utf-8",
   ".yml": "text/yaml; charset=utf-8",
+  ".toml": "application/toml; charset=utf-8",
   ".png": "image/png",
   // U16 hatch twins: an <img> only decodes SVG served as image/svg+xml;
   // GIF radar frames, TTF font faces and GeoJSON round out the assets.

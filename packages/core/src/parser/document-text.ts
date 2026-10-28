@@ -121,33 +121,42 @@ export async function parseDocumentText(
   text: string,
   options: ParseDocumentTextOptions = {}
 ): Promise<FormattedParseResult<unknown> | DocumentTextResult> {
+  // A failed download of the TOML reader is the one rejection (KTD1).
+  return readDocumentTextNow(text, options) ?? readText(text, options, await getDecoder("toml"))!;
+}
+
+/**
+ * {@link parseDocumentText} without waiting: the result for YAML, JSON and
+ * empty text, or `undefined` when the text is TOML and needs its reader. The
+ * elements use it so a YAML or JSON document renders in the same turn, as
+ * it always has.
+ *
+ * @internal
+ */
+export function readDocumentTextNow(
+  text: string,
+  options: ParseDocumentTextOptions = {}
+): FormattedParseResult<unknown> | DocumentTextResult | undefined {
+  return readText(text, options);
+}
+
+function readText(
+  text: string,
+  options: ParseDocumentTextOptions,
+  toml?: TomlReader
+): FormattedParseResult<unknown> | DocumentTextResult | undefined {
   const kind = options.kind ?? "any";
   let format: DocumentFormat = "yaml";
   let outcome: Outcome;
-  /** The TOML reader's download failure: the one rejection (KTD1). */
-  let chunkFailure: { error: unknown } | undefined;
   try {
     if (typeof text !== "string") throw new TypeError("expected the document as text");
     const body = text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
     format = detectDocumentFormat(body, options);
-    outcome =
-      body.trim() === ""
-        ? failure(EMPTY_MESSAGE)
-        : format === "toml"
-          ? withTomlLabelHint(
-              body,
-              readToml(
-                await getDecoder("toml").catch((error: unknown) => {
-                  chunkFailure = { error };
-                  throw error;
-                }),
-                body,
-                kind
-              )
-            )
-          : readYamlOrJson(body, kind, format);
+    if (body.trim() === "") outcome = failure(EMPTY_MESSAGE);
+    else if (format !== "toml") outcome = readYamlOrJson(body, kind, format);
+    else if (toml) outcome = withTomlLabelHint(body, readToml(toml, body, kind));
+    else return undefined;
   } catch (err) {
-    if (chunkFailure) throw chunkFailure.error;
     outcome = failure(`The document could not be read: ${err instanceof Error ? err.message : String(err)}`);
   }
   const result = {
@@ -213,15 +222,21 @@ function extensionFormat(name: string | undefined, isUrl: boolean): DocumentForm
  * no signal is sniffed.
  */
 function detectDocumentFormat(text: string, options: ParseDocumentTextOptions): DocumentFormat {
-  const s = options.signals ?? {};
+  return formatNamed(options.format) ?? signalledFormat(options.signals ?? {}) ?? sniffFormat(text);
+}
+
+/**
+ * The format the signals name, in precedence order, or undefined when none
+ * does (the text would be sniffed). Lets a caller start the TOML reader's
+ * download before the text arrives.
+ */
+export function signalledFormat(s: DocumentSignals): DocumentFormat | undefined {
   return (
-    formatNamed(options.format) ??
     mediaTypeFormat(s.scriptType) ??
     extensionFormat(s.url, true) ??
     extensionFormat(s.fileName, false) ??
     extensionFormat(s.responseUrl, true) ??
-    mediaTypeFormat(s.contentType) ??
-    sniffFormat(text)
+    mediaTypeFormat(s.contentType)
   );
 }
 

@@ -14,8 +14,8 @@
  * ```
  *
  * ### 2. Inline YAML via Script Tag
- * `type="text/yaml"`, `application/yaml` (or the `x-yaml` variants) and
- * `application/json` all work; JSON is parsed as the YAML 1.2 it is.
+ * `type="text/yaml"`, `application/yaml` (or the `x-yaml` variants),
+ * `application/json` and `application/toml` all work.
  * ```html
  * <ml-map>
  *   <script type="text/yaml">
@@ -30,7 +30,8 @@
  * </ml-map>
  * ```
  *
- * ### 3. JSON Config Attribute (Programmatic)
+ * ### 3. Config Attribute (Programmatic)
+ * Document text in any of the three formats.
  * ```html
  * <ml-map config='{"type":"map",...}'></ml-map>
  * ```
@@ -63,8 +64,9 @@ import {
   denormalizeOptions,
 } from "../model/index.js";
 import type { MapModel } from "../model/types.js";
-import { createErrorCard, ERROR_CARD_CLASS } from "./error-card.js";
-import { findDocumentScript, isJsonScript, wordForJson } from "./document-script.js";
+import { createErrorCard, ERROR_CARD_CLASS, tomlReaderCard } from "./error-card.js";
+import { findDocumentScript, noDocumentMessage } from "./document-script.js";
+import { after, fetchDocument, readDocument, type DocumentText } from "./document-ingest.js";
 import { MapNotice, appendMessage, type NoticeKind } from "./map-notice.js";
 import { showAuthorHints } from "./author-hints.js";
 import {
@@ -90,11 +92,6 @@ import {
   describeSwappedCenter,
   filePageWorkerCard,
   isFilePage,
-  looksLikeHtml,
-  resolveUrl,
-  srcFetchFailedCard,
-  srcHtmlCard,
-  srcHttpErrorCard,
   styleFailureCard,
   type ErrorCardContent,
 } from "./student-messages.js";
@@ -127,7 +124,6 @@ import {
   applyDocumentBase,
   applyDocumentBaseToLayer,
   normalizeDocumentBase,
-  resolveDocumentUrl,
 } from "../utils/document-base.js";
 
 /**
@@ -270,6 +266,15 @@ interface PendingSwap {
   notices: NoticeLine[];
   resolve: (result: UpdateResult) => void;
 }
+
+/**
+ * A document read and handed on (KTD8): its outcome, still to come. A
+ * wrapper, because a promise resolved with a promise flattens: `reload()`
+ * waits for the read, `update()` for the outcome.
+ */
+type Routed = { outcome: Promise<UpdateResult> | UpdateResult };
+
+const SUPERSEDED: Routed = { outcome: { outcome: "superseded" } };
 
 /** A document that arrived during a swap: applied once the swap settles (last wins, KTD5). */
 interface QueuedDocument {
@@ -457,6 +462,19 @@ export class MLMap extends BaseElement {
    * re-render. Cleared whenever the map is rendered from another source.
    */
   private appliedConfigKey: string | null = null;
+
+  /**
+   * Bumped by every document handed in (KTD8): a read still waiting (a
+   * fetch, the TOML reader) when a newer document arrives is dropped, and
+   * its outcome is `superseded`.
+   */
+  private generation = 0;
+
+  /** The document text being read, with its outcome: assigning the same text again joins it. */
+  private pendingText: { text: string; routed: Promise<Routed> } | null = null;
+
+  /** Document text assigned before the element connected: read when it does. */
+  private textBeforeConnect: string | null = null;
 
   /**
    * Cancels the pending "No configuration provided" check (ml-mpm), or
@@ -682,6 +700,11 @@ export class MLMap extends BaseElement {
 
   /**
    * Get the current map configuration
+   *
+   * @remarks
+   * While document text is being read (a TOML document waits for its
+   * reader), this is still the last document applied; text assigned before
+   * the element connects reads as `null` until it has been read.
    */
   get config(): MapBlock | null {
     return this._config;
@@ -691,11 +714,12 @@ export class MLMap extends BaseElement {
    * Set the map configuration programmatically.
    *
    * @remarks
-   * Accepts a `MapBlock` object or its JSON string; both are validated like
-   * every other config path, whether assigned before or after the element
-   * connects. Assigning a value that is JSON-equal to the config currently
-   * applied is a no-op, so a framework re-binding an equal object does not
-   * touch the map. A different document is applied to the running map in
+   * Accepts a `MapBlock` object or document text in YAML, JSON or TOML;
+   * both are validated like every other config path, whether assigned
+   * before or after the element connects. Text reads with positions, and a
+   * duplicate JSON key is an error. Assigning a value that is JSON-equal to
+   * the config currently applied, or the same text again, is a no-op, so a
+   * framework re-binding an equal object does not touch the map. A different document is applied to the running map in
    * place (live documents, 0.10): the camera stays unless the document's
    * camera changed, `getMap()` keeps its identity, and `ml-map:update-applied`
    * reports what changed; a document that fails validation is refused with
@@ -704,38 +728,44 @@ export class MLMap extends BaseElement {
    * stored config without touching a rendered map.
    */
   set config(value: MapBlock | string | null) {
-    if (value === null) {
-      this._config = null;
-      this.appliedConfigKey = null;
+    const text = typeof value === "string" ? value : null;
+    // Before connect: store the candidate; initialize() validates it.
+    if (!this.initialized || value === null) {
+      this._config = typeof value === "string" ? null : value;
+      this.textBeforeConnect = text;
+      if (value === null) this.appliedConfigKey = null;
       return;
     }
 
-    let parsed: unknown;
-
-    if (typeof value === "string") {
-      try {
-        parsed = JSON.parse(value);
-      } catch (e) {
-        this.cancelEmptyConfigCheck();
-        this.appliedConfigKey = null;
-        this.documentFailed([{ path: "", message: "Invalid JSON in config property" }]);
-        return;
-      }
-    } else {
-      parsed = value;
-    }
-
-    // Before connect: store the candidate; initialize() validates it.
-    if (!this.initialized) {
-      this._config = parsed as MapBlock;
+    if (text !== null) {
+      const routed = this.readText(text);
+      if (routed) this.lastUpdate = routed.then((r) => r.outcome);
       return;
     }
 
     this.cancelEmptyConfigCheck();
-    const key = configKey(parsed);
+    const key = configKey(value);
     if (key !== null && key === this.appliedConfigKey) return;
 
-    this.applyValidatedConfig(parsed, key);
+    this.applyValidatedConfig(value, key);
+  }
+
+  /**
+   * Read document text from the `config` attribute or property, or
+   * `update()` (KTD3): any format, through the front door. The same text as
+   * the last handed in is a no-op, checked before anything is awaited, so a
+   * re-render passing the same string reads nothing; while that text is
+   * still being read, its outcome is shared. `force` (reload) reads anyway.
+   */
+  private readText(text: string, hints: DiffHints = NO_HINTS, force = false): Promise<Routed> | null {
+    if (!force && text === this.appliedConfigKey) return this.pendingText?.text === text ? this.pendingText.routed : null;
+    this.appliedConfigKey = text;
+    const pending = { text, routed: this.ingest(() => ({ text, signals: {} }), hints) };
+    this.pendingText = pending;
+    void pending.routed.then(() => {
+      if (this.pendingText === pending) this.pendingText = null;
+    });
+    return pending.routed;
   }
 
   /**
@@ -750,6 +780,8 @@ export class MLMap extends BaseElement {
     candidate: unknown,
     key: string | null = configKey(candidate)
   ): void {
+    // A newer document than any read still in flight (KTD8).
+    ++this.generation;
     this.appliedConfigKey = key;
     this.documentUrl = null;
     const result = YAMLParser.safeParseMapBlockValue(candidate);
@@ -857,15 +889,17 @@ export class MLMap extends BaseElement {
       const src = this.getAttribute("src");
       // During a swap, the document the swap is building (not the one it replaces): applied again once the new map is up.
       const current = this.swap?.mapBlock ?? this._config;
+      // Without `src` no new document arrives, so a read in flight is not
+      // superseded: it applies against the new base when it lands.
       if (src) void this.loadFromURL(src, hints);
       else if (current && (this.renderer || this.swap)) this.renderDocument(current, hints);
       return;
     }
 
     if (name === "src" && newValue) {
-      this.loadFromURL(newValue);
+      void this.loadFromURL(newValue);
     } else if (name === "config" && newValue) {
-      this.loadFromJSONAttribute(newValue);
+      this.readText(newValue);
     }
   }
 
@@ -879,29 +913,35 @@ export class MLMap extends BaseElement {
     // properties at creation (React 19, Vue, Svelte) land here, so it is
     // validated and defaulted exactly like the attribute and YAML paths
     // (ml-jh6), never handed to the renderer raw.
+    const text = this.textBeforeConnect;
+    if (text !== null) {
+      this.textBeforeConnect = null;
+      this.readText(text);
+      return;
+    }
     if (this._config) {
       this.applyValidatedConfig(this._config);
       return;
     }
 
-    // Priority 2: an inline document script (YAML or JSON, ml-4cn.2)
+    // Priority 2: an inline document script (YAML, JSON or TOML, ml-4cn.2)
     const script = findDocumentScript(this);
     if (script?.textContent) {
-      this.loadFromScriptTag(script.textContent, isJsonScript(script));
+      void this.loadFromScript(script);
       return;
     }
 
-    // Priority 3: External YAML file
+    // Priority 3: External document file
     const srcAttr = this.getAttribute("src");
     if (srcAttr) {
       await this.loadFromURL(srcAttr);
       return;
     }
 
-    // Priority 4: JSON config attribute
+    // Priority 4: the config attribute (document text in any format)
     const configAttr = this.getAttribute("config");
     if (configAttr) {
-      this.loadFromJSONAttribute(configAttr);
+      this.readText(configAttr);
       return;
     }
 
@@ -930,15 +970,7 @@ export class MLMap extends BaseElement {
     const run = () => {
       this.cancelEmptyConfigCheck();
       if (!this.initialized || this._config || this.renderer) return;
-      this.handleError(
-        [
-          {
-            path: "",
-            message: "No configuration provided.",
-          },
-        ],
-        true
-      );
+      this.handleError([{ path: "", message: noDocumentMessage(this, false, "No configuration provided.") }], true);
     };
 
     let frame: number | undefined;
@@ -966,28 +998,56 @@ export class MLMap extends BaseElement {
   }
 
   /**
-   * Load and parse a document from an inline script's text content. JSON is
-   * YAML 1.2, so one parser reads both; `json` only words syntax errors.
+   * The one way a document read from text comes in (KTD8): an inline
+   * script, `src`, the `config` attribute or property, `update()` and
+   * `reload()`. It bumps the generation before anything is awaited and
+   * cancels the empty-document check, so neither a slow fetch nor the TOML
+   * reader's download lets an older document land over a newer one, or "No
+   * configuration provided" show meanwhile. YAML and JSON text is read and
+   * routed in the same turn. `load` reports its own failures (a `src` that
+   * didn't load) and gives `null`.
    */
-  private loadFromScriptTag(yamlContent: string, json = false, hints: DiffHints = NO_HINTS): void {
+  private ingest(
+    load: (stale: () => boolean) => DocumentText | null | Promise<DocumentText | null>,
+    hints: DiffHints
+  ): Promise<Routed> {
+    const generation = ++this.generation;
     this.cancelEmptyConfigCheck();
+    const stale = () => generation !== this.generation || !this.initialized;
+    return Promise.resolve(
+      after(load(stale), (doc) => {
+        if (stale()) return SUPERSEDED;
+        if (!doc) return { outcome: this.lastUpdate! };
+        return after(readDocument(doc, "map"), (read): Routed => {
+          if (stale()) return SUPERSEDED;
+          if ("chunk" in read) {
+            // The reader may download next time: the same text must be read again.
+            this.appliedConfigKey = null;
+            const card = tomlReaderCard(read.chunk);
+            this.documentFailed(card.errors, "chunk", card);
+          } else {
+            this.documentUrl = doc.url ?? null;
+            // Warnings are advisory (unknown keys, deprecations, expression hints):
+            // surface them on the console, never in the error card (per decision D11).
+            this.logWarnings(read.warnings);
+            if (read.success && read.data) this.renderDocument(read.data, hints);
+            else this.documentFailed(read.errors);
+          }
+          return { outcome: this.lastUpdate! };
+        });
+      })
+    );
+  }
+
+  /** Read the document in an inline script, its `type` naming the format. */
+  private loadFromScript(script: HTMLScriptElement, hints: DiffHints = NO_HINTS): Promise<Routed> {
     this.appliedConfigKey = null;
-    this.documentUrl = null;
-    const result = YAMLParser.safeParseMapBlock(yamlContent);
-
-    // Warnings are advisory (unknown keys, deprecations, expression hints):
-    // surface them on the console, never in the error card (per decision D11).
-    this.logWarnings(result.warnings);
-
-    if (result.success && result.data) {
-      this.renderDocument(result.data, hints);
-    } else {
-      this.documentFailed(json ? wordForJson(result.errors) : result.errors);
-    }
+    const doc = { text: script.textContent ?? "", signals: { scriptType: script.getAttribute("type") } };
+    return this.ingest(() => doc, hints);
   }
 
   /**
-   * Load and parse YAML from an external URL.
+   * Fetch and read the document at `src`.
    *
    * @remarks
    * Each way a fetch fails gets its own actionable card (ml-aot.13): a page
@@ -999,71 +1059,21 @@ export class MLMap extends BaseElement {
    * (KTD12): the document is refused with `ml-map:update-rejected`
    * (`kind: "fetch"`) and a dev-only hint, and the map stays.
    */
-  private async loadFromURL(url: string, hints: DiffHints = NO_HINTS): Promise<void> {
-    this.cancelEmptyConfigCheck();
+  private loadFromURL(url: string, hints: DiffHints = NO_HINTS): Promise<Routed> {
     this.appliedConfigKey = null;
-
-    // Emit loading event
-    this.dispatchEvent(
-      new CustomEvent("ml-map:loading", {
-        bubbles: true,
-        detail: { url },
-      })
-    );
-
-    const doc = this.ownerDocument;
-    // With a `base`, `src` is a site path like every path inside the document.
-    const target = resolveDocumentUrl(url, this.base);
-    const resolved = resolveUrl(target, doc.baseURI);
-    const filePage = isFilePage(doc);
-
-    let response: Response;
-    let yamlContent: string;
-    try {
-      response = await fetch(target);
-      if (!response.ok) {
-        this.fetchFailed(
-          url,
-          resolved,
-          `${response.status}${response.statusText ? ` ${response.statusText}` : ""}`,
-          srcHttpErrorCard(url, resolved, response.status, response.statusText, {
-            pageUrl: doc.baseURI,
-            base: this.base,
-          })
-        );
-        return;
-      }
-      yamlContent = await response.text();
-    } catch (error) {
-      const reason = error instanceof Error ? error.message : String(error);
-      this.fetchFailed(url, resolved, reason, srcFetchFailedCard(url, resolved, error, filePage));
-      return;
-    }
-
-    if (looksLikeHtml(yamlContent, response.headers?.get?.("content-type") ?? null)) {
-      this.fetchFailed(
-        url,
-        resolved,
-        "it is a web page, not a YAML file",
-        srcHtmlCard(url, resolved, { pageUrl: doc.baseURI, base: this.base })
-      );
-      return;
-    }
-
-    const result = YAMLParser.safeParseMapBlock(yamlContent);
-    this.logWarnings(result.warnings);
-
-    if (result.success && result.data) {
-      this.documentUrl = resolved;
-      this.renderDocument(result.data, hints);
-    } else {
-      this.documentFailed(result.errors);
-    }
+    return this.ingest(async (stale) => {
+      this.dispatchEvent(new CustomEvent("ml-map:loading", { bubbles: true, detail: { url } }));
+      const got = await fetchDocument(url, this.base, this.ownerDocument);
+      if (!("failed" in got)) return got;
+      if (!stale()) this.fetchFailed(url, got.resolved, got.reason, got.failed);
+      return null;
+    }, hints);
   }
 
   /** A `src` that didn't load: the card with no map to keep, a rejection otherwise (KTD12). */
   private fetchFailed(src: string, resolved: string, reason: string, card: ErrorCardContent): void {
     if (!this.renderer && !this.swap) {
+      this.lastUpdate = Promise.resolve({ outcome: "rejected", errors: toUpdateErrors("fetch", card.errors) });
       this.showFailure(card);
       return;
     }
@@ -1074,42 +1084,22 @@ export class MLMap extends BaseElement {
   }
 
   /**
-   * Parse and validate JSON from the config attribute
-   */
-  private loadFromJSONAttribute(jsonString: string): void {
-    this.cancelEmptyConfigCheck();
-    try {
-      const parsed = JSON.parse(jsonString);
-      // Validated like the YAML paths. Well-formed JSON that fails the schema
-      // used to go straight to the renderer, producing a broken map with no
-      // diagnostic — the same "accepted but does not work" shape this release
-      // is closing, on the entry path least likely to be noticed.
-      this.applyValidatedConfig(parsed);
-    } catch (error) {
-      this.documentFailed([
-        {
-          path: "",
-          message: `Invalid JSON in config attribute: ${
-            error instanceof Error ? error.message : String(error)
-          }`,
-        },
-      ]);
-    }
-  }
-
-  /**
    * A document that failed to parse or validate: on a running map it is
    * refused and the map kept (R2, KTD9); with no map, the error card as
    * before.
    */
-  private documentFailed(errors: ParseError[]): void {
-    const rejection = toUpdateErrors("validation", errors);
+  private documentFailed(
+    errors: ParseError[],
+    kind: RejectionKind = "validation",
+    card: { title?: string; hint?: string } = {}
+  ): void {
+    const rejection = toUpdateErrors(kind, errors);
     if (this.renderer || this.swap) {
-      this.lastUpdate = Promise.resolve(this.rejectUpdate("validation", rejection, describeRejectedUpdate(errors)));
+      this.lastUpdate = Promise.resolve(this.rejectUpdate(kind, rejection, describeRejectedUpdate(errors)));
       return;
     }
     this.lastUpdate = Promise.resolve({ outcome: "rejected", errors: rejection });
-    this.handleError(errors);
+    this.handleError(errors, card);
   }
 
   /** The standalone element's one hard requirement beyond the schema: a basemap. */
@@ -2715,14 +2705,16 @@ export class MLMap extends BaseElement {
    * method form of assigning `config`.
    *
    * @remarks
-   * Takes a `MapBlock` or its JSON string, validates it like every other
-   * path, and resolves when the outcome is final: `applied` with the summary
+   * Takes a `MapBlock` or document text (YAML, JSON or TOML), validates it
+   * like every other path, and resolves when the outcome is final: `applied` with the summary
    * of what changed (`ml-map:update-applied` fired), `rejected` with the
    * diagnostics (`ml-map:update-rejected` fired, map untouched), `fallback`
    * when a basemap change rebuilt the map or there was no running map yet,
    * or `superseded` when a later document replaced this one before it
-   * applied. A document equal to the applied one resolves `applied` with
-   * nothing in the summary.
+   * applied (a TOML document still waiting for its reader included). A
+   * document equal to the applied one resolves `applied` with nothing in the
+   * summary. Text that is TOML when the TOML reader can't be downloaded is
+   * refused with `kind: "chunk"`, the map untouched.
    *
    * @example
    * ```javascript
@@ -2777,10 +2769,11 @@ export class MLMap extends BaseElement {
    * Reload configuration from the current source
    *
    * @remarks
-   * Re-fetches `src` (or re-reads the inline script) and applies the result
-   * to the running map as an update (KTD11): sources whose last load failed
-   * are retried even when the document is unchanged. From an error card, a
-   * valid document renders fresh.
+   * Re-fetches `src` (or re-reads the inline script, or the `config`
+   * attribute) and applies the result to the running map as an update
+   * (KTD11): sources whose last load failed are retried even when the
+   * document is unchanged, and so is a TOML reader that couldn't be
+   * downloaded. From an error card, a valid document renders fresh.
    *
    * @returns Promise that resolves when reload is complete
    */
@@ -2789,14 +2782,11 @@ export class MLMap extends BaseElement {
     const hints: DiffHints = running ? { failedSources: running.failedSources(), urlsRebased: false, reload: true } : NO_HINTS;
     const src = this.getAttribute("src");
 
-    if (src) {
-      await this.loadFromURL(src, hints);
-    } else {
-      const script = findDocumentScript(this);
-      if (script?.textContent) {
-        this.loadFromScriptTag(script.textContent, isJsonScript(script), hints);
-      }
-    }
+    const script = findDocumentScript(this);
+    const attr = this.getAttribute("config");
+    if (src) await this.loadFromURL(src, hints);
+    else if (script?.textContent) await this.loadFromScript(script, hints);
+    else if (attr) await this.readText(attr, hints, true);
   }
 }
 

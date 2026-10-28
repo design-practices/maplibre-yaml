@@ -67,8 +67,20 @@ vi.mock("../../src/renderer/map-renderer", () => ({
   }),
 }));
 
+// The TOML reader's download, failed per test (U4); the real chunk otherwise.
+vi.mock("../../src/formats/decoders", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../src/formats/decoders")>();
+  return { ...actual, getDecoder: vi.fn(actual.getDecoder) };
+});
+
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { registerMLScrollytelling, MLScrollytelling } from "../../src/components/ml-scrollytelling";
 import { MapRenderer } from "../../src/renderer/map-renderer";
+import { YAMLParser } from "../../src/parser/yaml-parser";
+import { getDecoder } from "../../src/formats/decoders";
+import { FormatError } from "../../src/formats/errors";
 
 const settle = (ms = 60) => new Promise((r) => setTimeout(r, ms));
 
@@ -606,5 +618,94 @@ describe("the rail", () => {
     second!.dispatchEvent(new KeyboardEvent("keydown", { key: "Home", bubbles: true }));
     expect(document.activeElement).toBe(first);
     expect(el.dataset.activeChapter).toBe("one");
+  });
+});
+
+// U4 (ml-4cn): a story in YAML, JSON or TOML, through the shared ingest.
+describe("stories in any format (U4)", () => {
+  const STORY_TOML = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../fixtures/toml/story.toml"), "utf8");
+  const realGetDecoder = vi.mocked(getDecoder).getMockImplementation()!;
+  afterEach(() => vi.mocked(getDecoder).mockImplementation(realGetDecoder));
+  /** Wait for the chapters or the card (the TOML reader is a dynamic import). */
+  const settled = async (el: Element) => {
+    for (let i = 0; i < 200 && !el.querySelector(".scrolly-chapter, .scrolly-error"); i++) await settle(5);
+  };
+  const tomlResponse = () =>
+    Promise.resolve({ ok: true, status: 200, url: "", headers: { get: () => "application/toml" }, text: () => Promise.resolve(STORY_TOML) });
+
+  it("a story from a TOML src renders its chapters, and the inner map never parses text", async () => {
+    vi.stubGlobal("fetch", vi.fn(tomlResponse));
+    const mapText = vi.spyOn(YAMLParser, "safeParseMapBlock");
+    const anyText = vi.spyOn(YAMLParser, "safeParseAny");
+    const el = document.createElement("ml-scrollytelling");
+    el.setAttribute("src", "stories/ring.toml");
+    document.body.appendChild(el);
+    await settled(el);
+    await settle();
+    expect([...el.querySelectorAll<HTMLElement>(".scrolly-chapter")].map((s) => s.dataset.chapterId)).toEqual(
+      expect.arrayContaining(["intro", "japan"])
+    );
+    const mapEl = el.querySelector<any>(":scope > .scrolly-map-container > ml-map")!;
+    expect(mapEl.getRenderer()).toBeTruthy();
+    expect(mapEl.config).toMatchObject({ type: "map", id: "ring-of-fire-map" });
+    // The document reaches the map as a value: no second parse of any text.
+    expect(mapText).not.toHaveBeenCalled();
+    expect(anyText).not.toHaveBeenCalled();
+    // The attribute still carries it, for a story moved in the DOM.
+    expect(JSON.parse(mapEl.getAttribute("config")!)).toEqual(JSON.parse(JSON.stringify(mapEl.config)));
+    mapText.mockRestore();
+    anyText.mockRestore();
+  });
+
+  it("an inline application/toml story renders, and the stylesheet hides the script", async () => {
+    const el = document.createElement("ml-scrollytelling");
+    el.innerHTML = `<script type="application/toml">${STORY_TOML}</script>`;
+    document.body.appendChild(el);
+    await settled(el);
+    expect(el.querySelector(".scrolly-error")).toBeNull();
+    expect(el.querySelectorAll(".scrolly-chapter").length).toBeGreaterThan(1);
+    expect(document.getElementById("ml-scrollytelling-styles")!.textContent).toContain(
+      'ml-scrollytelling > script[type="application/toml"]'
+    );
+  });
+
+  it("the config attribute takes TOML text too; the same text again is a no-op", async () => {
+    const el = document.createElement("ml-scrollytelling") as MLScrollytelling;
+    el.setAttribute("config", STORY_TOML);
+    document.body.appendChild(el);
+    await settled(el);
+    expect(el.story?.id).toBe("ring-of-fire");
+    const shown = el.story;
+    el.story = STORY_TOML;
+    await settle();
+    expect(el.story).toBe(shown);
+  });
+
+  it("the TOML reader can't be downloaded: one card naming it, and no map", async () => {
+    mute("error");
+    vi.mocked(getDecoder).mockImplementation(((name: string) =>
+      name === "toml"
+        ? Promise.reject(new FormatError({ code: "chunk", format: name as never, url: "chunks/toml.js", detail: "offline" }))
+        : realGetDecoder(name as never)) as never);
+    vi.stubGlobal("fetch", vi.fn(tomlResponse));
+    const el = document.createElement("ml-scrollytelling");
+    el.setAttribute("src", "stories/ring.toml");
+    document.body.appendChild(el);
+    await settled(el);
+    const card = el.querySelector(".scrolly-error")!.textContent!;
+    expect(card).toContain("Couldn't read the TOML document");
+    expect(card).toContain("the TOML reader (chunks/toml.js) couldn't be downloaded");
+    expect(el.querySelector("ml-map")).toBeNull();
+  });
+
+  it("an unsupported story script type is named instead of 'No story provided' (R5)", async () => {
+    mute("error");
+    const el = document.createElement("ml-scrollytelling");
+    el.innerHTML = `<script type="application/json5">{}</script>`;
+    document.body.appendChild(el);
+    await settle(600);
+    const card = el.querySelector(".scrolly-error")!.textContent!;
+    expect(card).toContain('<script type="application/json5">');
+    expect(card).not.toContain("No story provided");
   });
 });

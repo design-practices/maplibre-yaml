@@ -10,11 +10,12 @@
  *
  * ## Giving it a story (same order as `<ml-map>`)
  *
- * 1. The `story` (alias `config`) property: an object or a JSON string.
+ * 1. The `story` (alias `config`) property: an object or document text.
  * 2. An inline `<script type="text/yaml">` child (or `application/yaml`,
- *    `application/json`: JSON is read as the YAML 1.2 it is).
- * 3. `src="story.yaml"`: fetched, parsed and validated in the browser.
- * 4. The `config` attribute: the story as JSON.
+ *    `application/json`, `application/toml`).
+ * 3. `src="story.yaml"` (or `.json`, `.toml`): fetched, parsed and
+ *    validated in the browser.
+ * 4. The `config` attribute: the story as text, in any of the three formats.
  *
  * ```html
  * <ml-scrollytelling src="story.yaml"></ml-scrollytelling>
@@ -54,7 +55,9 @@
  */
 
 import { BaseElement } from "./base-element.js";
-import { findDocumentScript, isJsonScript, wordForJson } from "./document-script.js";
+import { findDocumentScript, noDocumentMessage } from "./document-script.js";
+import { after, fetchDocument, readDocument, type DocumentText } from "./document-ingest.js";
+import { tomlReaderCard } from "./error-card.js";
 import type { Map as MapLibreMap } from "maplibre-gl";
 import {
   YAMLParser,
@@ -82,7 +85,7 @@ import {
   type StoryProblem,
 } from "../scrollytelling/render";
 import { injectScrollytellingStyles } from "../scrollytelling/styles";
-import { normalizeDocumentBase, resolveDocumentUrl } from "../utils/document-base.js";
+import { normalizeDocumentBase } from "../utils/document-base.js";
 import { displayPath } from "../parser/validation-utils.js";
 import { noteStoryImageRefs } from "../utils/image-refs.js";
 import { ML_MAP_SLOTS, registerMLMap, type MLMap } from "./ml-map.js";
@@ -95,15 +98,7 @@ import {
   STORY_LANDSCAPE_QUERY,
 } from "../scrollytelling/story-legend.js";
 import type { ClassifyRecord } from "../classify/compile.js";
-import {
-  isFilePage,
-  looksLikeHtml,
-  resolveUrl,
-  srcFetchFailedCard,
-  srcHtmlCard,
-  srcHttpErrorCard,
-  type ErrorCardContent,
-} from "./student-messages.js";
+import type { ErrorCardContent } from "./student-messages.js";
 
 /** The layout breakpoint the stylesheet switches to stacked cards at. */
 const NARROW_QUERY = "(max-width: 768px)";
@@ -162,8 +157,10 @@ export class MLScrollytelling extends BaseElement {
   private initialized = false;
   /** Bumped per load/render, so a slow fetch or map cannot land late. */
   private generation = 0;
-  /** JSON of the last object/attribute applied (equal re-assignments are no-ops). */
+  /** JSON of the last object applied, or the last text handed in (equal re-assignments are no-ops). */
   private appliedKey: string | null = null;
+  /** The text being read (a TOML story waits for its reader): the same text again joins it. */
+  private pendingKey: string | null = null;
   /** Whether a story has rendered into this element (hydration only once). */
   private hasRendered = false;
   private controller: StoryController | null = null;
@@ -294,9 +291,10 @@ export class MLScrollytelling extends BaseElement {
   }
 
   /**
-   * Show a story: a `type: scrollytelling` object or its JSON string. It is
-   * validated like every other path. Assigning a value JSON-equal to the
-   * one shown is a no-op.
+   * Show a story: a `type: scrollytelling` object or document text (YAML,
+   * JSON or TOML). It is validated like every other path. Assigning a value
+   * JSON-equal to the one shown, or the same text again, is a no-op. While
+   * text is being read, this is still the story shown.
    */
   set story(value: ScrollytellingBlock | string | null) {
     if (value === null || value === undefined) return;
@@ -445,15 +443,11 @@ export class MLScrollytelling extends BaseElement {
       this.applyValue(value);
       return;
     }
-    // An inline document script: YAML or JSON, one parser (ml-4cn.2).
+    // An inline document script: YAML, JSON or TOML, its type the format (ml-4cn.2).
     const script = findDocumentScript(this, true);
     if (script?.textContent?.trim()) {
       this.storyFromElsewhere = true;
-      const result = YAMLParser.safeParseScrollytellingBlock(script.textContent);
-      this.applyResult(
-        isJsonScript(script) && !result.success ? { ...result, errors: wordForJson(result.errors) } : result,
-        null
-      );
+      void this.read({ text: script.textContent, signals: { scriptType: script.getAttribute("type") } }, null);
       return;
     }
     const src = this.getAttribute("src");
@@ -494,7 +488,7 @@ export class MLScrollytelling extends BaseElement {
     const run = () => {
       this.cancelEmptyCheck?.();
       if (!this.initialized || this._story || this.lastError) return;
-      this.fail([{ path: "", message: "No story provided." }], [], {
+      this.fail([{ path: "", message: noDocumentMessage(this, true, "No story provided.") }], [], {
         title: "No story to show",
         showHelp: true,
       });
@@ -522,37 +516,48 @@ export class MLScrollytelling extends BaseElement {
   // Loading
   // ------------------------------------------------------------------
 
-  /** An object or JSON string from the property or the `config` attribute. */
+  /** An object or document text from the property or the `config` attribute. */
   private applyValue(value: unknown): void {
     this.cancelEmptyCheck?.();
     this.storyFromElsewhere = true;
-    let parsed: unknown = value;
     if (typeof value === "string") {
-      try {
-        parsed = JSON.parse(value);
-      } catch (error) {
-        this.appliedKey = null;
-        this.fail(
-          [
-            {
-              path: "",
-              message: `Invalid JSON for the story: ${error instanceof Error ? error.message : String(error)}`,
-            },
-          ],
-          []
-        );
-        return;
-      }
+      // Deduped by the raw text, before anything is awaited (KTD8).
+      if (value === this.appliedKey && (this._story || value === this.pendingKey)) return;
+      this.appliedKey = value;
+      void this.read({ text: value, signals: {} }, null);
+      return;
     }
     let key: string | null = null;
     try {
-      key = JSON.stringify(parsed) ?? null;
+      key = JSON.stringify(value) ?? null;
     } catch {
       key = null;
     }
     if (key !== null && key === this.appliedKey && this._story) return;
     this.appliedKey = key;
-    this.applyResult(YAMLParser.safeParseScrollytellingBlockValue(parsed), null);
+    ++this.generation;
+    this.applyResult(YAMLParser.safeParseScrollytellingBlockValue(value), null);
+  }
+
+  /**
+   * Read story text in any format (KTD8): YAML and JSON at once; a TOML
+   * story waits for its reader and is dropped if a newer story arrived
+   * meanwhile.
+   */
+  private read(doc: DocumentText, source: string | null): void | Promise<void> {
+    const generation = ++this.generation;
+    this.cancelEmptyCheck?.();
+    const key = doc.signals.url ? null : doc.text;
+    this.pendingKey = key;
+    return after(readDocument(doc, "story"), (result) => {
+      if (this.pendingKey === key) this.pendingKey = null;
+      if (generation !== this.generation || !this.initialized) return;
+      if ("chunk" in result) {
+        this.appliedKey = null;
+        const card = tomlReaderCard(result.chunk);
+        this.fail(card.errors, [], { title: card.title, hint: card.hint, source });
+      } else this.applyResult(result, source);
+    });
   }
 
   private async loadFromURL(url: string): Promise<void> {
@@ -561,36 +566,11 @@ export class MLScrollytelling extends BaseElement {
     this.storyFromElsewhere = false;
     const generation = ++this.generation;
     this.showLoading();
-
-    // Same path rules and the same failure messages as `<ml-map src>`: with a
-    // base, `src` is a site path like every path inside the story.
-    const doc = this.ownerDocument;
-    const target = resolveDocumentUrl(url, this.base);
-    const resolved = resolveUrl(target, doc.baseURI);
-    const context = { pageUrl: doc.baseURI, base: this.base };
-    const stale = () => generation !== this.generation || !this.initialized;
-
-    let response: Response;
-    let text: string;
-    try {
-      response = await fetch(target);
-      if (stale()) return;
-      if (!response.ok) {
-        this.failWith(srcHttpErrorCard(url, resolved, response.status, response.statusText, context), url);
-        return;
-      }
-      text = await response.text();
-    } catch (error) {
-      if (stale()) return;
-      this.failWith(srcFetchFailedCard(url, resolved, error, isFilePage(doc)), url);
-      return;
-    }
-    if (stale()) return;
-    if (looksLikeHtml(text, response.headers?.get?.("content-type") ?? null)) {
-      this.failWith(srcHtmlCard(url, resolved, context), url);
-      return;
-    }
-    this.applyResult(YAMLParser.safeParseScrollytellingBlock(text), url);
+    // Same path rules and the same failure messages as `<ml-map src>`.
+    const got = await fetchDocument(url, this.base, this.ownerDocument);
+    if (generation !== this.generation || !this.initialized) return;
+    if ("failed" in got) this.failWith(got.failed, url);
+    else await this.read(got, url);
   }
 
   /** A prepared failure from the shared `<ml-map>` messages, worded for a story. */
@@ -673,25 +653,29 @@ export class MLScrollytelling extends BaseElement {
       this.insertBefore(mapContainer, column);
     }
     let mapEl = mapContainer.querySelector<MLMap>(":scope > ml-map");
-    const mapDocument = JSON.stringify(storyMapDocument(story));
+    const mapValue = storyMapDocument(story);
+    // The parsed document goes in as the property, so the map never parses
+    // the story's text a second time (KTD3). The attribute keeps a copy on
+    // the element, so it re-renders if the story is moved in the DOM; it is
+    // the JSON of the value just assigned, which the map reads as a no-op.
+    // Both are set before the map connects, so it never reports "No
+    // configuration provided" (ml-4al).
+    const handOff = (el: MLMap) => {
+      el.config = mapValue as never;
+      el.setAttribute("config", JSON.stringify(mapValue));
+    };
     if (!mapEl) {
       mapEl = doc.createElement("ml-map") as MLMap;
       mapEl.id = `${this.id || story.id}-map`;
       this.adoptSlots(mapEl);
-      // As an attribute, not the property: the document stays on the
-      // element, so it re-renders if the story is moved in the DOM. Set
-      // before the map connects, so it never reports "No configuration
-      // provided" (ml-4al).
       this.syncMapBase(mapEl);
-      mapEl.setAttribute("config", mapDocument);
+      handOff(mapEl);
       mapContainer.prepend(mapEl);
     } else {
       this.adoptSlots(mapEl);
       // A server render puts the base on <ml-map> itself; keep them in step.
       this.syncMapBase(mapEl);
-      if (!hydrating || !(mapEl.hasAttribute("config") || mapEl.hasAttribute("src"))) {
-        mapEl.setAttribute("config", mapDocument);
-      }
+      if (!hydrating || !(mapEl.hasAttribute("config") || mapEl.hasAttribute("src"))) handOff(mapEl);
     }
 
     // The rail.

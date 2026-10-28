@@ -21,6 +21,12 @@ vi.mock("maplibre-gl", () => {
   return { default: { Map }, Map };
 });
 
+// The TOML reader's download, held or failed per test (U4); the real chunk otherwise.
+vi.mock("../../src/formats/decoders", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../src/formats/decoders")>();
+  return { ...actual, getDecoder: vi.fn(actual.getDecoder) };
+});
+
 /** Whether author hints show on the page (the dev-only policy): toggled per test. */
 let hintsOn = true;
 vi.mock("../../src/components/author-hints", () => ({
@@ -160,6 +166,8 @@ vi.mock("../../src/renderer/map-renderer", () => ({
 
 import { MLMap } from "../../src/components/ml-map";
 import { MapRenderer } from "../../src/renderer/map-renderer";
+import { getDecoder } from "../../src/formats/decoders";
+import { FormatError } from "../../src/formats/errors";
 import type { MLMapProps } from "../../src/react";
 
 const settle = (ms = 20) => new Promise((r) => setTimeout(r, ms));
@@ -1072,5 +1080,209 @@ layers: []
     expect(first().update).toHaveBeenCalledTimes(2);
     expect(first().update.mock.calls[1]![1].reload).toBeUndefined();
     expect(seen).toHaveLength(1);
+  });
+});
+
+describe("documents in any format: one ingest path, the newest wins (JSON and TOML, U4)", () => {
+  const realGetDecoder = vi.mocked(getDecoder).getMockImplementation()!;
+  afterEach(() => vi.mocked(getDecoder).mockImplementation(realGetDecoder));
+
+  /** Hold the TOML reader's download until `release()`. */
+  function holdTomlReader(): () => void {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    vi.mocked(getDecoder).mockImplementation(((name: string) =>
+      name === "toml" ? gate.then(() => realGetDecoder(name as never)) : realGetDecoder(name as never)) as never);
+    return release;
+  }
+  /** The TOML reader can't be downloaded. */
+  function blockTomlReader(): void {
+    vi.mocked(getDecoder).mockImplementation(((name: string) =>
+      name === "toml"
+        ? Promise.reject(new FormatError({ code: "chunk", format: name as never, url: "chunks/toml.js", detail: "offline" }))
+        : realGetDecoder(name as never)) as never);
+  }
+
+  const TOML = (id: string, zoom = 9) => `type = "map"
+id = "${id}"
+
+[config]
+center = [-74.5, 40]
+zoom = ${zoom}
+mapStyle = "${STYLE_A}"
+
+[sources.pts]
+type = "geojson"
+url = "/data/pts.geojson"
+
+[[layers]]
+id = "pts"
+type = "circle"
+source = "pts"
+`;
+  const YAML = (id: string, zoom = 9) => `type: map
+id: ${id}
+config:
+  center: [-74.5, 40]
+  zoom: ${zoom}
+  mapStyle: "${STYLE_A}"
+sources:
+  pts: { type: geojson, url: "/data/pts.geojson" }
+layers:
+  - { id: pts, type: circle, source: pts }
+`;
+  const response = (body: string, type = "application/toml") => ({
+    ok: true,
+    status: 200,
+    url: "",
+    headers: { get: () => type },
+    text: async () => body,
+  });
+
+  it("race: src=a.toml waits for the TOML reader, update(yaml) arrives: the YAML applies and a.toml is dropped (sequence diagram)", async () => {
+    const { el, seen } = await mounted();
+    const release = holdTomlReader();
+    globalThis.fetch = vi.fn(async () => response(TOML("a", 3))) as any;
+    el.setAttribute("src", "a.toml");
+    await settle();
+    const result = await el.update(YAML("b", 5));
+    expect(result.outcome).toBe("applied");
+    expect(first().update).toHaveBeenCalledTimes(1);
+    release();
+    await settle();
+    // a.toml was read after b applied: dropped, never handed to the map.
+    expect(first().update).toHaveBeenCalledTimes(1);
+    expect(el.getDocument()?.id).toBe("b");
+    expect(seen.map((e) => e.type)).toEqual(["ml-map:loading", "ml-map:update-applied"]);
+  });
+
+  it("race: update(tomlText) waiting for its reader is overtaken by update(yaml): it resolves superseded, the YAML applies", async () => {
+    const { el } = await mounted();
+    const release = holdTomlReader();
+    const slow = el.update(TOML("a", 3));
+    const fast = await el.update(YAML("b", 5));
+    expect(fast.outcome).toBe("applied");
+    release();
+    await expect(slow).resolves.toEqual({ outcome: "superseded" });
+    expect(first().update).toHaveBeenCalledTimes(1);
+    expect(el.getDocument()?.id).toBe("b");
+  });
+
+  it("update(tomlText) on a running map resolves with the real outcome and summary, not an empty applied", async () => {
+    const { el, seen } = await mounted();
+    const summary = { ...emptySummary(), propertiesSet: [{ layerId: "pts", property: "circle-radius" }] };
+    first().update.mockImplementationOnce(async (next: any) => {
+      first().config = next.config;
+      first().emit("update:applied", { summary });
+      return { outcome: "applied", summary };
+    });
+    const result = await el.update(TOML("m", 4));
+    expect(result).toEqual({ outcome: "applied", summary });
+    expect(first().update).toHaveBeenCalledTimes(1);
+    expect(first().update.mock.calls[0]![0].config.zoom).toBe(4);
+    expect(seen.map((e) => e.type)).toEqual(["ml-map:update-applied"]);
+    // An invalid TOML document is refused, with its TOML line.
+    const refused = await el.update(TOML("m", 4).replace("zoom = 4", 'zoom = "far"'));
+    expect(refused.outcome).toBe("rejected");
+    expect(seen.at(-1)!.type).toBe("ml-map:update-rejected");
+    expect(first().update).toHaveBeenCalledTimes(1);
+  });
+
+  it("the TOML reader can't be downloaded: update(tomlText) on a running map is refused with kind 'chunk', the map untouched, no card", async () => {
+    const { el, seen } = await mounted();
+    blockTomlReader();
+    const result = await el.update(TOML("m", 4));
+    expect(result.outcome).toBe("rejected");
+    expect(result.errors?.[0]).toMatchObject({ kind: "chunk", message: expect.stringContaining("TOML reader") });
+    expect(seen.map((e) => e.type)).toEqual(["ml-map:update-rejected"]);
+    expect(seen[0]!.detail.kind).toBe("chunk");
+    expect(el.querySelector(".ml-map-error")).toBeNull();
+    expect(el.getRenderer()).toBe(first());
+    expect(first().update).not.toHaveBeenCalled();
+    // The same text again is tried again (the reader may download now).
+    vi.mocked(getDecoder).mockImplementation(realGetDecoder);
+    await expect(el.update(TOML("m", 4))).resolves.toMatchObject({ outcome: "applied" });
+    expect(first().update).toHaveBeenCalledTimes(1);
+  });
+
+  it("the TOML reader can't be downloaded on a first render: the TOML-reader card; reload() re-reads the config attribute and renders", async () => {
+    blockTomlReader();
+    const el = document.createElement("ml-map") as MLMap;
+    const seen = record(el, EVENTS);
+    el.setAttribute("config", TOML("first"));
+    document.body.appendChild(el);
+    await settle();
+    expect(renderers).toHaveLength(0);
+    const card = el.querySelector(".ml-map-error")!.textContent!;
+    expect(card).toContain("Couldn't read the TOML document");
+    expect(card).toContain("the TOML reader (chunks/toml.js) couldn't be downloaded");
+    expect(card).toContain("reload()");
+    expect(card).not.toContain("Other layers are unaffected");
+    expect(seen.map((e) => e.type)).toEqual(["ml-map:error"]);
+    vi.mocked(getDecoder).mockImplementation(realGetDecoder);
+    await el.reload();
+    await settle();
+    expect(renderers).toHaveLength(1);
+    expect(el.querySelector(".ml-map-error")).toBeNull();
+    expect(el.config?.id).toBe("first");
+  });
+
+  it("the empty-document check does not fire while the TOML reader downloads", async () => {
+    const release = holdTomlReader();
+    const el = document.createElement("ml-map") as MLMap;
+    const seen = record(el, EVENTS);
+    el.innerHTML = `<script type="application/toml">${TOML("inline")}</script>`;
+    document.body.appendChild(el);
+    // Past the check's 500 ms bound.
+    await settle(700);
+    expect(seen).toEqual([]);
+    expect(el.querySelector(".ml-map-error")).toBeNull();
+    release();
+    await settle();
+    expect(renderers).toHaveLength(1);
+    expect(el.config?.id).toBe("inline");
+  });
+
+  it("a TOML src downloads the reader alongside the fetch, not after it", async () => {
+    const release = holdTomlReader();
+    let fetched = false;
+    globalThis.fetch = vi.fn(async () => {
+      fetched = true;
+      return response(TOML("from-src"));
+    }) as any;
+    vi.mocked(getDecoder).mockClear();
+    const el = document.createElement("ml-map") as MLMap;
+    el.setAttribute("src", "maps/a.toml?v=3");
+    document.body.appendChild(el);
+    // Asked for in the same turn as the fetch, before the response arrived.
+    expect(vi.mocked(getDecoder).mock.calls.map((c) => c[0])).toEqual(["toml"]);
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+    release();
+    await settle();
+    expect(fetched).toBe(true);
+    expect(renderers).toHaveLength(1);
+    expect(el.config?.id).toBe("from-src");
+  });
+
+  it("while TOML text is being read, el.config is the last applied document; the same text twice starts one read", async () => {
+    const { el } = await mounted();
+    const release = holdTomlReader();
+    vi.mocked(getDecoder).mockClear();
+    const text = TOML("next", 4);
+    el.config = text;
+    expect(el.config?.id).toBe("m");
+    el.config = text;
+    const joined = el.update(text);
+    await settle();
+    expect(el.config?.id).toBe("m");
+    expect(vi.mocked(getDecoder).mock.calls.filter((c) => c[0] === "toml")).toHaveLength(1);
+    release();
+    await expect(joined).resolves.toMatchObject({ outcome: "applied" });
+    expect(first().update).toHaveBeenCalledTimes(1);
+    expect(el.config?.id).toBe("next");
+    // And once applied, the same text again is a no-op too (a React re-render).
+    el.setAttribute("config", text);
+    await settle();
+    expect(first().update).toHaveBeenCalledTimes(1);
   });
 });

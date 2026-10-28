@@ -1,0 +1,21 @@
+#:schema https://docs.maplibre-yaml.org/schema/latest/map.schema.json
+# A map document in TOML, fetched by <ml-map src="…/map.toml"> (U4).
+type = "map"
+id = "toml-src"
+
+[config]
+center = [10.2, 42.15]
+zoom = 9
+mapStyle = "/examples/verification/configs/local-style.json"
+
+[[layers]]
+id = "toml-src-dots"
+type = "circle"
+paint = { circle-radius = 9, circle-color = "#2a9d8f" }
+
+[layers.source]
+type = "geojson"
+data = { type = "FeatureCollection", features = [
+  { type = "Feature", properties = {}, geometry = { type = "Point", coordinates = [10.1, 42.1] } },
+  { type = "Feature", properties = {}, geometry = { type = "Point", coordinates = [10.3, 42.2] } },
+] }
