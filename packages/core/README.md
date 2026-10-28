@@ -193,6 +193,11 @@ and the [TypeScript API reference](https://docs.maplibre-yaml.org/reference/api/
   list what carries over.
 - **Validation:** Zod schemas and JSON Schemas for editor completion
   ([Editor Setup](https://docs.maplibre-yaml.org/guides/editor-setup/)).
+- **JSON and TOML too:** the same document written as JSON or TOML
+  (`src="map.toml"`, `<script type="application/json">`) validates and
+  renders the same way, with positioned errors; `parseDocumentText` reads
+  any of the three
+  ([JSON & TOML documents](https://docs.maplibre-yaml.org/guides/json-and-toml/)).
 
 ## Entry points
 

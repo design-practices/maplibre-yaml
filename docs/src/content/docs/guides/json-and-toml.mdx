@@ -1,0 +1,504 @@
+---
+title: "JSON & TOML documents"
+description: Write a map or story document in JSON or TOML instead of YAML — when each format fits, the same map three ways, the schema line for editors, what TOML can't say and how to say it anyway, converting with mlym convert, and how the format is chosen.
+---
+
+import { Aside, Tabs, TabItem } from "@astrojs/starlight/components";
+
+A map or story document can be written in YAML, JSON or TOML. All three go
+through the same validation, and errors point at the line and column you
+wrote, in every place a document is read: `<ml-map>` and
+`<ml-scrollytelling>`, React, the Astro components, the CLI and the
+[playground](/playground/). The map they draw is the same.
+
+YAML stays the format these docs teach: every other page shows YAML, and
+`mlym init` writes YAML. This page covers what changes when you write JSON
+or TOML instead.
+
+## Which format to use \{#which-format}
+
+| Format | Use it when | Keep in mind |
+| ------ | ----------- | ------------ |
+| **YAML** (`.yaml`, `.yml`) | You write the document by hand and follow these docs | The default. It has comments, [anchors](/guides/reuse/) and the `!html` tag |
+| **JSON** (`.json`) | A program writes the document: an AI agent, an API, a build pipeline, `JSON.stringify` | No comments. Noisier to read and edit by hand |
+| **TOML** (`.toml`) | You prefer TOML and your maps are mostly flat settings | No `null`, anchors or tags, and nested lists (popups, chapter actions) get long. See [TOML: what's different](#toml) |
+
+JSON is part of YAML 1.2, so the library reads JSON with the same parser as
+YAML, and the same positions and duplicate-key checks apply. Docker Compose
+and Kubernetes accept JSON the same way. Tools that teach every snippet in
+three formats pay for it on every page, so these docs teach one.
+
+## The same map three ways \{#side-by-side}
+
+The earthquake map from [Your first map](/getting-started/first-map/), in
+each format. Save it as `map.yaml`, `map.json` or `map.toml`, and point
+`<ml-map src>` at the file. The extension tells the library how to read it.
+
+<Tabs>
+  <TabItem label="YAML">
+    ```yaml title="map.yaml"
+    # yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
+    type: map
+    id: earthquake-map
+    config:
+      center: [-160, 20]
+      zoom: 1
+      mapStyle: "https://tiles.openfreemap.org/styles/liberty"
+    layers:
+      - id: earthquakes
+        type: circle
+        source:
+          type: geojson
+          url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
+        paint:
+          circle-radius: ["interpolate", ["linear"], ["get", "mag"], 1, 2, 7, 20]
+          circle-color: "#e74c3c"
+          circle-opacity: 0.7
+          circle-stroke-width: 1
+          circle-stroke-color: "#ffffff"
+        interactive:
+          hover:
+            cursor: pointer
+          click:
+            popup:
+              - h3:
+                  - property: place
+              - p:
+                  - str: "Magnitude "
+                  - property: mag
+                    format: { max-fraction-digits: 1 }
+    controls:
+      navigation: true
+      scale: true
+    ```
+  </TabItem>
+  <TabItem label="JSON">
+    ```json title="map.json"
+    {
+      "$schema": "https://docs.maplibre-yaml.org/schema/latest/map.schema.json",
+      "type": "map",
+      "id": "earthquake-map",
+      "config": {
+        "center": [-160, 20],
+        "zoom": 1,
+        "mapStyle": "https://tiles.openfreemap.org/styles/liberty"
+      },
+      "layers": [
+        {
+          "id": "earthquakes",
+          "type": "circle",
+          "source": {
+            "type": "geojson",
+            "url": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
+          },
+          "paint": {
+            "circle-radius": [
+              "interpolate", ["linear"], ["get", "mag"], 1, 2, 7, 20
+            ],
+            "circle-color": "#e74c3c",
+            "circle-opacity": 0.7,
+            "circle-stroke-width": 1,
+            "circle-stroke-color": "#ffffff"
+          },
+          "interactive": {
+            "hover": { "cursor": "pointer" },
+            "click": {
+              "popup": [
+                { "h3": [{ "property": "place" }] },
+                {
+                  "p": [
+                    { "str": "Magnitude " },
+                    { "property": "mag", "format": { "max-fraction-digits": 1 } }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "controls": { "navigation": true, "scale": true }
+    }
+    ```
+  </TabItem>
+  <TabItem label="TOML">
+    ```toml title="map.toml"
+    #:schema https://docs.maplibre-yaml.org/schema/latest/map.schema.json
+    type = "map"
+    id = "earthquake-map"
+
+    [config]
+    center = [-160, 20]
+    zoom = 1
+    mapStyle = "https://tiles.openfreemap.org/styles/liberty"
+
+    [controls]
+    navigation = true
+    scale = true
+
+    [[layers]]
+    id = "earthquakes"
+    type = "circle"
+    source = { type = "geojson", url = "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson" }
+
+    [layers.paint]
+    circle-radius = ["interpolate", ["linear"], ["get", "mag"], 1, 2, 7, 20]
+    circle-color = "#e74c3c"
+    circle-opacity = 0.7
+    circle-stroke-width = 1
+    circle-stroke-color = "#ffffff"
+
+    [layers.interactive.hover]
+    cursor = "pointer"
+
+    [[layers.interactive.click.popup]]
+    h3 = [{ property = "place" }]
+
+    [[layers.interactive.click.popup]]
+    p = [
+      { str = "Magnitude " },
+      { property = "mag", format = { max-fraction-digits = 1 } },
+    ]
+    ```
+  </TabItem>
+</Tabs>
+
+The first line of each one tells an editor which schema the file follows
+([below](#schema)). In TOML, read the popup carefully: each
+`[[layers.interactive.click.popup]]` header adds one element to the popup of
+the **last** `[[layers]]` above it ([Lists of tables](#arrays-of-tables)).
+
+To try a document without saving a file, paste it into the
+[playground](/playground/) and switch its language there.
+
+## On a page \{#on-a-page}
+
+`<ml-map>` and `<ml-scrollytelling>` read all three formats wherever they
+take a document:
+
+- **`src`**: a `.json` or `.toml` URL, or a response labelled
+  `application/json` or `application/toml`.
+- **An inline script**: `<script type="application/json">` or
+  `<script type="application/toml">` (also `text/toml`,
+  `application/x-toml` and `text/x-toml`) inside the element, as with
+  `text/yaml` ([Elements reference](/reference/elements/)).
+- **The `config` attribute, the `config` property given a string, and
+  `update()` given a string** read YAML, JSON or TOML text.
+
+```html
+<ml-map style="display: block; height: 400px;">
+  <script type="application/toml">
+type = "map"
+id = "inline-toml"
+
+[config]
+center = [-74.006, 40.7128]
+zoom = 12
+mapStyle = "https://tiles.openfreemap.org/styles/liberty"
+  </script>
+</ml-map>
+```
+
+A page with no TOML document never downloads the TOML reader: it loads the
+first time a TOML document arrives.
+
+## Point your editor at the schema \{#schema}
+
+Each format has its own way to name the
+[JSON Schema](/guides/editor-setup/#stable-schema-urls), and the library
+reads all three:
+
+| Format | First line |
+| ------ | ---------- |
+| YAML | `# yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json` |
+| JSON | `"$schema": "https://docs.maplibre-yaml.org/schema/latest/map.schema.json",` as the first key |
+| TOML | `#:schema https://docs.maplibre-yaml.org/schema/latest/map.schema.json` |
+
+A root `$schema` key is accepted in every format and removed before the
+document is validated or drawn, so it never warns and never reaches the map.
+A story uses `scrollytelling.schema.json`. The settings each editor needs
+(VS Code for JSON, Taplo or Even Better TOML for TOML) are in
+[Editor setup](/guides/editor-setup/#json-and-toml).
+
+## JSON: what's different \{#json}
+
+A JSON document is the YAML document with every string quoted and every
+block in braces. Errors say "JSON syntax error", and two mistakes that YAML
+would read quietly are errors in JSON:
+
+- **A comment** (`//` or `/* */`): JSON has none. The error says so, at
+  its line.
+- **An unquoted `#` colour** (`"circle-color": #e74c3c`): YAML would read
+  `#` as the start of a comment. The error says to write `"#e74c3c"`.
+
+JSON5 and JSONC are not supported. A key written twice is an error, as it is
+in YAML. Everything else works as it does in YAML: a named source is
+referenced as `"source": "quakes"` or
+`"source": { "$ref": "#/sources/quakes" }`, and a popup's raw markup is
+`{ "$html": "…" }` ([below](#html)).
+
+## TOML: what's different \{#toml}
+
+TOML reads well for settings (`[config]`, `[controls]`, a layer's `paint`)
+and its arrays hold MapLibre expressions as they are. It lacks a few things
+YAML has, and some of its rules surprise authors used to YAML. Each gap has
+a way around it, and the validator points at the line when you hit one.
+
+### No null: leave the key out \{#null}
+
+TOML has no `null`. Wherever YAML writes `null`, leave the key out: a key
+that isn't written is unset. The common case is a story's `setFilter`
+action, where `filter: null` clears a layer's filter. In TOML, write the
+action without `filter`:
+
+```toml title="story.toml"
+#:schema https://docs.maplibre-yaml.org/schema/latest/scrollytelling.schema.json
+type = "scrollytelling"
+id = "strong-quakes"
+
+[config]
+center = [-160, 20]
+zoom = 1
+mapStyle = "https://tiles.openfreemap.org/styles/liberty"
+
+[[layers]]
+id = "quakes"
+type = "circle"
+source = { type = "geojson", url = "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson" }
+
+[[chapters]]
+id = "strong"
+title = "The strong ones"
+center = [-160, 20]
+zoom = 2
+
+[[chapters.onChapterEnter]]
+action = "setFilter"
+layer = "quakes"
+filter = [">=", ["get", "mag"], 5]
+
+[[chapters.onChapterExit]]
+action = "setFilter"
+layer = "quakes"
+# no filter key: leaving it out clears the filter, as filter: null does in YAML
+```
+
+`filter = null` is a TOML syntax error, and its message says to leave the
+key out. An expression that compares with null (`["==", ["get", "x"], null]`)
+can't be written in TOML; `["!", ["has", "x"]]` asks the same question.
+
+### No anchors: use named sources \{#anchors}
+
+TOML has no anchors, aliases or merge keys, so the
+[reuse patterns](/guides/reuse/) are YAML only. To share data between
+layers, declare a [named source](/guides/data-sources/#named-sources) once
+under `[sources.<name>]` and give each layer its name
+(`source = "quakes"`) or a reference
+(`source = { "$ref" = "#/sources/quakes" }`). A repeated colour or paint
+block is written out in each layer.
+
+### No tags: `!html` is `{ "$html" = … }` \{#html}
+
+YAML marks a popup string as raw markup with the `!html` tag. TOML and JSON
+have no tags, so they write the same value as an object with one `$html`
+key:
+
+```toml
+[[layers.interactive.click.popup]]
+p = [{ str = { "$html" = "<em>new</em> this week" } }]
+```
+
+```json
+{ "p": [{ "str": { "$html": "<em>new</em> this week" } }] }
+```
+
+It is the value `!html` produces, so it gets the same trust rule: markup
+only on a page that trusts the document, and escaped text everywhere else,
+including `<ml-map>` ([Popups](/guides/popups/#choose-what-the-popup-shows)).
+Writing `$html` instead of `!html` grants nothing extra. YAML accepts the
+object form too (`str: { $html: "…" }`).
+
+### Quote `$` keys and colours \{#quoting}
+
+A bare TOML key takes letters, digits, `-` and `_`, so `circle-color` and
+`max-fraction-digits` need no quotes. Keys that start with `$` do:
+`"$ref"`, `"$html"`, `"$schema"`. Every string value needs quotes too,
+colours included: `circle-color = #e74c3c` is a syntax error, because `#`
+starts a comment, and the message shows the quoted form.
+
+### Dotted keys nest \{#dotted-keys}
+
+In TOML a dot in a bare key is a path: `a.b = 1` means `a = { b = 1 }`. To
+keep a dot in a key, quote it: `"name.en" = "Paris"`.
+
+The [`locale:` table](/guides/accessibility-languages/#show-the-map-in-another-language)
+is the exception. Its keys contain dots (`Popup.Close`,
+`maplibre-yaml.Legend.Title`), so the library flattens nested tables under
+`locale` back into dotted keys. Quoted, bare or as a sub-table, these mean
+the same thing:
+
+```toml title="locale.toml"
+type = "map"
+id = "calor"
+title = "Vulnerabilidad al calor en el Bronx"
+
+[config]
+center = [-73.87, 40.84]
+zoom = 11
+mapStyle = "https://tiles.openfreemap.org/styles/liberty"
+
+[config.locale]
+"Popup.Close" = "Cerrar"
+maplibre-yaml.Legend.Title = "Leyenda"
+
+[config.locale.NavigationControl]
+ZoomIn = "Acercar"
+ZoomOut = "Alejar"
+```
+
+Writing one key both ways (`"Popup.Close"` and `Popup.Close`) is an error
+that names both spellings. The same flattening applies in YAML and JSON.
+
+### Dates stay text \{#dates}
+
+An unquoted date (`updated = 2024-01-02`) is a date in TOML. The library
+reads it back as the text you wrote, `"2024-01-02"`, which is what YAML
+gives for the same line.
+
+### A table's keys end at the next header \{#table-order}
+
+After a header such as `[layers.paint]`, every key belongs to that table
+until the next header. A layer's own keys written after it land in `paint`:
+
+```toml
+[[layers]]
+id = "quakes"
+type = "circle"
+source = "quakes"
+
+[layers.paint]
+circle-color = "#e74c3c"
+minzoom = 3        # lands in paint, not in the layer
+```
+
+The validator says where it went and where it belongs:
+
+```text
+layers.0.paint.minzoom: Unknown key "minzoom".
+Hint: in TOML every key after [layers.paint] belongs to it, until the next header. "minzoom" is a layer key: move it above [layers.paint].
+```
+
+Write a table's plain keys first, then its sub-tables. `mlym convert`
+writes TOML in that order.
+
+### Lists of tables attach to the last one \{#arrays-of-tables}
+
+`[[layers]]` starts a new layer. A header under it, such as
+`[[layers.interactive.click.popup]]` or `[layers.paint]`, belongs to the
+**most recent** `[[layers]]` above it, wherever it is in the file. The same
+goes for `[[chapters]]` and `[[chapters.onChapterEnter]]`. Keep each layer's
+headers together under its `[[layers]]` line. A short list can go inline
+instead, which keeps it visibly inside its layer:
+
+```toml
+[[layers]]
+id = "quakes"
+type = "circle"
+source = "quakes"
+interactive = { click = { popup = [
+  { h3 = [{ property = "place" }] },
+  { p = [{ str = "Magnitude " }, { property = "mag" }] },
+] } }
+```
+
+## Convert between formats \{#convert}
+
+`mlym convert` rewrites a document in another format. It writes what you
+wrote, not a filled-in copy: no defaults are added and nothing is expanded
+except what the target can't hold, and expressions stay inline where they
+fit.
+
+```bash
+npx maplibre-yaml@latest convert map.yaml --to toml               # print it
+npx maplibre-yaml@latest convert map.yaml --to json --out map.json
+npx maplibre-yaml@latest convert map.toml --to yaml --strict      # fail on any loss
+```
+
+The schema line moves to the target's form (the YAML modeline, the JSON
+`$schema` key, the TOML `#:schema` line), and `!html` becomes `$html` and
+back, so neither is a loss. What the target can't keep is listed on stderr:
+
+```text
+WARN  the comment on line 15 is dropped: # the story's one colour
+WARN  the alias *red on line 16 is written out in full
+WARN  chapters.0.onChapterExit.0.filter: null dropped — TOML has no null; the filter is left out, which clears the layer's filter just as null does
+WARN  3 things the TOML output does not keep (listed above).
+```
+
+- **Losses** are comments, anchors and merge keys (written out in full), and
+  nulls left out of TOML where leaving the key out means the same thing.
+  With losses, the command still writes the output and exits `0`.
+  `--strict` makes any loss an error: exit `1`, nothing written.
+- **Values the target can't hold** stop the conversion, naming the path: a
+  null anywhere else going to TOML (inside an expression, say), `inf` or
+  `nan` going to JSON, an integer too large to keep exactly.
+- **An invalid document** is not converted: the command prints its errors
+  and exits `1`. Warnings don't stop it.
+
+Every option is in the [CLI reference](/cli/reference/#convert).
+
+## In Astro \{#astro}
+
+The [Astro loaders](/integrations/astro/) pick the format by extension:
+`loadMapConfig('./src/configs/map.toml')` reads TOML, and its errors carry
+the TOML line and column. `loadFromGlob` can mix formats in one glob. The
+`YAMLParser` methods read YAML and JSON only, so validate with
+`parseDocumentText`, which reads the format from the path:
+
+```astro
+---
+import { loadFromGlob, Map } from '@maplibre-yaml/astro';
+import { parseDocumentText } from '@maplibre-yaml/core';
+
+const files = import.meta.glob<string>('/src/configs/*.{yaml,json,toml}', {
+  query: '?raw',
+  import: 'default',
+});
+const maps = await loadFromGlob(files, (text, { path }) =>
+  parseDocumentText(text, { kind: 'map', signals: { fileName: path } })
+);
+---
+```
+
+<Aside type="caution" title="Content collections give weaker errors">
+[Content collections](/integrations/astro-collections/#map-documents-as-collection-entries)
+accept `.json` and `.toml` entries, but Astro reads those files itself and
+hands the schema a value. A mistake is reported with its field path and no
+line or column. Run `mlym validate` on the collection's folder to see where
+it is.
+</Aside>
+
+## How the format is chosen \{#detection}
+
+The first of these that names a format decides:
+
+1. a `format` your code passes (`parseDocumentText(text, { format: "toml" })`);
+2. an inline script's `type`;
+3. the extension of the requested URL or file name (only the path counts,
+   so `map.toml?v=3` is TOML);
+4. the extension of the URL the response finally came from, after redirects;
+5. the response's content type, if it names YAML, JSON or TOML
+   (`application/json`, `application/geo+json`, `application/toml`,
+   `text/yaml` …). `text/plain` and `application/octet-stream` say nothing.
+
+Text with none of these is judged by its content: a first `{` is JSON;
+`key = value` lines with no `key:` line at the left margin are TOML;
+anything else is YAML. A label always beats the content, so name files with
+their real extension. When a label and the content disagree (TOML saved as
+`map.yaml`, or YAML labelled TOML) the syntax error carries a hint saying
+which format the text looks like.
+
+## In your own code \{#own-code}
+
+`parseDocumentText` reads text in any of the three formats, and
+`convertDocument` is what `mlym convert` runs. Both are in
+[Parsing & validating in your own code](/guides/parsing-and-validating/#any-format).

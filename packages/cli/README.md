@@ -53,7 +53,8 @@ reload the page.
   default: an HTML page and `map.yaml`), `story` (a scrollytelling story with
   `<ml-scrollytelling>`, no build step) or `astro` (an Astro site). `-t` picks
   the template, `--list` shows them, `-n` sets the project name.
-- **`validate <patterns...>`** checks files or globs against the schema, with
+- **`validate <patterns...>`** checks files, folders or globs (YAML, JSON or
+  TOML documents) against the schema, with
   line numbers and did-you-mean hints, and notes (`ℹ note`) that explain how
   a valid value is read without counting as warnings. `-f` sets the output (`human`, `json`,
   `sarif`, `vscode`), `--strict` fails on warnings (on by default in CI), `-w`
@@ -67,6 +68,10 @@ reload the page.
   `-o dist/` writes a file, `--strict` fails on any loss, `--target 5.6.0`
   checks against a maplibre-gl version, `--sprite-base <url>` places generated
   sprites.
+- **`convert <file> --to yaml|json|toml`** rewrites a document in another
+  format, listing on stderr what the target can't keep (comments, anchors,
+  nulls). `-o` writes a file, `--strict` fails on any loss
+  ([JSON & TOML documents](https://docs.maplibre-yaml.org/guides/json-and-toml/)).
 - **`schema [block]`** prints the JSON Schema for `map`, `scrollytelling`,
   `root` or `any`, matching the installed core.
 - **`bake [preset]`** regenerates the pattern images of the `crosshatch` and

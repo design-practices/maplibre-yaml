@@ -18,7 +18,9 @@ generate  →  validate -f json  →  repair  →  repeat until valid
 ```
 
 1. **Generate** a map document in [format v1](/guides/format-v2/), the
-   default: the schemas, the examples and every guide use it.
+   default: the schemas, the examples and every guide use it. An agent that
+   writes JSON more reliably can save the same document as `map.json`, with
+   a `$schema` key ([JSON & TOML documents](/guides/json-and-toml/)).
 2. **Validate** it with the CLI's JSON output:
 
    ```bash

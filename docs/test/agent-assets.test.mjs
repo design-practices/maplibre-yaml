@@ -11,7 +11,7 @@ import assert from "node:assert/strict";
 import { readFileSync, existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { YAMLParser } from "@maplibre-yaml/core";
+import { YAMLParser, parseDocumentText } from "@maplibre-yaml/core";
 import {
   buildLlmsTxt,
   buildLlmsFullTxt,
@@ -71,6 +71,49 @@ test("every YAML example in llms.txt and llms-full.txt validates with no warning
     const id = text.match(/^id: (.+)$/m)?.[1];
     assert.ok(result.success, `${id}: ${JSON.stringify(result.errors ?? result.error)}`);
     assert.deepEqual((result.warnings ?? []).map((w) => `${w.path}: ${w.message}`), [], id);
+  }
+});
+
+/** The lines of the section of llms.txt under a `## ` heading, up to the next one. */
+function section(text, heading) {
+  const start = text.indexOf(`## ${heading}`);
+  assert.ok(start >= 0, `llms.txt has a "${heading}" section`);
+  const end = text.indexOf("\n## ", start + 1);
+  return text.slice(start, end === -1 ? undefined : end);
+}
+
+test("llms.txt says JSON and TOML documents are accepted, and links the guide", () => {
+  assert.match(llms, /JSON and TOML documents are accepted/);
+  assert.ok(llms.includes("https://docs.maplibre-yaml.org/guides/json-and-toml/"));
+});
+
+test("llms.txt's \"Don't write these\" carries the TOML rules", () => {
+  const dont = section(llms, "Don't write these");
+  // An agent must never write a TOML null, an unquoted dotted key outside
+  // locale, or a bare # colour (R23).
+  assert.ok(dont.includes("`filter = null`"), "filter = null");
+  assert.match(dont, /unquoted dotted key outside `locale`/);
+  assert.ok(dont.includes("`circle-color = #e74c3c`"), "bare # colour");
+  assert.ok(dont.includes('`circle-color = "#e74c3c"`'), "the quoted fix");
+  assert.ok(dont.includes("$html"), "!html as $html");
+});
+
+test("llms-full.txt summarises the TOML gaps", () => {
+  const start = full.indexOf("# JSON AND TOML DOCUMENTS");
+  assert.ok(start >= 0);
+  const summary = full.slice(start, full.indexOf("# FULL JSON SCHEMA REFERENCE"));
+  for (const gap of ["No null", "No anchors", "No tags", "Dotted bare keys nest", "unquoted date", "[layers.paint]", "[[layers.interactive.click.popup]]", "#:schema", "convert"]) {
+    assert.ok(summary.includes(gap), gap);
+  }
+});
+
+test("the JSON and TOML examples in llms-full.txt validate with no warnings", async () => {
+  for (const format of ["json", "toml"]) {
+    const docs = fences(full, format).filter((text) => /"type": "map"|^type = "map"/m.test(text));
+    assert.equal(docs.length, 1, `one ${format} example`);
+    const { result } = await parseDocumentText(docs[0], { format });
+    assert.ok(result.success, `${format}: ${JSON.stringify(result.errors)}`);
+    assert.deepEqual(result.warnings.map((w) => `${w.path}: ${w.message}`), [], format);
   }
 });
 

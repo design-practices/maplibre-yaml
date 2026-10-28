@@ -269,6 +269,7 @@ export default defineConfig({
           items: [
             { label: "The CLI (mlym)", link: "/cli/getting-started/" },
             { label: "Editor setup", link: "/guides/editor-setup/" },
+            { label: "JSON & TOML documents", link: "/guides/json-and-toml/" },
             { label: "Using AI agents", link: "/guides/ai-agents/" },
           ],
         },

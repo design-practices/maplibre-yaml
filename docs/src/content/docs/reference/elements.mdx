@@ -29,8 +29,8 @@ Draws one `type: map` document.
 
 | Attribute | Value | What it does |
 |-----------|-------|--------------|
-| `src` | URL | The YAML document to load. Changing it fetches the new document and applies it to the running map in place ([Updating the document](#updating-the-document)) |
-| `config` | JSON string | The document as JSON. Changing it applies the new document to the running map in place |
+| `src` | URL | The document to load: YAML, JSON or TOML, by its extension or content type ([JSON & TOML](/guides/json-and-toml/#on-a-page)). Changing it fetches the new document and applies it to the running map in place ([Updating the document](#updating-the-document)) |
+| `config` | string | The document as text: YAML, JSON or TOML. Changing it applies the new document to the running map in place |
 | `base` | path | Where the paths in `src` and in the document start, for a site under a subpath (`"/my-repo/"`). Full `https://` URLs are never changed ([Sites under a subpath](/guides/publishing/#html-pages-the-base-attribute)) |
 | `camera` | `document` (default) or `host` | Who owns the camera when the document changes. `document`: a changed `center`, `zoom`, `bearing` or `pitch` eases the map there, and an added or re-targeted `fitTo` frames its source once. `host`: an update never moves the camera, and a basemap rebuild keeps the current view, for a page whose viewport is per-user |
 | `debug` | boolean | Show author hints on the page wherever it is served, not only while developing ([Reading what the map tells you](/troubleshooting/#reading-what-the-map-tells-you)) |
@@ -55,9 +55,9 @@ config:
 </ml-map>
 ```
 
-`type="application/yaml"` works too, and so does `type="application/json"`
-for a document written as JSON. The same parser reads it, so errors still
-carry line numbers:
+`type="application/yaml"` works too, `type="application/json"` takes a
+document written as JSON, and `type="application/toml"` one written as
+[TOML](/guides/json-and-toml/). Errors carry line numbers in every format:
 
 ```html
 <ml-map style="display: block; height: 400px;">
@@ -83,7 +83,7 @@ legend, and for the label language of a Protomaps basemap
 
 | Property | Type | What it does |
 |----------|------|--------------|
-| `config` | object or JSON string (set); object or `null` (get) | The document. Set before or after the element connects, it is validated like every other path; a value JSON-equal to the one shown is a no-op, and a different one is applied to the running map in place ([Updating the document](#updating-the-document)). Get returns the document being shown |
+| `config` | object or document text (set); object or `null` (get) | The document, as an object or as YAML, JSON or TOML text. Set before or after the element connects, it is validated like every other path; a value JSON-equal to the one shown is a no-op, and a different one is applied to the running map in place ([Updating the document](#updating-the-document)). Get returns the document being shown |
 | `base` | string or `null` | Reflects the `base` attribute; setting it re-resolves the document's paths and applies the result as an update |
 | `camera` | `"document"` or `"host"` | Reflects the `camera` attribute. Can be changed on a running map; it governs the next update onward, not one already in flight |
 | `debug` | boolean | Reflects the `debug` attribute |
@@ -98,7 +98,7 @@ legend, and for the label language of a Protomaps basemap
 | `getMap()` | `maplibregl.Map \| null` | The MapLibre map, or `null` before a render. The same object through every update; only a basemap change (`mapStyle`) builds a new one, and `ml-map:load` fires again when it does, so a page that keeps a reference refreshes it on that event |
 | `getRenderer()` | `MapRenderer \| null` | The renderer behind the element ([JavaScript API](/integrations/vanilla-js/)) |
 | `isLoaded()` | `boolean` | Whether the map has finished loading |
-| `update(doc)` | `Promise<UpdateResult>` | Apply a document (an object or its JSON string) to the running map in place: what setting `config` does, with the outcome. Resolves `{ outcome: "applied", summary }` once the map shows the document, `"rejected"` with `errors` (the map untouched), `"fallback"` when a basemap change rebuilt the map (or there was no map yet), or `"superseded"` when a later document replaced this one before it applied. The trust the map was built with (the renderer's `capabilities`) applies to the updated document: an update neither raises nor lowers it ([Updating the document](#updating-the-document)) |
+| `update(doc)` | `Promise<UpdateResult>` | Apply a document (an object, or its text in YAML, JSON or TOML) to the running map in place: what setting `config` does, with the outcome. Resolves `{ outcome: "applied", summary }` once the map shows the document, `"rejected"` with `errors` (the map untouched), `"fallback"` when a basemap change rebuilt the map (or there was no map yet), or `"superseded"` when a later document replaced this one before it applied. The trust the map was built with (the renderer's `capabilities`) applies to the updated document: an update neither raises nor lowers it ([Updating the document](#updating-the-document)) |
 | `getDocument()` | `MapBlock \| null` | The document the running map shows: the same shape `config` returns and `update()` takes. (`getRenderer().getDocument()` returns the renderer's normalized model instead, which is not the element's `update()` input) |
 | `setState(values)` | `void` | Write `state:` values. Each goes through the map's global state, the params panel follows, and one `ml-map:state-change` fires. Declared keys only: a key the document's `state:` block does not declare throws, and nothing is written. Needs maplibre-gl 5.6 or later ([State and parameters](/schema/map-config/#runtime-state-and-parameters)) |
 | `getState()` | `Record<string, unknown>` | The current `state:` values: the document's defaults, the panel's seeds and every write since. `{}` with no running map |
@@ -297,8 +297,8 @@ an `<ml-map>` inside it, with the chapters scrolling past.
 
 | Attribute | Value | What it does |
 |-----------|-------|--------------|
-| `src` | URL | The story's YAML |
-| `config` | JSON string | The story as JSON |
+| `src` | URL | The story file: YAML, JSON or TOML |
+| `config` | string | The story as text: YAML, JSON or TOML |
 | `base` | path | Where the story's own paths start, for a site under a subpath: `src`, every path in its map document and chapter `image` / `video` paths ([Sites under a subpath](/guides/publishing/#sites-under-a-subpath-github-pages)). Passed on to the story's map |
 | `debug` | boolean | Outline each chapter (green when active), and show the story's author hints (a chapter naming a layer that doesn't exist, a key under `config:` that belongs at the top level) wherever the page is served. Without it, hints show only while you develop (`localhost`, a `file://` page, a bundler dev build); failures always show. Passed on to the story's map |
 | `quiet` | boolean | Hide the on-page notes for a finished site: the map's "Part of this map couldn't load" notice and a chapter's "image didn't load" note. Every message stays in the browser console; a story that can't load at all still shows its error card, and a slow map still shows "Loading map…". Passed on to the story's map |
@@ -306,13 +306,14 @@ an `<ml-map>` inside it, with the chapters scrolling past.
 The element reads its story from the first of these it finds: the `story` (or
 `config`) property, an inline `<script type="text/yaml">` child, the `src`
 attribute, the `config` attribute. As on `<ml-map>`, the inline script may
-also be `type="application/yaml"` or `type="application/json"`.
+also be `type="application/yaml"`, `type="application/json"` or
+`type="application/toml"`.
 
 ### `<ml-scrollytelling>` properties and methods
 
 | Property / method | What it does |
 |-------------------|--------------|
-| `story` (alias `config`) | Set: the story as an object or JSON string, validated like every other path (a value JSON-equal to the one shown is a no-op). Get: the validated story, or `null` |
+| `story` (alias `config`) | Set: the story as an object or as YAML, JSON or TOML text, validated like every other path (a value JSON-equal to the one shown is a no-op). Get: the validated story, or `null` |
 | `base` | Reflects the `base` attribute |
 | `activeChapterId` | The active chapter's `id`, or `null` |
 | `mapElement` | The story's own [`<ml-map>`](#ml-map), once the story has rendered: its methods and events work as on any `<ml-map>` |

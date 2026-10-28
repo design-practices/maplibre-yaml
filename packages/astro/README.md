@@ -121,7 +121,9 @@ file behaves the same here and in a plain HTML page.
   the main entry includes the components, which a content config cannot load.
 - **Dev reload integration (optional):** add `maplibreYaml()` from
   `@maplibre-yaml/astro/integration` to `integrations` and `astro dev`
-  reloads the page when a YAML or GeoJSON file the maps read changes.
+  reloads the page when a YAML, JSON, TOML or GeoJSON file the maps read
+  changes. The loaders read `.json` and `.toml` documents as well as YAML,
+  by extension.
 - **Mistakes show on the page:** an error card for a document that can't be
   drawn, a notice for a layer or file that failed, and author hints
   (did-you-mean, misplaced keys) while you run `astro dev`. The `debug` prop

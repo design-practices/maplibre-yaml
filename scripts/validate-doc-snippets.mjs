@@ -21,6 +21,16 @@
  * a fragment naming a source defined elsewhere) opts out with `no-validate`
  * in its info string: ```yaml no-validate
  *
+ * ```json and ```toml fences are checked when they are whole documents, read
+ * with core's `parseDocumentText` in that format. A fence is a document by
+ * the rule `mlym validate` uses to pick JSON and TOML files out of a folder
+ * (KTD11), applied to the fence's text: it names a `type` of `map` or
+ * `scrollytelling`, has a top-level `pages` key, or carries a `$schema` (or,
+ * in TOML, a `#:schema` directive) under docs.maplibre-yaml.org/schema/.
+ * Every other JSON fence (a style.json, GeoJSON, package.json, editor
+ * settings, the CLI's JSON output) and every TOML fragment is skipped, and
+ * fragments are not wrapped. `no-validate` opts a document fence out too.
+ *
  * Requires @maplibre-yaml/core to be built first:
  *   pnpm --filter @maplibre-yaml/core build
  *
@@ -34,7 +44,7 @@
  */
 
 import { readFileSync, readdirSync, statSync, existsSync } from "node:fs";
-import { join, relative } from "node:path";
+import { join, relative, resolve } from "node:path";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 
@@ -48,7 +58,7 @@ if (!existsSync(coreDist)) {
   process.exit(2);
 }
 
-const { YAMLParser } = await import(coreDist);
+const { YAMLParser, parseDocumentText } = await import(coreDist);
 // The YAML library core itself parses with, to inspect a fragment's shape.
 const YAML = createRequire(join(repoRoot, "packages/core/package.json"))("yaml");
 
@@ -122,6 +132,33 @@ function placeholderSources(layers) {
   return Object.fromEntries(names.map((name) => [name, empty]));
 }
 
+/** A `$schema` URL (or TOML `#:schema` directive) under this site's schema folder. */
+const SCHEMA_URL = String.raw`https?://docs\.maplibre-yaml\.org/schema/`;
+
+/**
+ * What makes a JSON or TOML fence a whole document: the marks `mlym
+ * validate` looks for in a folder's .json and .toml files
+ * (packages/cli/src/lib/glob.ts), so a fence counts exactly when the same
+ * text saved as a file would.
+ */
+const DOCUMENT_MARKS = {
+  json: [
+    /"type"\s*:\s*"(?:map|scrollytelling)"/,
+    /"pages"\s*:\s*\[/,
+    new RegExp(String.raw`"\$schema"\s*:\s*"` + SCHEMA_URL),
+  ],
+  toml: [
+    /^type[ \t]*=[ \t]*["'](?:map|scrollytelling)["']/m,
+    /^(?:pages[ \t]*=|\[\[[ \t]*pages[ \t]*\]\])/m,
+    new RegExp(String.raw`^(?:#:schema[ \t]+|["']\$schema["'][ \t]*=[ \t]*["'])` + SCHEMA_URL, "m"),
+  ],
+};
+
+/** True when a ```json or ```toml fence is a whole map, story or root document. */
+function isDocumentFence(content, format) {
+  return DOCUMENT_MARKS[format].some((mark) => mark.test(content));
+}
+
 /** True for a root document: no top-level `type:`, a top-level `pages:` key. */
 function isRootDocument(content) {
   return /^pages:/m.test(content);
@@ -160,19 +197,19 @@ function defaultFileSet() {
 }
 
 /**
- * Extract fenced yaml code blocks from markdown/MDX text.
- * Handles fences indented inside components (e.g. Starlight <Steps>).
- * Returns [{ index, content, meta, line }]
+ * Extract the fenced code blocks of one language (yaml by default) from
+ * markdown/MDX text. Handles fences indented inside components (e.g.
+ * Starlight <Steps> or <Tabs>). Returns [{ index, content, meta, line, lang }]
  */
-function extractYamlFences(text, lang = /ya?ml/) {
+function extractFences(text, lang = /ya?ml/) {
   const lines = text.split("\n");
   const fences = [];
   let index = 0;
-  const openRe = new RegExp(`^(\\s*)(\`{3,})\\s*(?:${lang.source})\\b(.*)$`, "i");
+  const openRe = new RegExp(`^(\\s*)(\`{3,})\\s*(${lang.source})\\b(.*)$`, "i");
   for (let i = 0; i < lines.length; i++) {
     const open = lines[i].match(openRe);
     if (!open) continue;
-    const [, indent, ticks, meta] = open;
+    const [, indent, ticks, fenceLang, meta] = open;
     const closeRe = new RegExp(`^\\s*\`{${ticks.length},}\\s*$`);
     const content = [];
     let j = i + 1;
@@ -188,6 +225,7 @@ function extractYamlFences(text, lang = /ya?ml/) {
       content: content.join("\n"),
       meta: meta.trim(),
       line: i + 1,
+      lang: fenceLang.toLowerCase(),
     });
     i = j;
   }
@@ -219,7 +257,7 @@ function demotilesZoomProblem(content) {
 }
 
 const args = process.argv.slice(2);
-const files = args.length > 0 ? args.map((f) => join(process.cwd(), f)) : defaultFileSet();
+const files = args.length > 0 ? args.map((f) => resolve(process.cwd(), f)) : defaultFileSet();
 
 let checked = 0;
 let skipped = 0;
@@ -238,7 +276,7 @@ for (const file of files) {
   // The demotiles rule applies to code readers copy in any language: a
   // TypeScript or JSON document object at street zoom is the same flat map
   // (ml-aot.55).
-  for (const fence of extractYamlFences(text, /ts|typescript|js|javascript|jsx|tsx|json/)) {
+  for (const fence of extractFences(text, /ts|typescript|js|javascript|jsx|tsx|json/)) {
     const demoZoom = demotilesZoomProblem(fence.content);
     if (demoZoom) {
       failures.push({ file: rel, index: fence.index, line: fence.line, errors: [demoZoom] });
@@ -248,7 +286,7 @@ for (const file of files) {
   // The generated reference (TypeDoc, YAML reference) is rebuilt from core's
   // source; its fragments are fixed there, not here.
   const generated = /docs\/src\/content\/docs\/reference\/(api|yaml)\//.test(rel);
-  for (const fence of extractYamlFences(text)) {
+  for (const fence of extractFences(text)) {
     // demotiles has country polygons only: past zoom ~6 a map or story on it
     // is a flat green field with no coastline, roads or labels, which a
     // reader takes for a broken map (ml-aot.34). Checked on every fence,
@@ -300,6 +338,36 @@ for (const file of files) {
       });
     }
   }
+
+  // Whole JSON and TOML documents, read in their own format (the JSON and
+  // TOML guide's side-by-side documents, an agent's JSON map).
+  for (const fence of extractFences(text, /json|toml/)) {
+    const format = fence.lang;
+    if (!isDocumentFence(fence.content, format)) {
+      skipped++;
+      continue;
+    }
+    if (/\bno-validate\b/.test(fence.meta)) {
+      skipped++;
+      continue;
+    }
+    const { result } = await parseDocumentText(fence.content, { format });
+    checked++;
+    if (!result.success) {
+      failures.push({
+        file: rel,
+        index: fence.index,
+        line: fence.line,
+        kind: ` (${format.toUpperCase()} document)`,
+        // A position in the fence, as a line of the file: the fence's text
+        // starts on the line after its opening.
+        errors: result.errors.map((e) => {
+          const at = e.line ? `line ${fence.line + e.line}, column ${e.column ?? 1}: ` : "";
+          return `${at}${e.path ? `${e.path}: ` : ""}${e.message}`;
+        }),
+      });
+    }
+  }
 }
 
 console.log(
@@ -311,10 +379,10 @@ if (failures.length > 0) {
   for (const f of failures) {
     console.error(`- ${f.file} (snippet #${f.index}, fence at line ${f.line})${f.kind ?? ""}`);
     for (const e of f.errors) {
-      console.error(`    ${e}`);
+      console.error(`    ${e.replace(/\n/g, "\n      ")}`);
     }
   }
   process.exit(1);
 }
 
-console.log("All map/scrollytelling YAML snippets are valid.");
+console.log("All map/scrollytelling snippets (YAML, and JSON and TOML documents) are valid.");

@@ -76,9 +76,9 @@ npx maplibre-yaml@latest init --list                    # list the templates
 
 ### validate
 
-Check map documents and story files against the format. It reports
-problems with their path in the document, a message, and the line and
-column.
+Check map documents and story files, written in YAML, JSON or
+[TOML](/guides/json-and-toml/), against the format. It reports problems
+with their path in the document, a message, and the line and column.
 
 ```bash
 npx maplibre-yaml@latest validate <patterns> [options]
@@ -91,7 +91,9 @@ npx maplibre-yaml@latest validate <patterns> [options]
 A pattern can be:
 
 - a file: `map.yaml`;
-- a folder: `maps/` (every `.yaml` and `.yml` file under it);
+- a folder: `maps/` (every `.yaml` and `.yml` file under it, and the
+  `.json` and `.toml` files under it that are map or story documents;
+  [below](#folders-json-toml));
 - a glob: `"maps/**/*.yaml"`. Quote it, so the CLI sees the pattern rather
   than your shell's expansion of it. A quoted pattern with a space in a folder
   name, `"My Maps/*.yaml"`, works;
@@ -110,6 +112,7 @@ directly.
 | `--strict` / `--no-strict` | | boolean | on in CI, off otherwise | Treat warnings as errors. Without either flag, strict mode is on when the `CI` environment variable is set (as CI services do) and off on your machine |
 | `--strict-deprecations` | | boolean | `false` | Also treat deprecation warnings as errors (`--strict` leaves them as warnings) |
 | `--watch`  | `-w`  | boolean | `false` | Keep running and re-validate each file when it changes. Only changed files are checked again |
+| `--verbose` | | boolean | `false` | List the `.json` and `.toml` files a folder search skipped because they are not map or story documents |
 
 `validate` reports three kinds of finding:
 
@@ -120,8 +123,29 @@ directly.
 - **notes**: how a valid value is read, such as a basemap written as just a
   `.pmtiles` file. A note never makes a file invalid, even in strict mode.
 
+#### JSON and TOML files in a folder \{#folders-json-toml}
+
+A folder of maps often holds other JSON too: GeoJSON, a `package.json`, a
+`style.json`. So under a folder argument, a `.json` or `.toml` file is
+validated only if its first 64 KB show it is a document: it names a `type`
+of `map` or `scrollytelling`, has a top-level `pages` key, or carries a
+`$schema` (or a TOML `#:schema` line) under
+`https://docs.maplibre-yaml.org/schema/`. The check reads the text and
+doesn't parse it, so a document with a syntax error still joins the run
+and fails there. The project settings file, `maplibre-yaml.config.json`, is
+always skipped. A file you name, or a glob matches, is validated whatever
+it contains.
+
+`--verbose` lists each file the folder search skipped. A folder with no
+document in it is reported, and the command exits with code `2`:
+
+```text
+✗ No map or story documents found in maps (looked for .yaml and .yml files, and .json and .toml files that declare a map or story; --verbose lists the files skipped)
+```
+
 ```bash
 npx maplibre-yaml@latest validate map.yaml
+npx maplibre-yaml@latest validate maps/ --verbose
 npx maplibre-yaml@latest validate "maps/**/*.yaml" --watch
 npx maplibre-yaml@latest validate "**/*.yaml" --format sarif > results.sarif
 ```
@@ -162,8 +186,8 @@ see [Validate on save](/guides/editor-setup/#validate-on-save-vs-code-task).
 
 ### preview
 
-Start a local server that shows one YAML document, a map or a story map, on
-a page of its own, and reloads it when you save the file.
+Start a local server that shows one document (a map or a story map, in
+YAML, JSON or TOML) on a page of its own, and reloads it when you save the file.
 
 ```bash
 npx maplibre-yaml@latest preview <file> [options]
@@ -171,7 +195,7 @@ npx maplibre-yaml@latest preview <file> [options]
 
 | Argument | Required | Description                     |
 | -------- | -------- | ------------------------------- |
-| `file` | Yes      | The map document or story file to show |
+| `file` | Yes      | The map document or story file to show (`.yaml`, `.yml`, `.json` or `.toml`) |
 
 | Option      | Type    | Default | Description                              |
 | ----------- | ------- | ------- | ---------------------------------------- |
@@ -210,7 +234,7 @@ npx maplibre-yaml@latest emit <file> [options]
 
 | Argument | Required | Description |
 | -------- | -------- | ----------- |
-| `file` | Yes | Path to a `type: map` YAML document |
+| `file` | Yes | Path to a `type: map` document in YAML, JSON or TOML |
 
 | Option | Alias | Type | Default | Description |
 | ------ | ----- | ---- | ------- | ----------- |
@@ -252,6 +276,51 @@ npx maplibre-yaml@latest emit map.yaml --out dist/ --sprite-base https://maps.ex
 The last line exports a document with markers: it writes `style.json` and
 the sprite files (`mlym.json`, `mlym.png` and their `@2x` versions) into
 `dist/`, and the style points at them under `https://maps.example.org/dist/`.
+
+---
+
+### convert
+
+Rewrite a map or story document in another format: YAML, JSON or
+[TOML](/guides/json-and-toml/). The output is the document as written, not
+a filled-in copy: no defaults are added, nothing is expanded except what
+the target can't hold, and expressions stay inline where they fit.
+
+```bash
+npx maplibre-yaml@latest convert <file> --to <yaml|json|toml> [options]
+```
+
+| Argument | Required | Description |
+| -------- | -------- | ----------- |
+| `file` | Yes | The document to convert (`.yaml`, `.yml`, `.json` or `.toml`). Its extension names its format; with another extension, the content decides |
+
+| Option | Alias | Type | Default | Description |
+| ------ | ----- | ---- | ------- | ----------- |
+| `--to` | | string | | Required. The format to write: `yaml`, `json` or `toml`. The input's own format reprints the file |
+| `--out` | `-o` | string | stdout | Write to this file instead. It may not be the input file |
+| `--strict` | | boolean | off | Exit `1` and write nothing if anything would be lost |
+
+What the output can't keep is listed on stderr, so
+`npx maplibre-yaml@latest convert map.yaml --to json > map.json` keeps the
+file clean. A loss is a comment, an anchor or merge key (written out in
+full), or a null left out of TOML where leaving the key out means the same
+thing. With losses the command still writes the output and exits `0`, unless
+`--strict` is set. The schema line becomes the target's own form, and `!html`
+becomes `{"$html": …}` and back, so neither counts as a loss.
+
+The command exits `1` and writes nothing when the input is not a valid
+document (warnings don't stop it), when a value can't be written in the
+target (a null inside an expression going to TOML, `inf` or `nan` going to
+JSON), or when `--out` names the input. A file that doesn't exist exits `2`.
+
+```bash
+npx maplibre-yaml@latest convert map.yaml --to toml                 # print the TOML
+npx maplibre-yaml@latest convert map.yaml --to json --out map.json  # write a file
+npx maplibre-yaml@latest convert story.yaml --to toml --strict      # fail on any loss
+```
+
+[JSON & TOML documents › Convert between formats](/guides/json-and-toml/#convert)
+shows a loss report.
 
 ---
 
@@ -358,8 +427,8 @@ the built-in default. With the file above, `preview map.yaml` serves on port
 | Code | Meaning             | Commands          |
 | ---- | ------------------- | ----------------- |
 | `0`  | Success. For `emit`, the style was written; warnings, if any, are on stderr | All |
-| `1`  | Invalid input: validation or YAML syntax errors, warnings in strict mode, an unknown template or option, a non-empty `init` folder, an `emit --strict` refusal | validate, emit, init, schema, bake |
-| `2`  | File not found, or no file matched a pattern | validate, preview, emit |
+| `1`  | Invalid input: validation or syntax errors, warnings in strict mode, an unknown template or option, a non-empty `init` folder, an `emit --strict` or `convert --strict` refusal | validate, emit, convert, init, schema, bake |
+| `2`  | File not found, no file matched a pattern, or a folder held no map or story document | validate, preview, emit, convert |
 | `4`  | Unexpected error (for `emit`, for example, a basemap or image that could not be fetched) | All |
 
 ---

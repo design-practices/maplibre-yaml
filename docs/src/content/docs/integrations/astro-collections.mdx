@@ -362,7 +362,10 @@ const maps = defineCollection({
 export const collections = { maps };
 ```
 
-Each file in `src/collections/maps/` is one map document:
+Each file in `src/collections/maps/` is one map document. Entries can be
+[JSON or TOML](/guides/json-and-toml/) too (`pattern: "**/*.{yaml,json,toml}"`),
+but Astro reads collection files itself, so a mistake is reported with its
+field path and no line or column ([In Astro](/guides/json-and-toml/#astro)):
 
 ```yaml title="src/collections/maps/headquarters.yaml"
 type: map
