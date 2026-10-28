@@ -1,0 +1,40 @@
+type: map
+id: income-choropleth
+config:
+  center: [-75.19, 39.936]
+  zoom: 12
+  mapStyle: "https://tiles.openfreemap.org/styles/positron"
+sources:
+  tracts:
+    type: geojson
+    url: /data/classify/sample-tracts.geojson
+layers:
+  - id: income
+    type: fill
+    source: tracts
+    label: Median household income
+    classify:
+      field: median_income
+      method: quantile
+      classes: 5
+      palette: Blues
+      noData: hide
+      format: { currency: USD, max-fraction-digits: 0 }
+    paint:
+      fill-opacity: 0.85
+      fill-outline-color: "#ffffff"
+    interactive:
+      hover:
+        cursor: pointer
+        highlight: true
+      click:
+        popup:
+          - h3:
+              - property: NAME
+          - p:
+              - str: "Median income: "
+              - property: median_income
+                format: { currency: USD, max-fraction-digits: 0 }
+                else: "no data"
+legend:
+  position: bottom-left

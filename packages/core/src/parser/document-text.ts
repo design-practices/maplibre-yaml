@@ -19,7 +19,7 @@
  * async only because TOML waits for its reader.
  */
 
-import { parseDocument, isMap } from "yaml";
+import { parseDocument, isMap, stringify as stringifyYAML } from "yaml";
 import {
   YAMLParser,
   YAML_PARSE_OPTIONS,
@@ -32,6 +32,10 @@ import {
   type ScrollytellingBlock,
 } from "./yaml-parser";
 import type { MapBlockV2 } from "../schemas/map-v2.schema";
+import { LayerSchema } from "../schemas/layer.schema";
+import { MapConfigSchema } from "../schemas/map.schema";
+import { getDecoder } from "../formats/decoders";
+import { schemaKeys } from "./validation-utils";
 
 export type { DocumentFormat };
 
@@ -120,6 +124,8 @@ export async function parseDocumentText(
   const kind = options.kind ?? "any";
   let format: DocumentFormat = "yaml";
   let outcome: Outcome;
+  /** The TOML reader's download failure: the one rejection (KTD1). */
+  let chunkFailure: { error: unknown } | undefined;
   try {
     if (typeof text !== "string") throw new TypeError("expected the document as text");
     const body = text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
@@ -128,9 +134,20 @@ export async function parseDocumentText(
       body.trim() === ""
         ? failure(EMPTY_MESSAGE)
         : format === "toml"
-          ? withTomlLabelHint(body, await readToml(body, kind))
+          ? withTomlLabelHint(
+              body,
+              readToml(
+                await getDecoder("toml").catch((error: unknown) => {
+                  chunkFailure = { error };
+                  throw error;
+                }),
+                body,
+                kind
+              )
+            )
           : readYamlOrJson(body, kind, format);
   } catch (err) {
+    if (chunkFailure) throw chunkFailure.error;
     outcome = failure(`The document could not be read: ${err instanceof Error ? err.message : String(err)}`);
   }
   const result = {
@@ -407,15 +424,36 @@ function unquotedHint(err: ParseError | undefined, words: JsonWord[]): string | 
 // TOML
 // ---------------------------------------------------------------------------
 
+/** The `toml` chunk's exports. */
+type TomlReader = Awaited<ReturnType<typeof getDecoder<"toml">>>;
+
+/** The layer and `config` keys, for the TOML ordering hint (read from the schemas once). */
+let knownKeys: { layer: string[]; config: string[] } | undefined;
+
 /**
- * Read TOML text.
- *
- * TODO(U3): load the reader with `getDecoder("toml")` (the `toml` LOADERS
- * entry) and read the text through it. Until that chunk exists, TOML text
- * resolves as this one error.
+ * Read TOML text with the reader chunk, then validate its value through the
+ * value entry points with the TOML positions (KTD5), and add the TOML hints.
  */
-async function readToml(_text: string, _kind: DocumentKind): Promise<Outcome> {
-  return failure("TOML support is not available in this build.");
+function readToml(toml: TomlReader, text: string, kind: DocumentKind): Outcome {
+  const read = toml.readToml(text);
+  if (!read.ok) return failure(read.error.message, read.error);
+  const source = { positions: read.positions, authoredOrder: read.authoredOrder };
+  const outcome: Outcome =
+    kind === "map"
+      ? { blockType: "map", result: YAMLParser.safeParseMapBlockValue(read.value, source) }
+      : kind === "story"
+        ? { blockType: "scrollytelling", result: YAMLParser.safeParseScrollytellingBlockValue(read.value, source) }
+        : YAMLParser.safeParseAny(stringifyYAML(read.value), source);
+  const keys = (knownKeys ??= { layer: schemaKeys(LayerSchema), config: schemaKeys(MapConfigSchema) });
+  const { result } = outcome;
+  return {
+    blockType: outcome.blockType,
+    result: {
+      ...result,
+      errors: toml.hintsFor(read.positions, result.errors, keys),
+      warnings: toml.hintsFor(read.positions, result.warnings, keys),
+    },
+  };
 }
 
 /**

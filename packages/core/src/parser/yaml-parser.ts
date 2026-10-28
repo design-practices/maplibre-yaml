@@ -273,7 +273,7 @@ import {
 } from "./expand-sugar";
 import { checkClassify, checkClassifiedLegendItems } from "../classify/checks";
 import { checkLayerSources, refNotFoundMessage } from "./source-refs";
-import { restoreCategoryOrder } from "../classify/category-order";
+import { restoreCategoryOrder, type AuthoredOrder } from "../classify/category-order";
 import { RootSchema } from "../schemas/page.schema";
 import { MapBlockSchema } from "../schemas/map.schema";
 import { MapBlockV2Schema, type MapBlockV2 } from "../schemas/map-v2.schema";
@@ -286,6 +286,7 @@ import {
   hashSyntaxHint,
   positionForKey,
   positionForPath,
+  registerPositions,
   suggest,
   unknownTypeMessage,
   typeKindForOptions,
@@ -294,6 +295,7 @@ import {
   SOURCE_TYPES,
   BLOCK_TYPES,
   type HashCommentValue,
+  type PositionIndex,
   type ValidationWarning,
 } from "./validation-utils";
 import { isLikelyMisspelling } from "../utils/suggest";
@@ -307,6 +309,31 @@ import { explainIndentationError, explainQuoteError } from "./yaml-errors";
 import { normalizeDates, normalizeDocument, normalizeOrThrow, withNormalized, type Normalized } from "./normalize";
 
 const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/**
+ * Where a value came from, when it was read from text that is not YAML (a
+ * TOML document, KTD5). Given to the value entry points, it makes them
+ * report positions in that text: the YAML they synthesize answers its
+ * positions from `positions`, and `categories` keep `authoredOrder` (R9).
+ */
+export interface ValueSource {
+  positions: PositionIndex;
+  authoredOrder?: AuthoredOrder;
+}
+
+/** The source of the value being validated, while a value entry point runs with one. */
+let reading: ValueSource | undefined;
+
+/** Run `parse` with every Document it parses answering positions from `source`. */
+function readingFrom<T>(source: ValueSource, parse: () => T): T {
+  const outer = reading;
+  reading = source;
+  try {
+    return parse();
+  } finally {
+    reading = outer;
+  }
+}
 
 export type { ValidationWarning } from "./validation-utils";
 
@@ -359,6 +386,8 @@ export type ParseErrorCode =
   | "yaml-expansion"
   /** A merge key pointed at something that is not a map. */
   | "yaml-merge"
+  /** Malformed TOML (or TOML nested too deep to read). */
+  | "toml-syntax"
   /** The document validated against no schema (unknown block type, wrong shape). */
   | "schema";
 
@@ -546,6 +575,7 @@ export class YAMLParser {
   } {
     const lineCounter = new LineCounter();
     const doc = parseDocument(yaml, { lineCounter, ...YAML_PARSE_OPTIONS });
+    if (reading) registerPositions(doc, reading.positions);
 
     if (doc.errors.length > 0) {
       const err = doc.errors[0]!;
@@ -721,7 +751,7 @@ export class YAMLParser {
 
     // A `categories:` map with numeric keys keeps the order it was written
     // in (JavaScript would list the numbers first).
-    restoreCategoryOrder(result.data, doc);
+    restoreCategoryOrder(result.data, doc, reading?.authoredOrder);
 
     // Hand-written legend items beside a classified layer (ml-aot.94).
     warnings.push(...checkClassifiedLegendItems(value, { doc, lineCounter }));
@@ -1125,10 +1155,12 @@ export class YAMLParser {
    *
    * Positions are stripped: they would refer to the serialized YAML, not to
    * anything the caller wrote, and a line number pointing at text the author
-   * never saw is worse than none.
+   * never saw is worse than none. Given a `source` (the value was read from
+   * TOML text), positions point into that text instead.
    */
   static safeParseMapBlockValue(
-    value: unknown
+    value: unknown,
+    source?: ValueSource
   ): ParseResult<MapBlock | MapBlockV2> {
     let asYaml: string;
     try {
@@ -1148,6 +1180,7 @@ export class YAMLParser {
       };
     }
 
+    if (source) return readingFrom(source, () => this.parseMapBlockText(asYaml, true));
     const result = this.parseMapBlockText(asYaml, false);
     const stripPosition = <T extends { line?: number; column?: number }>(
       entry: T
@@ -1302,10 +1335,12 @@ export class YAMLParser {
    * The scrollytelling twin of {@link safeParseMapBlockValue}: round-trips
    * through YAML so errors, unknown-key suggestions and sugar expansion are
    * identical to the YAML entry points. Positions are stripped — they would
-   * point into serialized text the author never wrote.
+   * point into serialized text the author never wrote — unless a `source`
+   * says what text the value was read from.
    */
   static safeParseScrollytellingBlockValue(
-    value: unknown
+    value: unknown,
+    source?: ValueSource
   ): ParseResult<ScrollytellingBlock> {
     let asYaml: string;
     try {
@@ -1325,6 +1360,7 @@ export class YAMLParser {
       };
     }
 
+    if (source) return readingFrom(source, () => this.parseScrollytellingText(asYaml, true));
     const result = this.parseScrollytellingText(asYaml, false);
     const stripPosition = <T extends { line?: number; column?: number }>(
       entry: T
@@ -1358,6 +1394,9 @@ export class YAMLParser {
    * values, as does a document that has neither `type:` nor `pages:`.
    * This method never throws.
    *
+   * A `source` says that `yaml` was synthesized from a value read from other
+   * text (TOML): positions then point into that text.
+   *
    * @example
    * ```typescript
    * const { blockType, result } = YAMLParser.safeParseAny(yamlString);
@@ -1368,7 +1407,8 @@ export class YAMLParser {
    * }
    * ```
    */
-  static safeParseAny(yaml: string): SafeParseAnyResult {
+  static safeParseAny(yaml: string, source?: ValueSource): SafeParseAnyResult {
+    if (source) return readingFrom(source, () => this.safeParseAny(yaml));
     // Parse once (with a LineCounter) to inspect the top-level `type:`
     // discriminator and surface positioned syntax errors.
     const { doc: yamlDoc, syntaxError } = this.parseToDocument(yaml);

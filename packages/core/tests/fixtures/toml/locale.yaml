@@ -1,0 +1,22 @@
+type: map
+id: calor
+title: Vulnerabilidad al calor en el Bronx
+config:
+  center: [-73.88, 40.84]
+  zoom: 11
+  mapStyle: "https://tiles.openfreemap.org/styles/positron"
+  locale:
+    NavigationControl.ZoomIn: Acercar
+    NavigationControl.ZoomOut: Alejar
+    NavigationControl.ResetBearing: Restablecer la orientación
+    Popup.Close: Cerrar
+    maplibre-yaml.Legend.Title: Leyenda
+    maplibre-yaml.Notice.Title: Parte de este mapa no se pudo cargar
+    maplibre-yaml.Notice.Dismiss: Cerrar este aviso
+controls:
+  navigation: true
+legend:
+  title: Distritos
+  items:
+    - { color: "#fee08b", label: Bajo, shape: square }
+    - { color: "#d73027", label: Alto, shape: square }

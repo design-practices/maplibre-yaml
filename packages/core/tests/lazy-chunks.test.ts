@@ -54,6 +54,9 @@ const LIBRARY_MARKERS: Record<string, string[]> = {
   // The update engine (renderer/update): its own wording, which the entry —
   // which decides fallback and runs the queue — never carries.
   update: ["so the document's layer is skipped", "names a layer that comes earlier in the document"],
+  // toml-eslint-parser's own errors, and the TOML hints the chunk words
+  // (the entry carries neither: YAML and JSON pages download no TOML code).
+  toml: ["Trailing comma is not permitted in an inline table", "Unspecified values are invalid", "TOML reads the dots in"],
 };
 
 /** geotiff's codecs, in chunks/cog-<codec>.js (ml-cnv.11): never in a main bundle either. */
@@ -91,7 +94,7 @@ function staticClosure(files: string[]): string[] {
 describe("the seam", () => {
   it("names the readers this version loads on demand", () => {
     expect([...SEAM_NAMES].sort()).toEqual(
-      ["cog", "flatgeobuf", "geoparquet", "geoparquet-brotli", "pmtiles", "protomaps-basemap", "update"]
+      ["cog", "flatgeobuf", "geoparquet", "geoparquet-brotli", "pmtiles", "protomaps-basemap", "toml", "update"]
     );
     // Every on-demand library has markers, so the "not in the main bundle"
     // checks below cover all of them.
@@ -108,6 +111,18 @@ describe("the seam", () => {
       // Value imports stay inside the engine (./diff, ./apply, ./resync): nothing from the main bundle.
       expect(values.filter((s) => !s.startsWith("./")), file).toEqual([]);
       expect(/["'][^"']*\/(emitter|export)\//.test(code), `${file} reaches emitter/ or export/`).toBe(false);
+    }
+  });
+
+  it("the TOML reader's sources import core modules as types only (KTD4)", () => {
+    const dir = join(PKG_ROOT, "src/parser/toml");
+    const files = readdirSync(dir).filter((f) => f.endsWith(".ts"));
+    expect(files.sort()).toEqual(["hints.ts", "index-positions.ts", "index.ts", "reader.ts"]);
+    for (const file of files) {
+      const code = readFileSync(join(dir, file), "utf8").replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+      const values = [...code.matchAll(/^(?:import|export)\s+(?!type\b)[^;]*?from\s*["']([^"']+)["']/gm)].map((m) => m[1]!);
+      // Value imports stay inside the reader (./…) or are the parser itself.
+      expect(values.filter((s) => !s.startsWith("./") && s !== "toml-eslint-parser"), file).toEqual([]);
     }
   });
 
@@ -161,6 +176,16 @@ describe.skipIf(!built)("CDN build: register.browser.js + chunks/", () => {
       expect(code.includes(marker), `chunks/update.js has entry wording: ${marker}`).toBe(false);
     }
     expect(main.includes("so the document's layer is skipped")).toBe(false);
+  });
+
+  it("the TOML reader chunk imports nothing at all (KTD4)", () => {
+    const code = read("chunks/toml.js");
+    expect(staticImports(code)).toEqual([]);
+    expect(dynamicImports(code)).toEqual([]);
+    // The entry's own wording stays in the entry.
+    for (const marker of ["The document is empty. Add a map or a story to it.", "JSON syntax error:"]) {
+      expect(code.includes(marker), `chunks/toml.js has entry wording: ${marker}`).toBe(false);
+    }
   });
 
   it("the COG chunk keeps its heavy codecs in their own files next to it (ml-cnv.11)", () => {

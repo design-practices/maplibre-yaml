@@ -5,7 +5,7 @@
  * script type, URL extension, response URL, content type, then the sniff),
  * reads it, and words every error for that format. YAML results must stay
  * exactly what `YAMLParser` returns; JSON gets JSON wording and hints; TOML
- * is a stub until its reader chunk lands (U3).
+ * is read by its lazy chunk (U3, tests/parser/toml.test.ts).
  */
 
 import { describe, it, expect, vi, afterEach } from "vitest";
@@ -318,18 +318,18 @@ describe("mislabel hints (R3)", () => {
   it("sniffed TOML gets no mislabel hint", async () => {
     const out = await parseDocumentText(TOML_MAP);
     expect(out.format).toBe("toml");
-    expect(out.result.errors[0]!.message).not.toContain("Hint:");
+    for (const e of [...out.result.errors, ...out.result.warnings]) expect(e.message).not.toContain("Hint: this");
   });
 });
 
-describe("TOML before its reader lands (stub)", () => {
-  it("resolves as one error naming the format", async () => {
+describe("TOML goes through its reader chunk (U3)", () => {
+  it("reads and validates, naming the format", async () => {
     const out = await parseDocumentText(TOML_MAP, { kind: "map" });
-    expect(out.success).toBe(false);
     expect(out.format).toBe("toml");
-    expect(out.errors).toEqual([
-      { path: "", message: "TOML support is not available in this build.", format: "toml" },
-    ]);
+    expect(out.errors).toEqual([]);
+    expect(out.success).toBe(true);
+    expect(out.data).toMatchObject({ type: "map", id: "city", config: { zoom: 2 } });
+    expect(getDecoder).toHaveBeenCalledWith("toml");
   });
 });
 

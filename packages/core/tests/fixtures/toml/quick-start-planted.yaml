@@ -1,0 +1,32 @@
+type: map
+id: earthquake-map
+config:
+  center: [-160, 20]
+  zoom: "1"
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
+layers:
+  - id: earthquakes
+    type: circle
+    source:
+      type: geojson
+      url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
+    paitn:
+      circle-radius: ["interpolate", ["linear"], ["get", "mag"], 1, 2, 7, 20]
+      circle-color: "#e74c3c"
+      circle-opacity: 0.7
+      circle-stroke-width: 1
+      circle-stroke-color: "#ffffff"
+    interactive:
+      hover:
+        cursor: pointer
+      click:
+        popup:
+          - h3:
+              - property: place
+          - p:
+              - str: "Magnitude "
+              - property: mag
+                format: { max-fraction-digit: 1 }
+controls:
+  navigation: true
+  scale: true

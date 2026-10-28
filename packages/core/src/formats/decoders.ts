@@ -95,6 +95,10 @@ const LOADERS = {
   // the apply step and the runtime re-sync, awaited by `MapRenderer.update`
   // on a running map's first changed document.
   update: () => import("../renderer/update/index"),
+  // The TOML reader (parser/toml, 0.10): toml-eslint-parser plus the walk
+  // that builds the value, its positions and the TOML hints, awaited by
+  // `parseDocumentText` for the first TOML document a page reads.
+  toml: () => import("../parser/toml/index"),
 } satisfies Record<string, () => Promise<unknown>>;
 
 /** The library module behind each on-demand name. */
