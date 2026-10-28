@@ -87,6 +87,13 @@ test("llms.txt says JSON and TOML documents are accepted, and links the guide", 
   assert.ok(llms.includes("https://docs.maplibre-yaml.org/guides/json-and-toml/"));
 });
 
+test("llms.txt's \"Validate loop\" section mentions converting between formats", () => {
+  const loop = section(llms, "Validate loop (the whole agent workflow)");
+  assert.match(loop, /mlym convert/);
+  assert.ok(loop.includes("npx maplibre-yaml@latest convert"), "shows the convert command");
+  assert.match(loop, /--strict/);
+});
+
 test("llms.txt's \"Don't write these\" carries the TOML rules", () => {
   const dont = section(llms, "Don't write these");
   // An agent must never write a TOML null, an unquoted dotted key outside

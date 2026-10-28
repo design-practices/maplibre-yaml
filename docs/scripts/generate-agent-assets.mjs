@@ -556,6 +556,12 @@ until \`valid: true\`. Exit code 0 means valid, 1 errors (or warnings in strict
 mode, which is on when \`CI\` is set), 2 a file that wasn't found. Fix warnings
 too: they name things that validate but don't do what the author meant.
 
+Validate runs on JSON and TOML documents the same way. To turn a document
+an API or another tool handed you (say, JSON) into the format you want to
+keep, use \`mlym convert\`: \`npx maplibre-yaml@latest convert map.json --to
+yaml\`; add \`--strict\` in a pipeline to fail instead of silently dropping
+something the target format can't hold.
+
 ## Don't write these
 
 They validate, but do nothing or have a newer form, and validation warns:
