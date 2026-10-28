@@ -29,7 +29,14 @@
  * downloads it exactly once and a second change downloads nothing; a first
  * update whose chunk fetch fails is refused (`ml-map:update-rejected`, kind
  * `chunk`) with the map untouched and no error card, and `reload()` asks for
- * the file again under a `?retry=` URL. Requires `pnpm build` (core's dist/).
+ * the file again under a `?retry=` URL.
+ *
+ * Live data (polling, streaming, merging; bundle headroom U4) is
+ * `dist/chunks/live.js`: the third describe asserts a polling page paints its
+ * first data and then fetches it and polls, a static page (or one with only
+ * a legacy `updateStrategy`, or `refresh:` with no interval) never requests
+ * it, and a blocked download keeps the first data, says once that updates
+ * stopped, and `reload()` retries it. Requires `pnpm build` (core's dist/).
  */
 import { test, expect, type Page } from "@playwright/test";
 import { cpSync, existsSync, mkdtempSync, rmSync } from "node:fs";
@@ -408,6 +415,120 @@ test.describe("the update engine loads on the first update only (ml-4ug, live do
     expect(asked).toEqual(["(no query)", "?retry=1"]);
     expect(await dotColour(page)).toEqual({ painted: "#e9c46a", document: "#e9c46a" });
     await expect(page.locator("#map .ml-map-error")).toHaveCount(0);
+    expect(errors).toEqual([]);
+  });
+});
+
+/** A map whose one source is `source` (YAML, indented under `quakes:`), drawn as circles. */
+function liveDoc(source: string): string {
+  return `
+type: map
+id: live-chunk
+config:
+  center: [-118.2, 34.07]
+  zoom: 9
+  mapStyle: "/examples/verification/configs/local-style.json"
+sources:
+  quakes:
+${source}
+layers:
+  - id: quakes-points
+    type: circle
+    source: quakes
+    paint: { circle-radius: 6, circle-color: "#e63946" }
+`;
+}
+
+const FEED_PATH = "/examples/verification/data/usgs-quakes-poll.geojson";
+const POLLING_SOURCE = `    type: geojson
+    url: "${FEED_PATH}"
+    cache: { enabled: false }
+    refresh: { refreshInterval: 1000, updateStrategy: replace }`;
+const LIVE_CHUNK = "/my-site/js/maplibre-yaml/chunks/live.js";
+
+/** Count every request for the feed (first load and polls). */
+function feedRequests(page: Page): () => number {
+  let n = 0;
+  page.on("request", (r) => {
+    if (new URL(r.url()).pathname === FEED_PATH) n += 1;
+  });
+  return () => n;
+}
+
+test.describe("live data loads only for documents that refresh (bundle headroom U4)", () => {
+  test("AE2: a polling page paints its first data, then fetches chunks/live.js and polls", async ({ page }) => {
+    const errors = await guard(page);
+    const scripts = scriptsOf(page);
+    const polls = feedRequests(page);
+    await serveSite(page, site, pageHtml("/my-site/js/maplibre-yaml/register.browser.js", liveDoc(POLLING_SOURCE)));
+    await page.goto("/my-site/index.html", { waitUntil: "domcontentloaded" });
+    await page.evaluate(() => (document.getElementById("map") as any).mapReady());
+    await waitForLayer(page, "map", "quakes-points");
+    expect(scripts.filter((s) => s.includes("/chunks/"))).toEqual([LIVE_CHUNK]);
+    // The refresh runs: the feed is asked again on the schedule.
+    await expect.poll(polls, { timeout: 10_000 }).toBeGreaterThanOrEqual(3);
+    expect(scripts.filter((s) => s.includes("/chunks/"))).toEqual([LIVE_CHUNK]);
+    await expect(page.locator("#map .ml-map-notice")).toHaveCount(0);
+    expect(errors).toEqual([]);
+  });
+
+  test("a static url: source, a legacy updateStrategy alone, or refresh with no interval never request chunks/live.js", async ({ page }) => {
+    const errors = await guard(page);
+    const scripts = scriptsOf(page);
+    for (const source of [
+      `    type: geojson\n    url: "${FEED_PATH}"`,
+      `    type: geojson\n    url: "${FEED_PATH}"\n    updateStrategy: merge\n    updateKey: id`,
+      `    type: geojson\n    url: "${FEED_PATH}"\n    refresh: { updateStrategy: merge, updateKey: id }`,
+    ]) {
+      await page.unroute(/\/my-site\//);
+      await serveSite(page, site, pageHtml("/my-site/js/maplibre-yaml/register.browser.js", liveDoc(source)));
+      await page.goto("/my-site/index.html", { waitUntil: "domcontentloaded" });
+      await page.evaluate(() => (document.getElementById("map") as any).mapReady());
+      await waitForLayer(page, "map", "quakes-points");
+      await page.waitForTimeout(1500);
+    }
+    expect(scripts.filter((s) => s.includes("/chunks/"))).toEqual([]);
+    expect(errors).toEqual([]);
+  });
+
+  test("chunks/live.js blocked: the first data stays, one notice says updates stopped, reload() retries and polls", async ({
+    page,
+  }) => {
+    const errors = await guard(page);
+    const polls = feedRequests(page);
+    const asked: string[] = [];
+    let offline = true;
+    await serveSite(page, site, pageHtml("/my-site/js/maplibre-yaml/register.browser.js", liveDoc(POLLING_SOURCE)));
+    // Registered after serveSite: Playwright tries the newest route first.
+    await page.route("**/chunks/live.js*", (route) => {
+      asked.push(new URL(route.request().url()).search || "(no query)");
+      return offline ? route.abort("blockedbyclient") : route.fallback();
+    });
+    await page.goto("/my-site/index.html", { waitUntil: "domcontentloaded" });
+    await page.evaluate(() => (document.getElementById("map") as any).mapReady());
+    // The first data is drawn…
+    await waitForLayer(page, "map", "quakes-points");
+    // …and one line says its updates stopped, naming the file.
+    const notice = page.locator("#map .ml-map-notice");
+    await expect(notice).toContainText(/`?quakes-points`? shows the data it loaded first, but its live updates stopped/, { timeout: 30_000 });
+    await expect(notice).toContainText(/chunks\/live\.js/);
+    await expect(notice).not.toContainText("has no data");
+    expect((await notice.innerText()).match(/live updates stopped/g)).toHaveLength(1);
+    // No poll ran.
+    const firstLoads = polls();
+    await page.waitForTimeout(2500);
+    expect(polls()).toBe(firstLoads);
+    const failedAsks = asked.length;
+    expect(failedAsks).toBeGreaterThan(0);
+    await page.screenshot({ path: "e2e/results/lazy_live_blocked.png" });
+
+    // Back online: reload() asks for the file again under a URL of its own,
+    // the poll starts, and the line goes once fresh data lands.
+    offline = false;
+    await page.evaluate(() => (document.getElementById("map") as any).reload());
+    await expect.poll(() => asked.at(-1), { timeout: 10_000 }).toBe(`?retry=${failedAsks}`);
+    await expect.poll(polls, { timeout: 10_000 }).toBeGreaterThan(firstLoads + 1);
+    await expect(page.locator("#map .ml-map-notice")).toHaveCount(0);
     expect(errors).toEqual([]);
   });
 });

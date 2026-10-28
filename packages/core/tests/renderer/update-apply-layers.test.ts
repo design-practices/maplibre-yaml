@@ -552,7 +552,7 @@ describe("applyOps: existence reconciliation (KTD1)", () => {
       layer("b"),
     ]);
     await render(h, applied);
-    const stop = vi.spyOn((h.layerManager as any).pollingManager, "stop");
+    const stop = vi.spyOn((h.layerManager as any).live.polling, "stop");
     h.map.off.mockClear();
 
     const summary = await update(h, applied, doc([layer("b")]));

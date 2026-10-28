@@ -60,6 +60,9 @@ const LIBRARY_MARKERS: Record<string, string[]> = {
   // The converter's loss rules and printers (convert/): only `convertDocument`
   // loads them, and no element imports it.
   convert: ["and leaving this value out would change the document", "is written out in full", "# yaml-language-server: $schema="],
+  // Live data (data/live): the stream connections' and the poll's and the
+  // merge's own errors — a static page downloads none of them.
+  live: ["Failed to connect to SSE stream", "WebSocket connection error", "Interval must be at least 1000ms", "updateKey is required for merge strategy"],
 };
 
 /** geotiff's codecs, in chunks/cog-<codec>.js (ml-cnv.11): never in a main bundle either. */
@@ -97,7 +100,7 @@ function staticClosure(files: string[]): string[] {
 describe("the seam", () => {
   it("names the readers this version loads on demand", () => {
     expect([...SEAM_NAMES].sort()).toEqual(
-      ["cog", "convert", "flatgeobuf", "geoparquet", "geoparquet-brotli", "pmtiles", "protomaps-basemap", "toml", "update"]
+      ["cog", "convert", "flatgeobuf", "geoparquet", "geoparquet-brotli", "live", "pmtiles", "protomaps-basemap", "toml", "update"]
     );
     // Every on-demand library has markers, so the "not in the main bundle"
     // checks below cover all of them.
@@ -151,6 +154,31 @@ describe("the seam", () => {
             : []
       );
     expect(importers("src").sort()).toEqual(["src/index.ts"]);
+  });
+
+  it("the live-data chunk's sources import nothing of core but retry-manager and the event emitter (KTD6)", () => {
+    // Everything data/live/index.ts reaches, by path from src/.
+    const chunkFiles = [
+      "data/live/index.ts",
+      "data/polling-manager.ts",
+      "data/streaming/stream-manager.ts",
+      "data/streaming/sse-connection.ts",
+      "data/streaming/websocket-connection.ts",
+      "data/streaming/base-connection.ts",
+      "data/merge/data-merger.ts",
+    ];
+    // Leaf modules the CDN chunk carries a copy of (about 1.1 KB raw).
+    const allowed = new Set(["data/retry-manager.ts", "utils/event-emitter.ts"]);
+    for (const file of chunkFiles) {
+      const code = readFileSync(join(PKG_ROOT, "src", file), "utf8").replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+      const values = [...code.matchAll(/^(?:import|export)\s+(?!type\b)[^;]*?from\s*["']([^"']+)["']/gm)].map((m) => m[1]!);
+      const reached = values.map((spec) => relative(join(PKG_ROOT, "src"), resolve(PKG_ROOT, "src", dirname(file), spec)).split(sep).join("/") + ".ts");
+      expect(reached.filter((f) => !chunkFiles.includes(f) && !allowed.has(f)), file).toEqual([]);
+    }
+    // The renderer reaches the managers only through the seam (types otherwise).
+    const manager = readFileSync(join(PKG_ROOT, "src/renderer/layer-manager.ts"), "utf8");
+    const values = [...manager.matchAll(/^import\s+(?!type\b)[^;]*?from\s*["']([^"']+)["']/gm)].map((m) => m[1]!);
+    expect(values.filter((s) => /polling-manager|streaming|merge|loading-manager/.test(s))).toEqual([]);
   });
 
   it("describes where each build puts the readers as tsup.config.ts does (ml-cnv.19)", () => {
@@ -269,6 +297,13 @@ describe.skipIf(!built)("npm build: readers in dist/formats/, reached by import(
    * codec sub-chunks share code with formats/cog.js) load on demand too.
    */
   const npmFiles = built ? staticClosure(entries) : entries;
+  /**
+   * What only `index.js` reaches: the public API still exports the live
+   * managers (data/index, ui/index; KTD6), so their code is reachable from
+   * it statically. Every other entry — `register.js`, `components/index.js`
+   * — must not reach them.
+   */
+  const indexOnly = built ? new Set(staticClosure(["index.js"]).filter((f) => !staticClosure(entries.filter((e) => e !== "index.js")).includes(f))) : new Set<string>();
 
   it("emits each reader as its own module", () => {
     for (const file of formatFiles) expect(existsSync(join(DIST, file)), file).toBe(true);
@@ -280,6 +315,7 @@ describe.skipIf(!built)("npm build: readers in dist/formats/, reached by import(
     for (const file of npmFiles) {
       const code = read(file);
       for (const [name, markers] of Object.entries(LIBRARY_MARKERS)) {
+        if (name === "live" && indexOnly.has(file)) continue;
         for (const marker of markers) expect(code.includes(marker), `${file} has ${name}: ${marker}`).toBe(false);
       }
       for (const marker of CODEC_MARKERS) expect(code.includes(marker), `${file} has a cog codec: ${marker}`).toBe(false);
@@ -288,5 +324,12 @@ describe.skipIf(!built)("npm build: readers in dist/formats/, reached by import(
     }
     const dynamic = npmFiles.flatMap((f) => dynamicImports(read(f)));
     for (const name of SEAM_NAMES) expect(dynamic).toContain(`../formats/${name}.js`);
+  });
+
+  it("the live managers reach index.js only, as the public API's exports (KTD6)", () => {
+    // Not vacuous: index.js does carry them, through a module no other entry loads.
+    const carriers = [...indexOnly].filter((f) => LIBRARY_MARKERS.live!.some((m) => read(f).includes(m)));
+    // (The check above holds every other entry's closure to all the markers.)
+    expect(carriers.length).toBeGreaterThan(0);
   });
 });

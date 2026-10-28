@@ -4,8 +4,9 @@
  *
  * @description
  * The third-party readers behind the cloud-native formats (pmtiles,
- * flatgeobuf, and those still to come) and the library's own update engine
- * (renderer/update, live documents) are **not** part of the main bundle.
+ * flatgeobuf, and those still to come) and the library's own on-demand code
+ * (the update engine for live documents, the TOML reader, the converter, and
+ * the live-data polling and streaming) are **not** part of the main bundle.
  * Each is one literal `import()` in {@link LOADERS}, and the build turns each
  * into a file of its own that a page downloads only when a document uses
  * that format — or, for the engine, when a running map is first given a
@@ -103,6 +104,10 @@ const LOADERS = {
   // `convertDocument` (`mlym convert`, the playground's language toggle).
   // No element imports `convertDocument`, so a page never asks for it.
   convert: () => import("../convert/chunk"),
+  // Live data (data/live, bundle headroom): polling, streaming and the merge
+  // strategies, awaited by `LayerManager` once a source with `refresh:` has
+  // its first data on the map. A static document never asks for it.
+  live: () => import("../data/live/index"),
 } satisfies Record<string, () => Promise<unknown>>;
 
 /** The library module behind each on-demand name. */
