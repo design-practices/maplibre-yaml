@@ -167,3 +167,23 @@ describe("YAML flow mappings", () => {
     expect(parseYAML(yaml)).toEqual(JSON.parse(doc));
   });
 });
+
+describe("the schema hint comment", () => {
+  it("is left out when the hint is not one token (a line break would start lines of document)", async () => {
+    const { printYaml } = await import("../../src/convert/print-yaml");
+    const { printToml } = await import("../../src/convert/print-toml");
+    const root = { kind: "map" as const, entries: [{ key: "id", value: { kind: "string" as const, value: "original" } }] };
+    for (const bad of ['x\nid = "attacker"', "x\rid: attacker", "a b", "a\tb", "a\u0001b", "a b"]) {
+      expect(printYaml(root, bad), JSON.stringify(bad)).toBe("id: original\n");
+      expect(printToml(root, bad), JSON.stringify(bad)).toBe('id = "original"\n');
+    }
+    expect(printToml(root, "https://x.test/s.json")).toBe('#:schema https://x.test/s.json\nid = "original"\n');
+  });
+
+  it("JSON writes one $schema when the document has both a modeline and a $schema that stays data", async () => {
+    const doc = `# yaml-language-server: $schema=https://x.test/s.json\n$schema: "a b"\ntype: map\nid: m\n`;
+    const json = await text(doc, "json", "yaml");
+    expect(JSON.parse(json)).toEqual({ $schema: "a b", type: "map", id: "m" });
+    expect(json.match(/"\$schema"/g)).toHaveLength(1);
+  });
+});

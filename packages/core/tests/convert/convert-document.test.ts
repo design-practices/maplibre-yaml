@@ -233,6 +233,37 @@ describe("schema hints are translated, not lost", () => {
   });
 });
 
+describe("a $schema that is not one token stays data (no comment-line injection)", () => {
+  // The modeline and the `#:schema` directive are one-line comments: a hint
+  // holding a line break would write the rest of the value as document lines.
+  const BAD = {
+    newline: 'x\nid = "attacker"',
+    "carriage return": "x\rid: attacker",
+    tab: "x\tid",
+    space: "https://example.com/a schema.json",
+    "control character": "x\u0001y",
+  };
+  const sources = (schema: string): Record<"yaml" | "json" | "toml", string> => ({
+    json: `${JSON.stringify({ $schema: schema, type: "map", id: "original" }, null, 2)}\n`,
+    yaml: `$schema: ${JSON.stringify(schema)}\ntype: map\nid: original\n`,
+    toml: `"$schema" = ${JSON.stringify(schema)}\ntype = "map"\nid = "original"\n`,
+  });
+
+  for (const [name, schema] of Object.entries(BAD)) {
+    for (const from of ["yaml", "json", "toml"] as const) {
+      for (const to of ["yaml", "json", "toml"] as const) {
+        it(`${name}: ${from} → ${to} reads back as the input`, async () => {
+          const input = sources(schema)[from];
+          const out = ok(await convertDocument(input, { from, to }));
+          const back = authored(out.text, to) as Record<string, unknown>;
+          expect(back).toEqual({ $schema: schema, type: "map", id: "original" });
+          expect(back).toEqual(authored(input, from));
+        });
+      }
+    }
+  }
+});
+
 describe("number limits", () => {
   it("fails on inf or nan going to JSON, naming the path, and writes them in YAML and TOML", async () => {
     const doc = yamlMap("    paint: { circle-radius: .inf, circle-blur: .nan }\n");

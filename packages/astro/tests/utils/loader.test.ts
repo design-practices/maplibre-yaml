@@ -818,6 +818,58 @@ describe("JSON and TOML documents", () => {
     expect(await loadYAML(emptyToml)).toEqual({});
   });
 
+  it("loadYAML: a TOML integer past 2^53 loads, as YAML and JSON integers do", async () => {
+    const tomlPath = join(testDir, "big.toml");
+    await writeFile(tomlPath, 'id = "big"\ncount = 9007199254740993\n');
+    const yamlPath = join(testDir, "big.yaml");
+    await writeFile(yamlPath, "id: big\ncount: 9007199254740993\n");
+    expect(await loadYAML(tomlPath)).toEqual({ id: "big", count: 9007199254740992 });
+    expect(await loadYAML(tomlPath)).toEqual(await loadYAML(yamlPath));
+  });
+
+  it("loadYAML: the same data in YAML, JSON and TOML loads to the same value, root $schema and !html included", async () => {
+    const schema = "https://docs.maplibre-yaml.org/schema/latest/map.schema.json";
+    const files = {
+      "same.yaml": `$schema: ${schema}\ntitle: Test\nwhen: 2024-01-02\npopup: !html "<b>Hi</b>"\nnested:\n  items: [a, b]\n`,
+      "same.json": JSON.stringify({
+        $schema: schema,
+        title: "Test",
+        when: "2024-01-02",
+        popup: { $html: "<b>Hi</b>" },
+        nested: { items: ["a", "b"] },
+      }),
+      "same.toml": `"$schema" = "${schema}"\ntitle = "Test"\nwhen = 2024-01-02\npopup = { "$html" = "<b>Hi</b>" }\n\n[nested]\nitems = ["a", "b"]\n`,
+    };
+    const values: unknown[] = [];
+    for (const [name, text] of Object.entries(files)) {
+      await writeFile(join(testDir, name), text);
+      values.push(await loadYAML(join(testDir, name)));
+    }
+    expect(values[0]).toEqual({
+      $schema: schema,
+      title: "Test",
+      when: "2024-01-02",
+      popup: { $html: "<b>Hi</b>" },
+      nested: { items: ["a", "b"] },
+    });
+    expect(values[1]).toEqual(values[0]);
+    expect(values[2]).toEqual(values[0]);
+  });
+
+  it("loadYAML: a TOML $schema holding a line break gains no keys", async () => {
+    const tomlPath = join(testDir, "inject.toml");
+    await writeFile(tomlPath, '"$schema" = "x\\nid = \\"attacker\\""\nid = "original"\n');
+    expect(await loadYAML(tomlPath)).toEqual({ $schema: 'x\nid = "attacker"', id: "original" });
+  });
+
+  it("loadYAML: a YAML merge fan-out is refused, as core refuses it", async () => {
+    const yamlPath = join(testDir, "fanout.yaml");
+    await writeFile(yamlPath, "a: &a { x: 1 }\nb: &b { y: 2 }\nc:\n  <<: [*a, *b]\n");
+    const error = (await loadYAML(yamlPath).catch((e) => e)) as YAMLLoadError;
+    expect(error).toBeInstanceOf(YAMLLoadError);
+    expect(error.message).toMatch(/Unsupported YAML: a merge key with a sequence/);
+  });
+
   it("loadYAML: a TOML syntax error says TOML, with its line", async () => {
     const tomlPath = join(testDir, "bad.toml");
     await writeFile(tomlPath, 'title = "Test"\ncount = = 3\n');

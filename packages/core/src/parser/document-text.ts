@@ -224,9 +224,14 @@ function extensionFormat(name: string | undefined, isUrl: boolean): DocumentForm
 /**
  * Decide the format. Explicit beats every signal; the script type beats the
  * URL, which beats the response URL, which beats the content type; text with
- * no signal is sniffed.
+ * no signal is sniffed. The text has no byte-order mark.
+ *
+ * @internal Also for `readDocumentValue`.
  */
-function detectDocumentFormat(text: string, options: ParseDocumentTextOptions): DocumentFormat {
+export function detectDocumentFormat(
+  text: string,
+  options: Pick<ParseDocumentTextOptions, "format" | "signals">
+): DocumentFormat {
   return formatNamed(options.format) ?? signalledFormat(options.signals ?? {}) ?? sniffFormat(text);
 }
 
@@ -259,11 +264,14 @@ const YAML_KEY_LINE = /^(?:[\w$][\w$.-]*|"[^"\n]*"|'[^'\n]*')[ \t]*:(?:[ \t]|$)/
 
 /**
  * Whether text reads as TOML: a `key = value` line and no column-0 `key:`
- * line. A `[name]` line on its own is not enough, because it is also a YAML
- * flow sequence.
+ * line outside a TOML multi-line string (`"""…"""`, `'''…'''`), where a
+ * `Source: …` line is text. A `[name]` line on its own is not enough,
+ * because it is also a YAML flow sequence.
  */
 function looksLikeToml(text: string): boolean {
-  return TOML_ASSIGNMENT.test(text) && !YAML_KEY_LINE.test(text);
+  if (!TOML_ASSIGNMENT.test(text)) return false;
+  const outside = text.replace(/"""[\s\S]*?"""|'''[\s\S]*?'''/g, '""');
+  return !YAML_KEY_LINE.test(outside);
 }
 
 function sniffFormat(text: string): DocumentFormat {
@@ -275,9 +283,43 @@ function sniffFormat(text: string): DocumentFormat {
 // YAML and JSON
 // ---------------------------------------------------------------------------
 
-function readYamlOrJson(text: string, kind: DocumentKind, format: "yaml" | "json"): Outcome {
+/** What scanning JSON-shaped text found, or undefined for YAML and bare JSON scalars. */
+type JsonScan = ReturnType<typeof scanJson> | undefined;
+
+/**
+ * Scan JSON text for what JSON rejects and YAML reads quietly (a comment, an
+ * unquoted `#…`): its `problem` is the error to report before parsing.
+ *
+ * @internal Also for `readDocumentValue`.
+ */
+export function scanJsonText(text: string, format: DocumentFormat): JsonScan {
   const jsonShaped = format === "json" && /[{[]/.test(firstSignificant(text));
-  const tokens = jsonShaped ? scanJson(text) : undefined;
+  return jsonShaped ? scanJson(text) : undefined;
+}
+
+/** A scan's problem as an error, if it found one. */
+export function scanProblem(scan: JsonScan): ParseError | undefined {
+  return scan?.problem && { path: "", message: scan.problem.message, ...scan.problem.at };
+}
+
+/**
+ * YAML-parser errors from YAML or JSON text, worded for the format: JSON
+ * spelling and the unquoted-string hint for JSON, the TOML mislabel hint for
+ * YAML that looks like TOML.
+ *
+ * @internal Also for `readDocumentValue`.
+ */
+export function wordYamlOrJsonErrors(text: string, format: "yaml" | "json", errors: ParseError[], scan: JsonScan): ParseError[] {
+  if (format === "json") {
+    const worded = wordForJson(errors).map((err) => ({ ...err, message: spellForJson(err.message) }));
+    const hint = scan && unquotedHint(worded[0], scan.words);
+    return hint ? withHint(worded, hint) : worded;
+  }
+  return looksLikeToml(text) ? withHint(errors, mislabelHint("looks like", "TOML", "YAML")) : errors;
+}
+
+function readYamlOrJson(text: string, kind: DocumentKind, format: "yaml" | "json"): Outcome {
+  const tokens = scanJsonText(text, format);
   if (tokens?.problem) return failure(tokens.problem.message, tokens.problem.at);
 
   const outcome: Outcome =
@@ -288,14 +330,7 @@ function readYamlOrJson(text: string, kind: DocumentKind, format: "yaml" | "json
         : YAMLParser.safeParseAny(text);
   if (outcome.result.success) return outcome;
 
-  let errors = outcome.result.errors;
-  if (format === "json") {
-    errors = wordForJson(errors).map((err) => ({ ...err, message: spellForJson(err.message) }));
-    const hint = tokens && unquotedHint(errors[0], tokens.words);
-    if (hint) errors = withHint(errors, hint);
-  } else if (looksLikeToml(text)) {
-    errors = withHint(errors, mislabelHint("looks like", "TOML", "YAML"));
-  }
+  const errors = wordYamlOrJsonErrors(text, format, outcome.result.errors, tokens);
   return { blockType: outcome.blockType, result: { ...outcome.result, errors } };
 }
 
@@ -445,7 +480,7 @@ function unquotedHint(err: ParseError | undefined, words: JsonWord[]): string | 
 // ---------------------------------------------------------------------------
 
 /** The `toml` chunk's exports. */
-type TomlReader = Awaited<ReturnType<typeof getDecoder<"toml">>>;
+export type TomlReader = Awaited<ReturnType<typeof getDecoder<"toml">>>;
 
 /** The layer and `config` keys, for the TOML ordering hint (read from the schemas once). */
 let knownKeys: { layer: string[]; config: string[] } | undefined;
@@ -483,11 +518,17 @@ function readToml(toml: TomlReader, text: string, kind: DocumentKind): Outcome {
  */
 function withTomlLabelHint(text: string, outcome: Outcome): Outcome {
   if (outcome.result.success) return outcome;
+  return { ...outcome, result: { ...outcome.result, errors: withTomlLabelHintOn(text, outcome.result.errors) } };
+}
+
+/**
+ * {@link withTomlLabelHint} on a failed TOML read's errors.
+ *
+ * @internal Also for `readDocumentValue`.
+ */
+export function withTomlLabelHintOn(text: string, errors: ParseError[]): ParseError[] {
   const doc = parseDocument(text, YAML_PARSE_OPTIONS);
-  if (doc.errors.length > 0 || !isMap(doc.contents)) return outcome;
+  if (doc.errors.length > 0 || !isMap(doc.contents)) return errors;
   const is = firstSignificant(text) === "{" ? "JSON" : "YAML";
-  return {
-    ...outcome,
-    result: { ...outcome.result, errors: withHint(outcome.result.errors, mislabelHint("reads as", is, "TOML")) },
-  };
+  return withHint(errors, mislabelHint("reads as", is, "TOML"));
 }

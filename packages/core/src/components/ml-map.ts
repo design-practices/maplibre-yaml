@@ -733,7 +733,16 @@ export class MLMap extends BaseElement {
     if (!this.initialized || value === null) {
       this._config = typeof value === "string" ? null : value;
       this.textBeforeConnect = text;
-      if (value === null) this.appliedConfigKey = null;
+      if (value === null) {
+        this.appliedConfigKey = null;
+        if (this.initialized) {
+          // Newer than any text still being read (a TOML document waiting
+          // for its reader): that read resolves superseded instead of
+          // bringing the cleared document back.
+          ++this.generation;
+          this.pendingText = null;
+        }
+      }
       return;
     }
 

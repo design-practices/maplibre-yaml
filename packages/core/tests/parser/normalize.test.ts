@@ -263,6 +263,37 @@ describe("date values", () => {
     expect(props).toEqual({ at: "2024-01-02T00:00:00.000Z", local: "2024-01-02", list: ["1970-01-01T00:00:00.000Z"] });
   });
 
+  it("returns the same object when there is no date in it", () => {
+    const input = { a: [{ b: 1 }, "x"], c: { d: null, e: [] }, ["__proto__"]: { f: 1 } };
+    expect(normalizeDates(input)).toBe(input);
+    const list = [1, { a: [2] }];
+    expect(normalizeDates(list)).toBe(list);
+  });
+
+  it("copies only the path to a date; untouched siblings keep their identity", () => {
+    const sibling = { keep: [1, 2] };
+    const other = [{ x: 1 }];
+    const input = { a: { b: [sibling, { when: new Date(0) }], c: other }, d: sibling };
+    const out = normalizeDates(input) as any;
+    expect(out).not.toBe(input);
+    expect(out.a).not.toBe(input.a);
+    expect(out.a.b).not.toBe(input.a.b);
+    expect(out.a.b[1]).toEqual({ when: "1970-01-01T00:00:00.000Z" });
+    expect(out.a.b[0]).toBe(sibling);
+    expect(out.a.c).toBe(other);
+    expect(out.d).toBe(sibling);
+    expect(input.a.b[1]!.when).toBeInstanceOf(Date);
+  });
+
+  it("keeps a __proto__ key as data in a copied object", () => {
+    const input = JSON.parse('{"__proto__": {"polluted": true}, "when": 0}');
+    input.when = new Date(0);
+    const out = normalizeDates(input) as Record<string, unknown>;
+    expect(Object.getPrototypeOf(out)).toBe(Object.prototype);
+    expect(Object.getOwnPropertyDescriptor(out, "__proto__")?.value).toEqual({ polluted: true });
+    expect(({} as any).polluted).toBeUndefined();
+  });
+
   it("walks arrays and objects into a copy, leaving the input alone", () => {
     const input = { a: [{ d: new Date(0) }], b: { toJSON: () => "text" }, c: 1 };
     expect(normalizeDates(input)).toEqual({ a: [{ d: "1970-01-01T00:00:00.000Z" }], b: "text", c: 1 });
@@ -289,6 +320,24 @@ describe("normalizeDocumentValue (exported for values parsed elsewhere)", () => 
     });
     expect(input.config.locale.Popup.Close).toBe("Fermer");
     expect(input.$schema).toBeDefined();
+  });
+
+  it("leaves an input with no dates alone too (no root $schema dropped, no locale flattened in it)", async () => {
+    const { normalizeDocumentValue } = await import("../../src/index");
+    const input = {
+      $schema: "https://docs.maplibre-yaml.org/schema/latest/map.schema.json",
+      type: "map",
+      config: { locale: { Popup: { Close: "Fermer" } } },
+      runtime: { map: { locale: { Popup: { Close: "Fermer" } } } },
+    };
+    const before = structuredClone(input);
+    const { value } = normalizeDocumentValue(input);
+    expect(input).toEqual(before);
+    expect(value).toEqual({
+      type: "map",
+      config: { locale: { "Popup.Close": "Fermer" } },
+      runtime: { map: { locale: { "Popup.Close": "Fermer" } } },
+    });
   });
 
   it("reports a collision with its path as segments", async () => {

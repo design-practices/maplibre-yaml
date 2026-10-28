@@ -227,6 +227,26 @@ describe("the sniff", () => {
     expect(out.result.success).toBe(true);
   });
 
+  it("TOML whose multi-line string holds a column-0 `key:` line is still TOML", async () => {
+    for (const quote of ['"""', "'''"]) {
+      const toml = TOML_MAP.replace(
+        'id = "city"',
+        `id = "city"\ndescription = ${quote}\nEarthquakes of the past week.\nSource: NASA earthquake feed\n${quote}`
+      );
+      const out = await parseDocumentText(toml, { kind: "map" });
+      expect(out.format, quote).toBe("toml");
+      expect(out.errors, quote).toEqual([]);
+      expect(out.success, quote).toBe(true);
+    }
+  });
+
+  it('YAML whose block scalar holds """ stays YAML', async () => {
+    const yaml = YAML_MAP.replace("id: city", 'id: city\ndescription: |\n  """\n  x = 1\n  """');
+    const out = await parseDocumentText(yaml);
+    expect(out.format).toBe("yaml");
+    expect(out.result.success).toBe(true);
+  });
+
   it("a YAML comment before a flow map stays YAML", async () => {
     const yaml = `# yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/map.schema.json
 { type: map, id: city, config: { center: [0, 0], zoom: 2, mapStyle: "${STYLE}" }, layers: [] }

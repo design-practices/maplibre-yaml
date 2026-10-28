@@ -1285,4 +1285,26 @@ layers:
     await settle();
     expect(first().update).toHaveBeenCalledTimes(1);
   });
+  it("race: config = null while TOML text waits for its reader drops the read; the same text again reads anew", async () => {
+    const { el } = await mounted();
+    const release = holdTomlReader();
+    const text = TOML("next", 4);
+    el.config = text;
+    // Joins the read the assignment started.
+    const pending = el.update(text);
+    el.config = null;
+    expect(el.config).toBeNull();
+    release();
+    await expect(pending).resolves.toEqual({ outcome: "superseded" });
+    await settle();
+    expect(first().update).not.toHaveBeenCalled();
+    expect(el.config).toBeNull();
+    expect(el.querySelector(".ml-map-error")).toBeNull();
+    // Cleared, so the same text is a new document, not a no-op.
+    el.config = text;
+    await settle();
+    expect(first().update).toHaveBeenCalledTimes(1);
+    expect(el.config?.id).toBe("next");
+  });
 });
+

@@ -31,7 +31,7 @@
  */
 
 import type { AuthoredNode } from "./types";
-import { nonFiniteLabel, numberText } from "./print-yaml";
+import { commentableHint, nonFiniteLabel, numberText } from "./print-yaml";
 import { WIDTH, fillLines } from "./wrap";
 
 type MapNode = Extract<AuthoredNode, { kind: "map" }>;
@@ -112,7 +112,7 @@ function section(name: string, node: AuthoredNode, depth: number): "table" | "ta
 
 /** The document as TOML text, ending in a newline. The root is a table (losses.ts checks). */
 export function printToml(root: MapNode, schema: string | undefined): string {
-  const out: string[] = schema === undefined ? [] : [`#:schema ${schema}`];
+  const out: string[] = commentableHint(schema) ? [`#:schema ${schema}`] : [];
 
   const table = (node: MapNode, path: string[], header: string | undefined, element: boolean) => {
     const values: string[] = [];

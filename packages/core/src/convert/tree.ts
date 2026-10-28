@@ -55,10 +55,22 @@ function htmlOf(entries: AuthoredEntry[]): string | undefined {
   return only?.key === "$html" && only.value.kind === "string" ? only.value.value : undefined;
 }
 
-/** A root map's string `$schema` entry, taken out of the tree. */
+/**
+ * A schema hint the printers can write as a one-line comment: one token, no
+ * whitespace or control character (the shape the modeline and directive
+ * readers above accept). print-yaml.ts and print-toml.ts check the same
+ * shape again; the two halves of the converter share no code.
+ */
+const HINT = /^[^\s\x00-\x1f\x7f-\x9f]+$/;
+
+/**
+ * A root map's string `$schema` entry, taken out of the tree. One that is not
+ * a single token stays an entry, printed as quoted data: written into the
+ * comment, a line break in it would start lines of document.
+ */
 function liftSchema(root: AuthoredNode): string | undefined {
   if (root.kind !== "map") return undefined;
-  const i = root.entries.findIndex((e) => e.key === "$schema" && e.value.kind === "string");
+  const i = root.entries.findIndex((e) => e.key === "$schema" && e.value.kind === "string" && HINT.test(e.value.value));
   if (i === -1) return undefined;
   const [entry] = root.entries.splice(i, 1);
   return (entry!.value as { value: string }).value;

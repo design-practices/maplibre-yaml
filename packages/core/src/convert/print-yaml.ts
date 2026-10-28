@@ -177,9 +177,17 @@ function seqLines(node: Extract<AuthoredNode, { kind: "seq" }>, indent: number):
   });
 }
 
+/**
+ * Whether a schema hint can be written as a one-line comment: one token, no
+ * whitespace or control character. tree.ts lifts only such a hint; this is
+ * the second check, so a line break can never reach a comment line.
+ */
+export const commentableHint = (schema: string | undefined): schema is string =>
+  schema !== undefined && /^[^\s\x00-\x1f\x7f-\x9f]+$/.test(schema);
+
 /** The document as YAML text, ending in a newline. */
 export function printYaml(root: AuthoredNode, schema: string | undefined): string {
-  const head = schema === undefined ? [] : [`# yaml-language-server: $schema=${schema}`];
+  const head = commentableHint(schema) ? [`# yaml-language-server: $schema=${schema}`] : [];
   const body =
     root.kind === "map" && root.entries.length > 0
       ? mapLines(root, 0)

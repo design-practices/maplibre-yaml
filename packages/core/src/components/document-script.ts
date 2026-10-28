@@ -54,13 +54,28 @@ export function findDocumentScript(
 }
 
 /**
- * The "nothing to show" message for an element with no document. When a
- * script of an unsupported type that looks like a document is there
- * (`text/x-yaml5`, `application/json5`), it names that type instead (R5,
- * ml-4cn.9). `module`, `importmap` and `application/ld+json` never count.
+ * The "nothing to show" message for an element with no document. A
+ * supported script that is there but empty says so (with a word on its
+ * `src`, which a document script never loads). Else, when a script of an
+ * unsupported type that looks like a document is there (`text/x-yaml5`,
+ * `application/json5`), it names that type (R5, ml-4cn.9). `module`,
+ * `importmap` and `application/ld+json` never count.
  */
 export function noDocumentMessage(host: Element, directChildrenOnly: boolean, none: string): string {
-  const type = ownScripts(host, directChildrenOnly)
+  const scripts = ownScripts(host, directChildrenOnly);
+  const empty = scripts.find(isDocumentScript);
+  if (empty) {
+    const src = empty.getAttribute("src");
+    return (
+      `The <script type="${empty.getAttribute("type")}"> is empty, so there is no document to show. ` +
+      "Put the document inside the script." +
+      (src !== null
+        ? ` A document script's src attribute is not loaded: to load the file, write <${host.localName} src="${src}">.`
+        : "")
+    );
+  }
+  const type = scripts
+    .filter((el) => !isDocumentScript(el))
     .map((el) => el.getAttribute("type") ?? "")
     .find((type) => /yaml|yml|toml|json5|jsonc/i.test(type));
   return type

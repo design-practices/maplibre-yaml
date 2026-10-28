@@ -497,3 +497,65 @@ describe.skipIf(!process.env["MLYM_SCALE"])("TOML at scale (MLYM_SCALE=1)", () =
     expect(ratio).toBeLessThanOrEqual(1.9);
   }, 300_000);
 });
+
+describe('a key named "<<" is a key in TOML, as in JSON', () => {
+  const STYLE = "https://demotiles.maplibre.org/style.json";
+  const json = JSON.stringify({
+    type: "map",
+    id: "m",
+    config: { center: [0, 0], zoom: 2, mapStyle: STYLE },
+    layers: [
+      {
+        id: "a",
+        type: "circle",
+        source: {
+          type: "geojson",
+          data: {
+            type: "FeatureCollection",
+            features: [
+              {
+                type: "Feature",
+                geometry: { type: "Point", coordinates: [0, 0] },
+                properties: { "<<": { merged: 1 }, kept: 2 },
+              },
+            ],
+          },
+        },
+      },
+    ],
+  });
+  const toml = `type = "map"
+id = "m"
+
+[config]
+center = [0, 0]
+zoom = 2
+mapStyle = "${STYLE}"
+
+[[layers]]
+id = "a"
+type = "circle"
+source = { type = "geojson", data = { type = "FeatureCollection", features = [{ type = "Feature", geometry = { type = "Point", coordinates = [0, 0] }, properties = { "<<" = { merged = 1 }, kept = 2 } }] } }
+`;
+
+  for (const kind of ["map", "any"] as const) {
+    it(`kind ${kind}: the same value and findings`, async () => {
+      const fromJson = await parseDocumentText(json, { kind, format: "json" } as never);
+      const fromToml = await parseDocumentText(toml, { kind, format: "toml" } as never);
+      const strip = (r: any) => {
+        const result = kind === "any" ? r.result : r;
+        return {
+          success: result.success,
+          data: result.data,
+          errors: result.errors.map((e: any) => [e.path, e.message]),
+          warnings: result.warnings.map((w: any) => [w.path, w.message]),
+        };
+      };
+      const a = strip(fromJson);
+      expect(a.errors).toEqual([]);
+      const props = (a.data as any).layers[0].source.data.features[0].properties;
+      expect(Object.getOwnPropertyDescriptor(props, "<<")?.value).toEqual({ merged: 1 });
+      expect(strip(fromToml)).toEqual(a);
+    });
+  }
+});

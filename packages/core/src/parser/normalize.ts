@@ -34,21 +34,47 @@ export function localeOrigin(table: unknown, key: string): string[] {
 }
 
 /**
- * A copy with every date object turned into text: a `Date` gives ISO 8601,
- * and a date-like value gives its own `toJSON()` string (a TOML local date
- * from an Astro collection stays `2024-01-02`).
+ * The value with every date object turned into text: a `Date` gives ISO
+ * 8601, and a date-like value gives its own `toJSON()` string (a TOML local
+ * date from an Astro collection stays `2024-01-02`).
+ *
+ * The input is never changed. An array or plain object with no date in it
+ * comes back as is (the same reference), so a large GeoJSON with no dates is
+ * not copied; one holding a date is copied along the path to it, and its
+ * untouched siblings keep their identity.
  */
 export function normalizeDates(v: unknown): unknown {
   if (v === null || typeof v !== "object") return v;
-  if (Array.isArray(v)) return v.map(normalizeDates);
+  if (Array.isArray(v)) {
+    let out: unknown[] | undefined;
+    for (let i = 0; i < v.length; i++) {
+      const x = normalizeDates(v[i]);
+      if (x !== v[i]) (out ??= v.slice())[i] = x;
+    }
+    return out ?? v;
+  }
   const toJSON = (v as { toJSON?: unknown }).toJSON;
   const text = typeof toJSON === "function" ? toJSON.call(v) : undefined;
   if (typeof text === "string") return text;
   const proto = Object.getPrototypeOf(v);
   if (proto !== Object.prototype && proto !== null) return v;
+  const obj = v as Rec;
+  const keys = Object.keys(obj);
+  let out: Array<[string, unknown]> | undefined;
+  for (let i = 0; i < keys.length; i++) {
+    const k = keys[i]!;
+    // An own `__proto__` key shadows the accessor, so this reads the data.
+    const x = obj[k];
+    const y = normalizeDates(x);
+    if (y !== x && !out) out = keys.slice(0, i).map((p) => [p, obj[p]]);
+    out?.push([k, y]);
+  }
   // fromEntries defines own properties, so a `__proto__` key stays data.
-  return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, normalizeDates(x)]));
+  return out ? Object.fromEntries(out) : v;
 }
+
+/** A shallow copy of a plain object (a `__proto__` key stays data), or the value as is. */
+const shallow = (v: unknown): unknown => (isObject(v) ? Object.fromEntries(Object.entries(v)) : v);
 
 /**
  * Drop a root `$schema` key and flatten nested `locale` tables (v1
@@ -85,7 +111,17 @@ export interface NormalizedValue {
  * changed.
  */
 export function normalizeDocumentValue(input: unknown): NormalizedValue {
-  const value = normalizeDates(input);
+  // normalizeDates keeps what it does not change, so copy what
+  // normalizeDocument rewrites in place: the root and the tables on the way
+  // to each `locale`.
+  const value = shallow(normalizeDates(input));
+  if (isObject(value)) {
+    if (isObject(value.config)) value.config = shallow(value.config);
+    if (isObject(value.runtime)) {
+      const runtime = (value.runtime = shallow(value.runtime) as Rec);
+      if (isObject(runtime.map)) runtime.map = shallow(runtime.map);
+    }
+  }
   const found = normalizeDocument(value);
   return {
     value,

@@ -43,24 +43,15 @@
 import { existsSync } from "fs";
 import { readFile } from "fs/promises";
 import { resolve as resolvePath } from "path";
-import { parse as parseYAML } from "yaml";
 
-// Every document read here goes through core's front door,
-// `parseDocumentText`, which picks the format by the file's extension and
-// words its errors for that format ("TOML syntax error: …"). A copy of the
-// parse options once drifted from core here (it dropped the `!html` tag), so
-// the loader keeps no reading rules of its own. The one direct `yaml` parse
-// left is `readValue`'s raw read of a file `loadYAML`/`loadFromGlob` return
-// unvalidated (any data, not only documents), after the front door has read
-// it, with core's canonical `YAML_PARSE_OPTIONS` imported, never re-declared.
-import {
-  UNREADABLE_CODES,
-  YAML_PARSE_OPTIONS,
-  convertDocument,
-  displayPath,
-  parseDocumentText,
-  stripBom,
-} from "@maplibre-yaml/core";
+// Every document read here goes through core's front doors:
+// `parseDocumentText` to validate, `readDocumentValue` for the raw value
+// `loadYAML`/`loadFromGlob` return unvalidated (any data, not only
+// documents). Both pick the format by the file's extension and word their
+// errors for that format ("TOML syntax error: …"). A copy of the parse
+// options once drifted from core here (it dropped the `!html` tag), so the
+// loader keeps no reading rules of its own and parses nothing itself.
+import { displayPath, parseDocumentText, readDocumentValue } from "@maplibre-yaml/core";
 import { trackFile } from "./dev-watch";
 import type {
   DocumentFormat,
@@ -241,13 +232,11 @@ function overlayEntries(path: string, errors: ParseError[], warnings: Finding[] 
  * failing that, its content) says, without validating it as a document.
  *
  * @remarks
- * The front door reads the text first, so a syntax error is worded for its
- * format and carries its line and column, and YAML gets core's merge-key and
- * alias-expansion guards. The value then comes from the same canonical
- * options: YAML and JSON (which is YAML 1.2) are parsed with
- * `YAML_PARSE_OPTIONS`; TOML is converted by core's converter to YAML (dates
- * stay the text as written; `{"$html" = …}` becomes `!html`) and read back
- * the same way, so all three formats yield the same value for the same data.
+ * Core's `readDocumentValue` reads it: a syntax error is worded for its
+ * format and carries its line and column, YAML gets core's merge fan-out and
+ * alias-expansion guards, and all three formats yield the same value for the
+ * same data (a root `$schema` kept, TOML dates as the text written,
+ * `{"$html" = …}` the same value as `!html`, an integer past 2^53 a number).
  *
  * @throws {YAMLLoadError} When the text is not valid YAML, JSON or TOML.
  */
@@ -255,24 +244,9 @@ async function readValue(
   contents: string,
   path: string
 ): Promise<{ value: unknown; format: DocumentFormat }> {
-  const read = await parseDocumentText(contents, { signals: { fileName: path } });
-  const { format } = read;
-  const unreadable = read.result.errors.filter((e) => e.code !== undefined && UNREADABLE_CODES.has(e.code));
-  if (unreadable.length > 0) throw syntaxError(path, unreadable);
-
-  const body = stripBom(contents);
-  if (format !== "toml") return { value: parseYAML(body, YAML_PARSE_OPTIONS), format };
-  // An empty TOML file is an empty table.
-  if (body.trim() === "") return { value: {}, format };
-  const converted = await convertDocument(body, { from: "toml", to: "yaml" });
-  if (!converted.success) {
-    // A value TOML holds that YAML cannot (an integer past 2^53), by its path.
-    throw syntaxError(
-      path,
-      converted.errors.map(({ path: at, message, line, column }) => ({ path: at, message, line, column }))
-    );
-  }
-  return { value: parseYAML(converted.text, YAML_PARSE_OPTIONS), format };
+  const read = await readDocumentValue(contents, { signals: { fileName: path } });
+  if (!read.success) throw syntaxError(path, read.errors);
+  return { value: read.value, format: read.format };
 }
 
 /** `Could not read map.toml: TOML syntax error: … (line 3, column 7)`, as {@link validationError} frames it. */

@@ -1140,6 +1140,52 @@ data = { type = "FeatureCollection", features = [] }
     quiet.mockRestore();
   });
 
+  it("an empty supported script with a src says the script is empty and its src is not loaded, not that its type is unsupported", async () => {
+    const quiet = vi.spyOn(console, "error").mockImplementation(() => {});
+    const el = document.createElement("ml-map") as MLMap;
+    const script = document.createElement("script");
+    script.setAttribute("type", "text/yaml");
+    script.setAttribute("src", "maps/city.yaml");
+    el.appendChild(script);
+    document.body.appendChild(el);
+    await tick(600);
+    const card = el.querySelector(".ml-map-error")!.textContent!;
+    expect(card).not.toContain("isn't a type maplibre-yaml reads");
+    expect(card).toContain('<script type="text/yaml"> is empty');
+    expect(card).toContain("src attribute is not loaded");
+    expect(card).toContain('<ml-map src="maps/city.yaml">');
+    expect(card).not.toContain("No configuration provided");
+    quiet.mockRestore();
+  });
+
+  it("an empty supported script says it is empty, ahead of an unsupported one after it", async () => {
+    const quiet = vi.spyOn(console, "error").mockImplementation(() => {});
+    const el = withScript("application/json", "");
+    const other = document.createElement("script");
+    other.setAttribute("type", "text/x-yaml5");
+    other.textContent = YAML_DOC;
+    el.appendChild(other);
+    document.body.appendChild(el);
+    await tick(600);
+    const card = el.querySelector(".ml-map-error")!.textContent!;
+    expect(card).toContain('<script type="application/json"> is empty');
+    expect(card).not.toContain("isn't a type maplibre-yaml reads");
+    expect(card).not.toContain("src attribute");
+    quiet.mockRestore();
+  });
+
+  it("a TOML config attribute whose multi-line string holds a column-0 `Source:` line renders (no signal, sniffed)", async () => {
+    const el = document.createElement("ml-map") as MLMap;
+    el.setAttribute(
+      "config",
+      TOML_DOC.replace('id = "formats"', 'id = "formats"\ndescription = """\nQuakes this week.\nSource: NASA earthquake feed\n"""')
+    );
+    document.body.appendChild(el);
+    await settled(el);
+    expect(el.querySelector(".ml-map-error")).toBeNull();
+    expect(el.getDocument()?.id).toBe("formats");
+  });
+
   it.each(["module", "importmap", "application/ld+json"])("a %j script still says 'No configuration provided'", async (type) => {
     const quiet = vi.spyOn(console, "error").mockImplementation(() => {});
     const el = withScript(type, "{}");

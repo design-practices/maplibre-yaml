@@ -66,8 +66,10 @@ function block(node: AuthoredNode, indent: number, prefix: number, top = false):
 
 /** The document as JSON text, ending in a newline. */
 export function printJson(root: AuthoredNode, schema: string | undefined): string {
+  // A `$schema` entry still in the tree (one tree.ts would not lift, being
+  // more than one token) is the authored key; the hint does not repeat it.
   const withSchema: AuthoredNode =
-    schema !== undefined && root.kind === "map"
+    schema !== undefined && root.kind === "map" && !root.entries.some((e) => e.key === "$schema")
       ? { ...root, entries: [{ key: "$schema", value: { kind: "string", value: schema } }, ...root.entries] }
       : root;
   return `${block(withSchema, 0, 0, true)}\n`;

@@ -709,3 +709,79 @@ describe("stories in any format (U4)", () => {
     expect(card).not.toContain("No story provided");
   });
 });
+
+// KTD8, mirroring ml-map-update.test.ts's "one ingest path, the newest wins":
+// a story waiting on the TOML reader never lands over a newer story.
+describe("stories in any format: one ingest path, the newest wins (KTD8)", () => {
+  const STORY_TOML = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../fixtures/toml/story.toml"), "utf8");
+  const realGetDecoder = vi.mocked(getDecoder).getMockImplementation()!;
+  afterEach(() => vi.mocked(getDecoder).mockImplementation(realGetDecoder));
+
+  /** Hold the TOML reader's download until `release()`. */
+  function holdTomlReader(): () => void {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    vi.mocked(getDecoder).mockImplementation(((name: string) =>
+      name === "toml" ? gate.then(() => realGetDecoder(name as never)) : realGetDecoder(name as never)) as never);
+    return release;
+  }
+  const chapterIds = (el: Element) => [...el.querySelectorAll<HTMLElement>(".scrolly-chapter")].map((s) => s.dataset.chapterId);
+  const tomlResponse = () =>
+    Promise.resolve({ ok: true, status: 200, url: "", headers: { get: () => "application/toml" }, text: () => Promise.resolve(STORY_TOML) });
+
+  it("race: a TOML src story waits for its reader, a YAML story is assigned: the YAML shows and the TOML never renders", async () => {
+    const release = holdTomlReader();
+    vi.stubGlobal("fetch", vi.fn(tomlResponse));
+    const el = document.createElement("ml-scrollytelling") as MLScrollytelling;
+    el.setAttribute("src", "stories/ring.toml");
+    document.body.appendChild(el);
+    // The fetch is done; the read waits on the reader.
+    await settle();
+    expect(el.story).toBeNull();
+    el.story = STORY_YAML;
+    await settle();
+    expect(el.story?.id).toBe("tour");
+    expect(chapterIds(el)).toEqual(["one", "two"]);
+    const maps = vi.mocked(MapRenderer).mock.calls.length;
+    release();
+    await settle();
+    await settle();
+    expect(el.story?.id).toBe("tour");
+    expect(chapterIds(el)).toEqual(["one", "two"]);
+    expect(el.querySelector(".scrolly-error")).toBeNull();
+    // No map was built (or rebuilt) for the stale story.
+    expect(vi.mocked(MapRenderer).mock.calls.length).toBe(maps);
+  });
+
+  it("race: TOML text waiting for its reader, then a YAML story: the TOML text is dropped", async () => {
+    const el = document.createElement("ml-scrollytelling") as MLScrollytelling;
+    document.body.appendChild(el);
+    const release = holdTomlReader();
+    el.story = STORY_TOML;
+    el.story = STORY_YAML;
+    await settle();
+    expect(el.story?.id).toBe("tour");
+    release();
+    await settle();
+    await settle();
+    expect(el.story?.id).toBe("tour");
+    expect(chapterIds(el)).toEqual(["one", "two"]);
+  });
+
+  it("the same TOML text assigned twice while it is being read starts one read", async () => {
+    const el = document.createElement("ml-scrollytelling") as MLScrollytelling;
+    document.body.appendChild(el);
+    const release = holdTomlReader();
+    vi.mocked(getDecoder).mockClear();
+    el.story = STORY_TOML;
+    el.setAttribute("config", STORY_TOML);
+    el.story = STORY_TOML;
+    await settle();
+    expect(vi.mocked(getDecoder).mock.calls.filter((c) => c[0] === "toml")).toHaveLength(1);
+    expect(el.story).toBeNull();
+    release();
+    for (let i = 0; i < 200 && !el.querySelector(".scrolly-chapter, .scrolly-error"); i++) await settle(5);
+    expect(el.story?.id).toBe("ring-of-fire");
+    expect(vi.mocked(getDecoder).mock.calls.filter((c) => c[0] === "toml")).toHaveLength(1);
+  });
+});

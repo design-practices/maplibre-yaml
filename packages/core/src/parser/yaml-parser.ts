@@ -321,7 +321,16 @@ export interface ValueSource {
   authoredOrder?: AuthoredOrder;
 }
 
-/** The source of the value being validated, while a value entry point runs with one. */
+/**
+ * The source of the value being validated, while a value entry point runs with one.
+ *
+ * @remarks
+ * Module state, and safe only because the whole validation chain under
+ * {@link readingFrom} is synchronous: nothing awaits between setting it and
+ * restoring it, so no other document's parse can observe it. A value entry
+ * point that ever awaits inside `parse` must thread the source explicitly
+ * instead.
+ */
 let reading: ValueSource | undefined;
 
 /** Run `parse` with every Document it parses answering positions from `source`. */
@@ -574,7 +583,9 @@ export class YAMLParser {
     syntaxError?: ParseError;
   } {
     const lineCounter = new LineCounter();
-    const doc = parseDocument(yaml, { lineCounter, ...YAML_PARSE_OPTIONS });
+    // YAML synthesized from a value read elsewhere (TOML) has no merge keys:
+    // a key the author named `<<` is a key there, as it is in JSON.
+    const doc = parseDocument(yaml, { lineCounter, ...YAML_PARSE_OPTIONS, ...(reading ? { merge: false } : {}) });
     if (reading) registerPositions(doc, reading.positions);
 
     if (doc.errors.length > 0) {
@@ -2199,6 +2210,21 @@ function enumHint(received: string, options: string[]): string | undefined {
   const sameCase = options.find((o) => o.toLowerCase() === lower);
   if (sameCase) return sameCase;
   return suggest(received, options);
+}
+
+/**
+ * Parse YAML (or JSON) text and materialize it with validation's guards —
+ * the merge fan-out refusal and the alias budget ({@link toJSSafe}) — and
+ * nothing else: no normalization, no validation. The syntax error is
+ * {@link YAMLParser}'s own, with its line, column and explanations.
+ *
+ * @internal For `readDocumentValue` (parser/document-value.ts).
+ */
+export function materializeYamlValue(yaml: string): { value: unknown } | { error: ParseError } {
+  // parseToDocument is private to the class's API, not to this module.
+  const { doc, syntaxError } = YAMLParser["parseToDocument"](yaml);
+  if (syntaxError) return { error: syntaxError };
+  return toJSSafe(doc);
 }
 
 /**

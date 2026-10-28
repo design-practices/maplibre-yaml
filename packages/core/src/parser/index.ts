@@ -30,6 +30,11 @@ export type { NormalizedValue } from './normalize';
 // The front door for document text in YAML, JSON or TOML: detects the
 // format and words every error for it.
 export { parseDocumentText, stripBom } from './document-text';
+// A document's raw value in YAML, JSON or TOML, read with the same format
+// detection, wording and guards, but not validated or normalized (Astro's
+// `loadYAML`). Never imported by the elements.
+export { readDocumentValue } from './document-value';
+export type { ReadDocumentValueOptions, DocumentValueResult } from './document-value';
 // Whether JSON or TOML text is a map or story document, judged from the text
 // (the rule `mlym validate` picks a folder's .json and .toml files by).
 export { looksLikeDocumentText } from './document-marks';
