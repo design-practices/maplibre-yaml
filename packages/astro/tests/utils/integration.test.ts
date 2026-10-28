@@ -39,6 +39,20 @@ beforeAll(() => {
       "",
     ].join("\n")
   );
+  writeFileSync(
+    join(dir, "map.toml"),
+    [
+      'type = "map"',
+      'id = "m"',
+      "layers = []",
+      "",
+      "[config]",
+      "center = [0, 0]",
+      "zoom = 2",
+      'mapStyle = "https://tiles.openfreemap.org/styles/liberty"',
+      "",
+    ].join("\n")
+  );
 });
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
@@ -128,6 +142,32 @@ describe("maplibreYaml() integration", () => {
         emit("change", join(dir, "src", "pages", "index.astro"));
         emit("change", join(dir, "src", "content", "never-loaded.yaml"));
         expect(sent).toEqual([]);
+      });
+
+      // JSON and TOML documents (0.10): `<Map src="/maps/city.toml">` reloads
+      // like its YAML twin, and so does a TOML file a loader read.
+      it("JSON and TOML map documents under public/: full reload", () => {
+        const { server, sent, invalidated, emit } = fakeServer(vite6);
+        devReloadPlugin(join(dir, "public")).configureServer(server);
+
+        emit("change", join(dir, "public", "maps", "city.toml"));
+        emit("change", join(dir, "public", "maps", "CITY.TOML"));
+        emit("change", join(dir, "public", "maps", "city.json"));
+        expect(sent.filter((s) => s.channel !== "ssr")).toHaveLength(3);
+        expect(invalidated).toEqual([]);
+      });
+
+      it("a TOML file loadMapConfig read: invalidate server modules + full reload", async () => {
+        await loadMapConfig(join(dir, "map.toml"));
+        const { server, sent, invalidated, emit } = fakeServer(vite6);
+        devReloadPlugin(join(dir, "public")).configureServer(server);
+
+        emit("change", join(dir, "map.toml"));
+        expect(invalidated).toEqual([vite6 ? "ssr" : "mixed"]);
+        expect(sent).toContainEqual({
+          channel: vite6 ? "client" : "ws",
+          payload: { type: "full-reload", path: "*" },
+        });
       });
     });
   }

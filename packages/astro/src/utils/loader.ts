@@ -1,15 +1,18 @@
 /**
- * @file YAML loading utilities for Astro components
+ * @file YAML, JSON and TOML loading utilities for Astro components
  * @module @maplibre-yaml/astro/utils/loader
  *
  * @description
- * Utilities for loading and validating YAML configuration files at build time.
+ * Utilities for loading and validating map and story documents at build time.
  * These functions are designed to be used in Astro component frontmatter to
  * load configurations during the build process.
  *
  * ## Key Features
  *
- * - **Type-safe loading** - Validates YAML against schemas
+ * - **Three formats** - YAML, JSON or TOML, chosen by the file's extension
+ *   (`.yaml`/`.yml`, `.json`, `.toml`); a file with another extension is
+ *   read by its content
+ * - **Type-safe loading** - Validates documents against schemas
  * - **Build-time execution** - Loads files during Astro build
  * - **Error reporting** - Detailed validation errors with paths
  * - **Glob support** - Load multiple files at once
@@ -42,18 +45,31 @@ import { readFile } from "fs/promises";
 import { resolve as resolvePath } from "path";
 import { parse as parseYAML } from "yaml";
 
-// This loader calls `yaml`'s `parse` directly (in `loadYAML`/`loadFromGlob`)
-// rather than delegating to core's `YAMLParser`, so it must parse with core's
-// canonical options — imported, not re-declared. A local copy previously
-// drifted from core: it carried `merge` but not the `!html` tag, so it silently
-// dropped `!html` to a bare string here while core resolved it to `{ $html }`.
-// Importing the single source of truth makes that drift structurally impossible.
-import { YAMLParser, YAML_PARSE_OPTIONS, displayPath } from "@maplibre-yaml/core";
+// Every document read here goes through core's front door,
+// `parseDocumentText`, which picks the format by the file's extension and
+// words its errors for that format ("TOML syntax error: …"). A copy of the
+// parse options once drifted from core here (it dropped the `!html` tag), so
+// the loader keeps no reading rules of its own. The one direct `yaml` parse
+// left is `readValue`'s raw read of a file `loadYAML`/`loadFromGlob` return
+// unvalidated (any data, not only documents), after the front door has read
+// it, with core's canonical `YAML_PARSE_OPTIONS` imported, never re-declared.
+import {
+  YAML_PARSE_OPTIONS,
+  convertDocument,
+  displayPath,
+  parseDocumentText,
+} from "@maplibre-yaml/core";
 import { trackFile } from "./dev-watch";
-import type { MapBlock, ScrollytellingBlock, ParseError } from "@maplibre-yaml/core";
+import type {
+  DocumentFormat,
+  MapBlock,
+  ScrollytellingBlock,
+  ParseError,
+} from "@maplibre-yaml/core";
 
 /**
- * Error thrown when YAML loading or validation fails.
+ * Error thrown when loading or validating a YAML, JSON or TOML file fails.
+ * (The name predates JSON and TOML and is kept for compatibility.)
  *
  * @remarks
  * This error includes detailed validation errors with paths to help
@@ -84,7 +100,7 @@ export interface YAMLLoadIssue extends ParseError {
   reason?: string;
   /** Same as `message` (the field Astro 4/5's overlay reads). */
   text?: string;
-  /** Where in the YAML file (Astro 7's overlay frames it). */
+  /** Where in the file (Astro 7's overlay frames it). */
   loc?: { file: string; line: number; column: number };
   /** Same as `loc` (Astro 4/5's overlay). */
   location?: { file: string; line: number; column: number };
@@ -103,7 +119,7 @@ export class YAMLLoadError extends Error {
   public errors?: YAMLLoadIssue[];
 
   /**
-   * Path to the YAML file that failed to load
+   * Path to the file that failed to load
    */
   public filePath: string;
 
@@ -159,7 +175,7 @@ function describeFinding(finding: Finding): string {
  *   counts the other errors;
  * - `reason` — core's original message, for programmatic use (`path`,
  *   `line` and `column` are unchanged);
- * - `loc` / `location` — `{ file, line, column }` in the YAML file, so the
+ * - `loc` / `location` — `{ file, line, column }` in the file, so the
  *   overlay shows a code frame of the offending line.
  *
  * The top-level `message` lists every error and warning, for `astro build`
@@ -176,9 +192,17 @@ function validationError(
     ...warnings.map((w) => `  warning ${describeFinding(w)}`),
   ];
   const message = `${what} validation failed for ${path}:\n${lines.join("\n")}`;
+  return new YAMLLoadError(message, path, overlayEntries(path, errors, warnings));
+}
+
+/**
+ * The self-describing `errors` entries of {@link validationError}, which
+ * Astro's overlay shows the first of (see there).
+ */
+function overlayEntries(path: string, errors: ParseError[], warnings: Finding[] = []): YAMLLoadIssue[] {
   const file = resolvePath(path);
   const parentOf = (p: string) => p.split(".").slice(0, -1).join(".");
-  const entries = errors.map((error, index) => {
+  return errors.map((error, index) => {
     const related = warnings
       .filter((w) => parentOf(w.path) === parentOf(error.path))
       .map((w) => ` Warning: ${describeFinding(w)}`)
@@ -208,7 +232,54 @@ function validationError(
       ...where,
     };
   });
-  return new YAMLLoadError(message, path, entries);
+}
+
+/** Codes of the errors that mean the text could not be read at all. */
+const UNREADABLE = new Set(["yaml-syntax", "toml-syntax", "yaml-expansion", "yaml-merge"]);
+
+/**
+ * Read a file's text as a plain value, in whichever format its name (or,
+ * failing that, its content) says, without validating it as a document.
+ *
+ * @remarks
+ * The front door reads the text first, so a syntax error is worded for its
+ * format and carries its line and column, and YAML gets core's merge-key and
+ * alias-expansion guards. The value then comes from the same canonical
+ * options: YAML and JSON (which is YAML 1.2) are parsed with
+ * `YAML_PARSE_OPTIONS`; TOML is converted by core's converter to YAML (dates
+ * stay the text as written; `{"$html" = …}` becomes `!html`) and read back
+ * the same way, so all three formats yield the same value for the same data.
+ *
+ * @throws {YAMLLoadError} When the text is not valid YAML, JSON or TOML.
+ */
+async function readValue(
+  contents: string,
+  path: string
+): Promise<{ value: unknown; format: DocumentFormat }> {
+  const read = await parseDocumentText(contents, { signals: { fileName: path } });
+  const { format } = read;
+  const unreadable = read.result.errors.filter((e) => e.code !== undefined && UNREADABLE.has(e.code));
+  if (unreadable.length > 0) throw syntaxError(path, unreadable);
+
+  const body = contents.charCodeAt(0) === 0xfeff ? contents.slice(1) : contents;
+  if (format !== "toml") return { value: parseYAML(body, YAML_PARSE_OPTIONS), format };
+  // An empty TOML file is an empty table.
+  if (body.trim() === "") return { value: {}, format };
+  const converted = await convertDocument(body, { from: "toml", to: "yaml" });
+  if (!converted.success) {
+    // A value TOML holds that YAML cannot (an integer past 2^53), by its path.
+    throw syntaxError(
+      path,
+      converted.errors.map(({ path: at, message, line, column }) => ({ path: at, message, line, column }))
+    );
+  }
+  return { value: parseYAML(converted.text, YAML_PARSE_OPTIONS), format };
+}
+
+/** `Could not read map.toml: TOML syntax error: … (line 3, column 7)`, as {@link validationError} frames it. */
+function syntaxError(path: string, errors: ParseError[]): YAMLLoadError {
+  const lines = errors.map((e) => `  error   ${describeFinding(e)}`);
+  return new YAMLLoadError(`Could not read ${path}:\n${lines.join("\n")}`, path, overlayEntries(path, errors));
 }
 
 /**
@@ -240,16 +311,18 @@ function missingFileHint(error: unknown): string {
 }
 
 /**
- * Load and parse a YAML file with optional schema validation.
+ * Load and parse a YAML, JSON or TOML file with optional schema validation.
  *
- * @param path - Absolute or relative path to YAML file
+ * @param path - Absolute or relative path to the file
  * @param schema - Optional Zod schema for validation
  * @returns Parsed and validated configuration object
  * @throws {YAMLLoadError} If file cannot be read or validation fails
  *
  * @remarks
- * This is a generic loader that can be used with any YAML file and
- * optional Zod schema. For map and scrollytelling configs, use the
+ * This is a generic loader that can be used with any YAML, JSON or TOML file
+ * and optional Zod schema; the extension picks the format (`.yaml`/`.yml`,
+ * `.json`, `.toml`), and a syntax error names that format with its line and
+ * column. For map and scrollytelling configs, use the
  * specialized loaders {@link loadMapConfig} and {@link loadScrollytellingConfig}.
  *
  * ## File Path Resolution
@@ -293,18 +366,8 @@ export async function loadYAML<T = unknown>(
     // Read file contents
     const contents = await readFile(path, "utf-8");
 
-    // Parse YAML
-    let parsed: unknown;
-    try {
-      parsed = parseYAML(contents, YAML_PARSE_OPTIONS);
-    } catch (error) {
-      throw new YAMLLoadError(
-        `YAML syntax error: ${error instanceof Error ? error.message : String(error)}`,
-        path,
-        [],
-        { cause: error },
-      );
-    }
+    // Parse in the file's format (a syntax error throws a YAMLLoadError)
+    const { value: parsed } = await readValue(contents, path);
 
     // Validate with schema if provided
     if (schema) {
@@ -338,16 +401,19 @@ export async function loadYAML<T = unknown>(
 }
 
 /**
- * Load and validate a map configuration from YAML file.
+ * Load and validate a map configuration from a YAML, JSON or TOML file.
  *
- * @param path - Path to YAML file containing map configuration
+ * @param path - Path to the file containing the map configuration; its
+ *   extension (`.yaml`/`.yml`, `.json`, `.toml`) picks the format
  * @returns Validated MapBlock configuration
  * @throws {YAMLLoadError} If file cannot be read or validation fails
  *
  * @remarks
- * This function loads a YAML file and validates it against the MapBlockSchema
- * from @maplibre-yaml/core. It ensures the configuration is valid before
- * returning it.
+ * This function loads a map document and validates it against the MapBlockSchema
+ * from @maplibre-yaml/core, through core's `parseDocumentText`, so its
+ * errors (with their lines and columns) are the ones `mlym validate` and the
+ * `<ml-map>` error card show for the same file. It ensures the configuration
+ * is valid before returning it.
  *
  * ## Validation
  *
@@ -390,8 +456,8 @@ export async function loadMapConfig(path: string): Promise<MapBlock> {
     // Read file contents
     const contents = await readFile(path, "utf-8");
 
-    // Parse and validate using YAMLParser
-    const result = YAMLParser.safeParseMapBlock(contents);
+    // Parse in the file's format and validate, as every surface does
+    const result = await parseDocumentText(contents, { kind: "map", signals: { fileName: path } });
 
     if (!result.success) {
       throw validationError("Map configuration", path, result.errors, result.warnings);
@@ -417,15 +483,17 @@ export async function loadMapConfig(path: string): Promise<MapBlock> {
 }
 
 /**
- * Load and validate a scrollytelling configuration from YAML file.
+ * Load and validate a scrollytelling configuration from a YAML, JSON or TOML file.
  *
- * @param path - Path to YAML file containing scrollytelling configuration
+ * @param path - Path to the file containing the scrollytelling configuration;
+ *   its extension (`.yaml`/`.yml`, `.json`, `.toml`) picks the format
  * @returns Validated ScrollytellingBlock configuration
  * @throws {YAMLLoadError} If file cannot be read or validation fails
  *
  * @remarks
- * This function loads a YAML file and validates it against the
- * ScrollytellingBlockSchema from @maplibre-yaml/core. It ensures all
+ * This function loads a story document and validates it against the
+ * ScrollytellingBlockSchema from @maplibre-yaml/core, through core's
+ * `parseDocumentText`, like {@link loadMapConfig}. It ensures all
  * chapters, actions, and configurations are valid.
  *
  * ## Validation
@@ -466,8 +534,8 @@ export async function loadScrollytellingConfig(
     // Read file contents
     const contents = await readFile(path, "utf-8");
 
-    // Parse and validate using YAMLParser
-    const result = YAMLParser.safeParseScrollytellingBlock(contents);
+    // Parse in the file's format and validate, as every surface does
+    const result = await parseDocumentText(contents, { kind: "story", signals: { fileName: path } });
 
     if (!result.success) {
       throw validationError("Scrollytelling configuration", path, result.errors, result.warnings);
@@ -493,17 +561,23 @@ export async function loadScrollytellingConfig(
 }
 
 /**
- * Load multiple YAML configurations using Astro's glob import.
+ * Load multiple YAML, JSON or TOML configurations using Astro's glob import.
  *
  * @param globResult - Result from import.meta.glob with { as: 'raw' }
- * @param validator - Optional validation function (e.g., YAMLParser.safeParseMapBlock)
+ * @param validator - Optional validation function (e.g., YAMLParser.safeParseMapBlock).
+ *   It receives the file's text and, as a second argument, its path and
+ *   format, and may return a promise.
  * @returns Array of loaded configurations with their paths
  * @throws {YAMLLoadError} If any file fails to load or validate
  *
  * @remarks
  * This function works with Astro's `import.meta.glob` to load multiple
- * YAML files at once during the build process. It's useful for loading
- * collections of map configs or stories.
+ * files at once during the build process. It's useful for loading
+ * collections of map configs or stories. Each file's format comes from its
+ * glob key's extension (`.yaml`/`.yml`, `.json`, `.toml`), so one glob can
+ * mix all three. `YAMLParser`'s methods read YAML (and JSON) text only; to
+ * validate TOML files too, validate with `parseDocumentText`, as in the
+ * mixed-format example below.
  *
  * ## Usage Pattern
  *
@@ -534,6 +608,19 @@ export async function loadScrollytellingConfig(
  * </div>
  * ```
  *
+ * @example Load maps in any of the three formats
+ * ```astro
+ * ---
+ * import { loadFromGlob } from '@maplibre-yaml/astro/utils';
+ * import { parseDocumentText } from '@maplibre-yaml/core';
+ *
+ * const configs = await loadFromGlob(
+ *   import.meta.glob('./src/configs/*.{yaml,json,toml}', { as: 'raw' }),
+ *   (text, { path }) => parseDocumentText(text, { kind: 'map', signals: { fileName: path } })
+ * );
+ * ---
+ * ```
+ *
  * @example Load without validation
  * ```astro
  * ---
@@ -542,34 +629,31 @@ export async function loadScrollytellingConfig(
  * ---
  * ```
  */
+/** What a {@link loadFromGlob} validator returns (a core parse result fits). */
+export type GlobValidation<T> = { success: boolean; data?: T; errors?: ParseError[] };
+
 export async function loadFromGlob<T = unknown>(
   globResult: Record<string, () => Promise<string> | string>,
-  validator?: (yaml: string) => { success: boolean; data?: T; errors?: ParseError[] }
+  validator?: (
+    yaml: string,
+    file: { path: string; format: DocumentFormat }
+  ) => GlobValidation<T> | Promise<GlobValidation<T>>
 ): Promise<Array<{ path: string; config: T }>> {
   const results: Array<{ path: string; config: T }> = [];
   const errors: Array<{ path: string; errors: ParseError[] }> = [];
 
   for (const [path, loader] of Object.entries(globResult)) {
     try {
-      // Get the raw YAML content
+      // Get the raw content
       const contents = typeof loader === "function" ? await loader() : loader;
 
-      // Parse YAML
-      let parsed: unknown;
-      try {
-        parsed = parseYAML(contents, YAML_PARSE_OPTIONS);
-      } catch (error) {
-        throw new YAMLLoadError(
-          `YAML syntax error: ${error instanceof Error ? error.message : String(error)}`,
-          path,
-          [],
-          { cause: error },
-        );
-      }
+      // Parse in the format the key's extension names (a syntax error
+      // throws a YAMLLoadError)
+      const { value: parsed, format } = await readValue(contents, path);
 
       // Validate if validator provided
       if (validator) {
-        const result = validator(contents);
+        const result = await validator(contents, { path, format });
         if (!result.success) {
           errors.push({
             path,
@@ -583,7 +667,12 @@ export async function loadFromGlob<T = unknown>(
       }
     } catch (error) {
       if (error instanceof YAMLLoadError) {
-        errors.push({ path: error.filePath, errors: error.errors ?? [] });
+        // Back to core's own messages: the aggregate below adds the file.
+        const issues = (error.errors ?? []).map(({ reason, text: _text, loc: _loc, location: _location, ...issue }) => ({
+          ...issue,
+          message: reason ?? issue.message,
+        }));
+        errors.push({ path: error.filePath, errors: issues });
       } else {
         errors.push({
           path,

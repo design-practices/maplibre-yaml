@@ -14,6 +14,12 @@
  * directories and query them with type safety. These helpers provide the
  * schemas needed to validate map and scrollytelling configurations.
  *
+ * Entries may be YAML, JSON or TOML, but Astro parses the file itself and
+ * hands the schema a value, so a schema error names the field without the
+ * line and column `loadMapConfig` or `mlym validate` give for the same file.
+ * The value goes through core's normalizations first (dates as text, a root
+ * `$schema` dropped, nested `locale` tables flattened), as a loaded file does.
+ *
  * @example Define a maps collection
  * ```typescript
  * // src/content/config.ts
@@ -57,6 +63,7 @@ import type {
 } from "@maplibre-yaml/core/schemas";
 import { bridgeSchema, HOST_ZOD_IS_V4, type CoreSchemaLike } from "./zod-bridge";
 import { withEntrySugar } from "./collection-sugar";
+import { withEntryNormalized } from "./collection-normalize";
 
 /**
  * Core schema behind each bridged schema, so {@link extendSchema} can extend
@@ -132,9 +139,12 @@ function bridged<T>(core: CoreSchemaLike<T>): z.ZodType<T> {
  * ```
  */
 export function getMapSchema(): z.ZodType<MapBlock> {
-  // GeoJSON shorthand (location:, route:, …) expands first, as it does for
-  // <Map src> and loadMapConfig (ml-svf).
-  return bridged<MapBlock>(withEntrySugar(MapBlockSchema as CoreSchemaLike<MapBlock>));
+  // Core's value normalizations first (dates to text, no root $schema,
+  // nested locale tables flattened), then the GeoJSON shorthand (location:,
+  // route:, …), in the order core reads <Map src> and loadMapConfig (ml-svf).
+  return bridged<MapBlock>(
+    withEntryNormalized(withEntrySugar(MapBlockSchema as CoreSchemaLike<MapBlock>))
+  );
 }
 
 /**
@@ -203,7 +213,9 @@ export function getMapSchema(): z.ZodType<MapBlock> {
  */
 export function getScrollytellingSchema(): z.ZodType<ScrollytellingBlock> {
   return bridged<ScrollytellingBlock>(
-    withEntrySugar(ScrollytellingBlockSchema as CoreSchemaLike<ScrollytellingBlock>)
+    withEntryNormalized(
+      withEntrySugar(ScrollytellingBlockSchema as CoreSchemaLike<ScrollytellingBlock>)
+    )
   );
 }
 

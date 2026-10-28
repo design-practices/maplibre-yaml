@@ -5,6 +5,7 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { writeFile, mkdir, rm } from "fs/promises";
+import { readFileSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
 import {
@@ -15,7 +16,8 @@ import {
   YAMLLoadError,
 } from "../../src/utils/loader";
 import { z } from "zod";
-import { YAMLParser as YAMLParserForGlob } from "@maplibre-yaml/core";
+import { YAMLParser as YAMLParserForGlob, parseDocumentText } from "@maplibre-yaml/core";
+import type { MapBlock } from "@maplibre-yaml/core";
 
 describe("loadYAML", () => {
   let testDir: string;
@@ -654,5 +656,326 @@ secondary:
 
     expect(results).toHaveLength(1);
     expect(results[0]!.config.label).toEqual({ $html: "<b>Bold</b>" });
+  });
+});
+
+/**
+ * JSON and TOML documents (0.10, U7): every loader reads the format its
+ * file's extension names, through core's `parseDocumentText`, so a TOML map
+ * loads to the same config as its YAML twin and its errors carry TOML lines.
+ */
+describe("JSON and TOML documents", () => {
+  const FIXTURES = join(__dirname, "../fixtures/documents");
+  let testDir: string;
+
+  beforeEach(async () => {
+    testDir = join(tmpdir(), `astro-formats-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    await mkdir(testDir, { recursive: true });
+  });
+
+  afterEach(async () => {
+    await rm(testDir, { recursive: true, force: true });
+  });
+
+  it("loadMapConfig: map.toml and map.json load to the same config as map.yaml", async () => {
+    const yaml = await loadMapConfig(join(FIXTURES, "quick-start.yaml"));
+    expect(await loadMapConfig(join(FIXTURES, "quick-start.toml"))).toEqual(yaml);
+    expect(await loadMapConfig(join(FIXTURES, "quick-start.json"))).toEqual(yaml);
+    expect(yaml.id).toBe("earthquake-map");
+  });
+
+  it("loadScrollytellingConfig: story.toml and story.json load to the same config as story.yaml", async () => {
+    const yaml = await loadScrollytellingConfig(join(FIXTURES, "story.yaml"));
+    expect(await loadScrollytellingConfig(join(FIXTURES, "story.json"))).toEqual(yaml);
+    // TOML has no null: the story clears its filter by leaving `filter` out
+    // (the same action at runtime), where the YAML writes `filter: null`.
+    const exit = (yaml.chapters[1]!.onChapterExit as any[])[0];
+    expect(exit).toMatchObject({ action: "setFilter", filter: null });
+    delete exit.filter;
+    expect(await loadScrollytellingConfig(join(FIXTURES, "story.toml"))).toEqual(yaml);
+    expect(yaml.chapters.length).toBeGreaterThan(1);
+  });
+
+  it("a TOML locale, dotted or nested, loads to the YAML locale", async () => {
+    const yaml = await loadMapConfig(join(FIXTURES, "locale.yaml"));
+    expect(await loadMapConfig(join(FIXTURES, "locale.toml"))).toEqual(yaml);
+
+    const nested = join(testDir, "nested.toml");
+    await writeFile(
+      nested,
+      [
+        'type = "map"',
+        'id = "m"',
+        "",
+        "[config]",
+        "center = [0, 0]",
+        "zoom = 2",
+        'mapStyle = "https://demotiles.maplibre.org/style.json"',
+        "",
+        "[config.locale]",
+        '"Popup.Close" = "Cerrar"',
+        "",
+        "[config.locale.NavigationControl]",
+        'ZoomIn = "Acercar"',
+        "",
+      ].join("\n")
+    );
+    const config = await loadMapConfig(nested);
+    expect(config.config.locale).toEqual({ "Popup.Close": "Cerrar", "NavigationControl.ZoomIn": "Acercar" });
+  });
+
+  it("a TOML validation error names the file, field, TOML line and column in Astro's first-message display", async () => {
+    const tomlPath = join(testDir, "map.toml");
+    await writeFile(
+      tomlPath,
+      [
+        'type = "map"', // 1
+        'id = "m"', // 2
+        "", // 3
+        "[config]", // 4
+        "center = [0, 0]", // 5
+        "zoom = 2", // 6
+        'mapStyle = "https://demotiles.maplibre.org/style.json"', // 7
+        "", // 8
+        "[[layers]]", // 9
+        'id = "pts"', // 10
+        'type = "circle"', // 11
+        'source = { type = "geojson", url = "#cities.geojson" }', // 12
+        "",
+      ].join("\n")
+    );
+    const error = (await loadMapConfig(tomlPath).catch((e) => e)) as YAMLLoadError;
+    expect(error).toBeInstanceOf(YAMLLoadError);
+    expect(error.message).toContain(tomlPath);
+
+    // What Astro's overlay renders: the first entry's message/text and loc/location.
+    const first = error.errors![0]! as any;
+    for (const shown of [first.message, first.text]) {
+      expect(shown).toMatch(
+        new RegExp(`^${tomlPath.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}: layers\\.0\\.source\\.url: Must be an absolute URL.* \\(line 12, column \\d+\\)`)
+      );
+    }
+    expect(first.loc).toMatchObject({ file: tomlPath, line: 12 });
+    expect(first.location).toMatchObject({ file: tomlPath, line: 12 });
+    expect(first.loc.column).toBeGreaterThan(1);
+    expect(first.path).toBe("layers.0.source.url");
+    expect(first.format).toBe("toml");
+  });
+
+  it("a TOML syntax error says TOML, with the file, line and column", async () => {
+    const tomlPath = join(testDir, "broken.toml");
+    await writeFile(tomlPath, 'type = "map"\nid = = "m"\n');
+    const error = (await loadMapConfig(tomlPath).catch((e) => e)) as YAMLLoadError;
+    expect(error).toBeInstanceOf(YAMLLoadError);
+    const first = error.errors![0]! as any;
+    expect(first.message).toMatch(/broken\.toml: TOML syntax error: .*\(line 2, column \d+\)/);
+    expect(first.code).toBe("toml-syntax");
+    expect(first.loc).toMatchObject({ file: tomlPath, line: 2 });
+    expect(error.message).not.toMatch(/YAML syntax error/);
+  });
+
+  it("a JSON syntax error says JSON, not YAML", async () => {
+    const jsonPath = join(testDir, "broken.json");
+    await writeFile(jsonPath, '{\n  "type": "map",\n  "id": "m",,\n}\n');
+    const error = (await loadMapConfig(jsonPath).catch((e) => e)) as YAMLLoadError;
+    expect(error).toBeInstanceOf(YAMLLoadError);
+    expect(error.errors![0]!.message).toMatch(/broken\.json: JSON syntax error: [\s\S]*\(line 3, column \d+\)/);
+    expect(error.message).not.toMatch(/YAML syntax error/);
+
+    const loaded = (await loadYAML(jsonPath).catch((e) => e)) as YAMLLoadError;
+    expect(loaded).toBeInstanceOf(YAMLLoadError);
+    expect(loaded.message).toMatch(/JSON syntax error/);
+    expect(loaded.message).not.toMatch(/YAML syntax error/);
+  });
+
+  it("YAML text in a .toml file gets the relabel hint", async () => {
+    const tomlPath = join(testDir, "mislabeled.toml");
+    await writeFile(tomlPath, "type: map\nid: m\n");
+    const error = (await loadMapConfig(tomlPath).catch((e) => e)) as YAMLLoadError;
+    expect(error.errors![0]!.message).toMatch(/TOML syntax error/);
+    expect(error.message).toMatch(/reads as YAML, not TOML/);
+  });
+
+  it("loadYAML reads any TOML or JSON data, not only documents", async () => {
+    const tomlPath = join(testDir, "data.toml");
+    await writeFile(tomlPath, 'title = "Test"\ncount = 3\nwhen = 2024-01-02\n\n[nested]\nitems = ["a", "b"]\n');
+    expect(await loadYAML(tomlPath)).toEqual({
+      title: "Test",
+      count: 3,
+      when: "2024-01-02",
+      nested: { items: ["a", "b"] },
+    });
+
+    const jsonPath = join(testDir, "data.json");
+    await writeFile(jsonPath, '{ "title": "Test", "count": 3 }');
+    expect(await loadYAML(jsonPath, z.object({ title: z.string(), count: z.number() }))).toEqual({
+      title: "Test",
+      count: 3,
+    });
+
+    const emptyToml = join(testDir, "empty.toml");
+    await writeFile(emptyToml, "# nothing yet\n");
+    expect(await loadYAML(emptyToml)).toEqual({});
+  });
+
+  it("loadYAML: a TOML syntax error says TOML, with its line", async () => {
+    const tomlPath = join(testDir, "bad.toml");
+    await writeFile(tomlPath, 'title = "Test"\ncount = = 3\n');
+    const error = (await loadYAML(tomlPath).catch((e) => e)) as YAMLLoadError;
+    expect(error).toBeInstanceOf(YAMLLoadError);
+    expect(error.message).toMatch(/TOML syntax error: .*\(line 2, column \d+\)/);
+    expect(error.errors![0]!.message).toContain(tomlPath);
+  });
+
+  describe("loadFromGlob over mixed .yaml, .json and .toml", () => {
+    const read = (name: string) => readFileSync(join(FIXTURES, name), "utf8");
+    const glob = () => ({
+      "/src/maps/quick-start.yaml": () => Promise.resolve(read("quick-start.yaml")),
+      "/src/maps/quick-start.json": () => Promise.resolve(read("quick-start.json")),
+      "/src/maps/quick-start.toml": read("quick-start.toml"),
+    });
+
+    it("returns all three, as the same value, without a validator", async () => {
+      const results = await loadFromGlob<any>(glob());
+      expect(results.map((r) => r.path)).toEqual([
+        "/src/maps/quick-start.yaml",
+        "/src/maps/quick-start.json",
+        "/src/maps/quick-start.toml",
+      ]);
+      // The authored documents (TOML's $schema directive is a comment).
+      expect(results[1]!.config).toEqual(results[0]!.config);
+      expect(results[2]!.config).toEqual(results[0]!.config);
+    });
+
+    it("validates all three with parseDocumentText, given each file's path and format", async () => {
+      const seen: string[] = [];
+      const results = await loadFromGlob(glob(), (text, { path, format }) => {
+        seen.push(format);
+        return parseDocumentText(text, { kind: "map", signals: { fileName: path } });
+      });
+      expect(seen).toEqual(["yaml", "json", "toml"]);
+      expect(results).toHaveLength(3);
+      expect(results[1]!.config).toEqual(results[0]!.config);
+      expect(results[2]!.config).toEqual(results[0]!.config);
+      expect((results[0]!.config as MapBlock).id).toBe("earthquake-map");
+    });
+
+    it("a TOML syntax error names the file and TOML line once in the aggregate", async () => {
+      const error = (await loadFromGlob({
+        ...glob(),
+        "/src/maps/broken.toml": 'type = "map"\nid = = "m"\n',
+      }).catch((e) => e)) as YAMLLoadError;
+      expect(error).toBeInstanceOf(YAMLLoadError);
+      const text = error.errors![0]!.text!;
+      expect(text).toMatch(/^\/src\/maps\/broken\.toml: TOML syntax error: .*\(line 2, column \d+\)/);
+      expect(text.split("broken.toml").length).toBe(2);
+      expect(error.message).toMatch(/\/src\/maps\/broken\.toml:\n {2}TOML syntax error/);
+    });
+  });
+});
+
+/**
+ * One reading path (U7): the loaders and core's front door must agree on
+ * every document, including the YAML features a copy of the parse options
+ * once dropped here (`!html`, ml-0fg) or would need (merge keys). If the
+ * loader ever parses on its own again, these diverge.
+ */
+describe("loader and core's parseDocumentText agree (one reading path)", () => {
+  let testDir: string;
+
+  beforeEach(async () => {
+    testDir = join(tmpdir(), `astro-parity-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    await mkdir(testDir, { recursive: true });
+  });
+
+  afterEach(async () => {
+    await rm(testDir, { recursive: true, force: true });
+  });
+
+  const MAP = `
+type: map
+id: m
+config: { center: [0, 0], zoom: 5, mapStyle: "https://demotiles.maplibre.org/style.json" }
+x-base: &base
+  circle-color: "#111"
+  circle-radius: 4
+sources:
+  s: { type: geojson, data: { type: FeatureCollection, features: [] } }
+layers:
+  - id: a
+    type: circle
+    source: s
+    paint:
+      <<: *base
+      circle-radius: 6
+    interactive:
+      click:
+        popup:
+          - p:
+              - str: !html "<b>Bold</b>"
+`;
+
+  const TOML = `
+type = "map"
+id = "m"
+
+[config]
+center = [0, 0]
+zoom = 5
+mapStyle = "https://demotiles.maplibre.org/style.json"
+
+[x-base]
+circle-color = "#111"
+circle-radius = 4
+
+[sources.s]
+type = "geojson"
+data = { type = "FeatureCollection", features = [] }
+
+[[layers]]
+id = "a"
+type = "circle"
+source = "s"
+paint = { circle-color = "#111", circle-radius = 6 }
+
+[[layers.interactive.click.popup]]
+p = [{ str = { "$html" = "<b>Bold</b>" } }]
+`;
+
+  it("loadMapConfig returns exactly what parseDocumentText validates, merge keys and !html included", async () => {
+    const path = join(testDir, "map.yaml");
+    await writeFile(path, MAP);
+    const core = await parseDocumentText(MAP, { kind: "map", signals: { fileName: path } });
+    expect(core.success).toBe(true);
+    const loaded = await loadMapConfig(path);
+    expect(loaded).toEqual(core.data);
+
+    const layer = (loaded.layers as any[])[0];
+    expect(layer.paint).toEqual({ "circle-color": "#111", "circle-radius": 6 });
+    expect(layer.interactive.click.popup[0].p[0].str).toEqual({ $html: "<b>Bold</b>" });
+  });
+
+  it("loadYAML reads the same merge keys and !html as core does", async () => {
+    const path = join(testDir, "map.yaml");
+    await writeFile(path, MAP);
+    const raw = await loadYAML<any>(path);
+    const core = await parseDocumentText(MAP, { kind: "map", signals: { fileName: path } });
+    expect(raw.layers[0].paint).toEqual((core.data as any).layers[0].paint);
+    expect(raw.layers[0].interactive.click.popup[0].p[0].str).toEqual({ $html: "<b>Bold</b>" });
+    expect(Object.keys(raw.layers[0].paint)).not.toContain("<<");
+  });
+
+  it("the TOML spelling ({\"$html\" = …}, the merge written out) loads to the same map", async () => {
+    const yamlPath = join(testDir, "map.yaml");
+    const tomlPath = join(testDir, "map.toml");
+    await writeFile(yamlPath, MAP);
+    await writeFile(tomlPath, TOML);
+    const fromToml = await loadMapConfig(tomlPath);
+    expect(fromToml).toEqual(await loadMapConfig(yamlPath));
+    const core = await parseDocumentText(TOML, { kind: "map", signals: { fileName: tomlPath } });
+    expect(fromToml).toEqual(core.data);
+    // loadYAML's raw read of the TOML keeps the marker too.
+    const raw = await loadYAML<any>(tomlPath);
+    expect(raw.layers[0].interactive.click.popup[0].p[0].str).toEqual({ $html: "<b>Bold</b>" });
   });
 });

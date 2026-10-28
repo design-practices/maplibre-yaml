@@ -403,3 +403,114 @@ describe("extendSchema", () => {
     expect(result.priority).toBe(0);
   });
 });
+
+/**
+ * Core's value normalizations (0.10): Astro parses a collection's TOML (or
+ * YAML) file itself, so its dates arrive as objects and its locale as nested
+ * tables. The collection schemas normalize them first, as a loaded file is.
+ */
+describe("collection entries are normalized like loaded documents", () => {
+  /** smol-toml's TomlDate: a Date whose toISOString() is the text as written. */
+  class TomlDate extends Date {
+    constructor(private readonly text: string) {
+      super(text);
+    }
+    override toISOString(): string {
+      return this.text;
+    }
+  }
+
+  const tomlEntry = () => ({
+    $schema: "https://docs.maplibre-yaml.org/schema/latest/map.schema.json",
+    type: "map",
+    id: "dated",
+    title: "Heat",
+    config: {
+      center: [0, 0],
+      zoom: 2,
+      mapStyle: "https://demotiles.maplibre.org/style.json",
+      locale: {
+        "Popup.Close": "Cerrar",
+        NavigationControl: { ZoomIn: "Acercar", ZoomOut: "Alejar" },
+      },
+    },
+    sources: {
+      pts: {
+        type: "geojson",
+        data: {
+          type: "FeatureCollection",
+          features: [
+            {
+              type: "Feature",
+              geometry: { type: "Point", coordinates: [0, 0] },
+              properties: { observed: new TomlDate("2024-01-02"), at: new Date("2024-01-02T03:04:05Z") },
+            },
+          ],
+        },
+      },
+    },
+  });
+
+  it("getMapSchema: a TOML date, a YAML Date, a nested locale and a root $schema validate", () => {
+    const entry = tomlEntry();
+    const result = getMapSchema().safeParse(entry);
+    expect(result.success).toBe(true);
+    const data = result.data as any;
+    expect(data.config.locale).toEqual({
+      "Popup.Close": "Cerrar",
+      "NavigationControl.ZoomIn": "Acercar",
+      "NavigationControl.ZoomOut": "Alejar",
+    });
+    expect(data.sources.pts.data.features[0].properties).toEqual({
+      observed: "2024-01-02",
+      at: "2024-01-02T03:04:05.000Z",
+    });
+    expect(data).not.toHaveProperty("$schema");
+    // The entry Astro handed over is not changed.
+    expect(entry.config.locale.NavigationControl).toEqual({ ZoomIn: "Acercar", ZoomOut: "Alejar" });
+    expect(entry.sources.pts.data.features[0]!.properties.observed).toBeInstanceOf(TomlDate);
+  });
+
+  it("matches what core makes of the same value", async () => {
+    const { YAMLParser } = await import("@maplibre-yaml/core");
+    const core = YAMLParser.safeParseMapBlockValue(tomlEntry());
+    expect(core.success).toBe(true);
+    const result = getMapSchema().safeParse(tomlEntry());
+    expect((result.data as any).config.locale).toEqual((core.data as any).config.locale);
+    expect((result.data as any).sources.pts.data).toEqual((core.data as any).sources.pts.data);
+  });
+
+  it("a key written both nested and dotted fails, naming both spellings, as core does", async () => {
+    const entry = tomlEntry() as any;
+    entry.config.locale["NavigationControl.ZoomIn"] = "Ampliar";
+    const result = getMapSchema().safeParse(entry);
+    expect(result.success).toBe(false);
+    const issue = result.error!.issues[0]!;
+    expect(issue.path).toEqual(["config", "locale", "NavigationControl.ZoomIn"]);
+
+    const { YAMLParser } = await import("@maplibre-yaml/core");
+    const core = YAMLParser.safeParseMapBlockValue(entry);
+    expect(core.success).toBe(false);
+    expect(issue.message).toBe(core.errors[0]!.message);
+    expect(issue.message).toMatch(/written twice/);
+  });
+
+  it("getScrollytellingSchema: a nested locale and a date validate", () => {
+    const result = getScrollytellingSchema().safeParse({
+      type: "scrollytelling",
+      id: "story",
+      config: {
+        center: [0, 0],
+        zoom: 2,
+        mapStyle: "https://demotiles.maplibre.org/style.json",
+        locale: { Popup: { Close: "Cerrar" } },
+      },
+      chapters: [
+        { id: "a", title: "A", center: [0, 0], zoom: 2, description: new TomlDate("1883-08-27") },
+      ],
+    });
+    expect(result.success).toBe(true);
+    expect((result.data as any).config.locale).toEqual({ "Popup.Close": "Cerrar" });
+    expect((result.data as any).chapters[0].description).toBe("1883-08-27");
+  });
+});
