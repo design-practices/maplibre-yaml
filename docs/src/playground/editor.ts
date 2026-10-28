@@ -1,7 +1,9 @@
 /**
- * The playground's editor: CodeMirror 6 with YAML highlighting, schema
- * completion and hover (schema-assist.mjs), and the parser's diagnostics
- * with quick fixes (diagnostics.mjs). Loaded with a dynamic import from the
+ * The playground's editor: CodeMirror 6 with YAML, JSON or TOML
+ * highlighting (a language compartment the format toggle switches), schema
+ * completion and hover for YAML (schema-assist.mjs), and the parser's
+ * diagnostics with quick fixes (diagnostics.mjs) in every format. There is
+ * no CodeMirror linter: diagnostics come from core only. Loaded with a dynamic import from the
  * playground page only, so no other page carries it (design D1, D10;
  * docs/test/playground-bundle.test.mjs holds that line).
  */
@@ -17,7 +19,16 @@ import {
 import { EditorState, type Extension } from "@codemirror/state";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
 import { yaml } from "@codemirror/lang-yaml";
-import { syntaxHighlighting, HighlightStyle, indentOnInput, bracketMatching, indentUnit } from "@codemirror/language";
+import { json } from "@codemirror/lang-json";
+import { toml } from "@codemirror/legacy-modes/mode/toml";
+import {
+  syntaxHighlighting,
+  HighlightStyle,
+  indentOnInput,
+  bracketMatching,
+  indentUnit,
+  StreamLanguage,
+} from "@codemirror/language";
 import { lintGutter, setDiagnostics, lintKeymap, openLintPanel, type Diagnostic as CMDiagnostic } from "@codemirror/lint";
 import {
   autocompletion,
@@ -38,8 +49,17 @@ const highlight = HighlightStyle.define([
   { tag: [t.number, t.bool, t.null, t.atom], color: "var(--pg-tok-number)" },
   { tag: [t.comment, t.lineComment, t.blockComment], color: "var(--pg-tok-comment)", fontStyle: "italic" },
   { tag: [t.meta, t.typeName, t.labelName, t.keyword, t.modifier], color: "var(--pg-tok-meta)" },
-  { tag: [t.punctuation, t.separator, t.squareBracket, t.brace], color: "var(--pg-tok-punct)" },
+  { tag: [t.punctuation, t.separator, t.squareBracket, t.brace, t.bracket], color: "var(--pg-tok-punct)" },
 ]);
+
+export type Format = "yaml" | "json" | "toml";
+
+/** The words the editor's accessible name uses for each format. */
+const FORMAT_NAME: Record<Format, string> = { yaml: "YAML", json: "JSON", toml: "TOML" };
+
+const tomlLanguage = StreamLanguage.define(toml);
+const languageFor = (format: Format): Extension =>
+  format === "json" ? json() : format === "toml" ? tomlLanguage : yaml();
 
 const theme = EditorView.theme({
   "&": { height: "100%", backgroundColor: "var(--pg-bg)", color: "var(--pg-fg)" },
@@ -90,8 +110,11 @@ function positionInfo(
 export interface EditorHandle {
   view: EditorView;
   getValue(): string;
-  /** Replace the whole document, with a fresh undo history (a new starter). */
-  setValue(text: string): void;
+  /**
+   * Replace the whole document, with a fresh undo history (a new starter, a
+   * format switch); with `format`, switch the language too.
+   */
+  setValue(text: string, format?: Format): void;
   setSchema(schema: unknown): void;
   setDiagnostics(list: Diagnostic[]): void;
   /** Move the cursor to an offset and focus the editor. */
@@ -104,14 +127,22 @@ export interface EditorOptions {
   onChange?: (text: string) => void;
   /** The cursor moved to another line (quiet-while-typing releases held errors). */
   onCursorLine?: (line: number) => void;
-  label?: string;
+  /** The document's format; YAML when left out. */
+  format?: Format;
 }
 
 export function mount(parent: HTMLElement, doc: string, options: EditorOptions = {}): EditorHandle {
   let assist: ReturnType<typeof createSchemaAssist> | null = null;
   let lastLine = 1;
+  let format: Format = options.format ?? "yaml";
+  const labelFor = (f: Format) =>
+    EditorView.contentAttributes.of({ "aria-label": `Map document (${FORMAT_NAME[f]})` });
+
+  // Schema completion and hover read YAML indentation: YAML only.
+  const assisting = () => (format === "yaml" ? assist : null);
 
   const schemaSource = (ctx: CompletionContext): CompletionResult | null => {
+    const assist = assisting();
     if (!assist) return null;
     const r = assist.complete(ctx.state.doc.toString(), ctx.pos);
     if (!r || !r.options.length) return null;
@@ -134,6 +165,7 @@ export function mount(parent: HTMLElement, doc: string, options: EditorOptions =
   };
 
   const hover = hoverTooltip((view, pos) => {
+    const assist = assisting();
     if (!assist) return null;
     const h = assist.hover(view.state.doc.toString(), pos);
     if (!h || !h.text) return null;
@@ -172,7 +204,6 @@ export function mount(parent: HTMLElement, doc: string, options: EditorOptions =
     closeBrackets(),
     highlightActiveLine(),
     syntaxHighlighting(highlight),
-    yaml(),
     autocompletion({ override: [schemaSource], icons: false, positionInfo }),
     hover,
     lintGutter(),
@@ -187,8 +218,7 @@ export function mount(parent: HTMLElement, doc: string, options: EditorOptions =
     ]),
     EditorView.lineWrapping,
     EditorView.contentAttributes.of({
-      "aria-label": options.label ?? "Map document (YAML)",
-      // A phone keyboard must not "fix" YAML keys.
+      // A phone keyboard must not "fix" keys.
       autocapitalize: "off",
       autocorrect: "off",
       spellcheck: "false",
@@ -205,13 +235,18 @@ export function mount(parent: HTMLElement, doc: string, options: EditorOptions =
     }),
   ];
 
-  const stateFor = (text: string) => EditorState.create({ doc: text, extensions });
+  // The language and the accessible name follow the format. A format switch
+  // is a new state, like a starter: the undo history can't cross it, since
+  // undoing into YAML text with the TOML language would show neither right.
+  const stateFor = (text: string) =>
+    EditorState.create({ doc: text, extensions: [...extensions, languageFor(format), labelFor(format)] });
   const view = new EditorView({ parent, state: stateFor(doc) });
 
   return {
     view,
     getValue: () => view.state.doc.toString(),
-    setValue(text) {
+    setValue(text, next) {
+      if (next) format = next;
       view.setState(stateFor(text));
       lastLine = 1;
     },

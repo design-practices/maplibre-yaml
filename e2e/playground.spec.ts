@@ -19,6 +19,15 @@
  *    and the legend re-renders them; scrolling the pane moves the map; a
  *    share link reopens it; Download saves story.yaml with an index.html
  *    that uses <ml-scrollytelling>;
+ *  - the YAML / JSON / TOML toggle (ml-4cn, U8): YAML to TOML converts the
+ *    document, keeps the same map and reports the dropped comments, and
+ *    switching straight back restores the YAML as written; a syntax error
+ *    refuses the switch; a TOML story renders as a story; a TOML diagnostic
+ *    lands on its key; a TOML share link's banner names the hosts once the
+ *    (delayed) TOML reader has read it, and a link that doesn't read says
+ *    so; an old `#code/` link opens as YAML; a `#code/` link with a merge
+ *    fan-out shows the expansion error instead of hanging the tab; a TOML
+ *    download holds map.toml with its site paths rewritten;
  *  - on a phone, the editor and map stack, and a story map opens full height
  *    under a "Back to code" bar that leaves the story's legend button free;
  *  - the header's Examples and Playground links (desktop), and the site menu
@@ -36,7 +45,11 @@ const REPO = join(__dirname, "..");
 const DIST = join(REPO, "docs", "dist");
 const LOCAL_STYLE = JSON.parse(readFileSync(join(REPO, "examples/verification/configs/local-style.json"), "utf8"));
 // fflate is the playground's own dependency (docs/package.json): unzip with it.
-const { unzipSync, strFromU8 } = createRequire(join(REPO, "docs", "package.json"))("fflate");
+const docsRequire = createRequire(join(REPO, "docs", "package.json"));
+const { unzipSync, strFromU8 } = docsRequire("fflate");
+// lz-string too: share links are made by hand for the old-link and broken-link cases.
+const LZString = docsRequire("lz-string");
+const shareHash = (prefix: "code" | "json" | "toml", text: string) => `#${prefix}/${LZString.compressToEncodedURIComponent(text)}`;
 
 const QUAKES = {
   type: "FeatureCollection",
@@ -136,6 +149,12 @@ async function revealLine(page: Page, match: RegExp): Promise<void> {
     await page.waitForTimeout(50);
   }
   throw new Error(`no editor line matches ${match}`);
+}
+
+/** Switch the document format with the toggle and wait for the switch to land. */
+async function switchTo(page: Page, format: "yaml" | "json" | "toml"): Promise<void> {
+  await page.locator("#pg-format").selectOption(format);
+  await expect(page.locator(".pg-root")).toHaveAttribute("data-format", format);
 }
 
 /** Replace one line's text (after its indentation) the way a keyboard does. */
@@ -403,6 +422,284 @@ test.describe("playground story map at 1280×800", () => {
   });
 });
 
+test.describe("playground format toggle at 1280×800", () => {
+  test.use({ viewport: { width: 1280, height: 800 }, permissions: ["clipboard-read", "clipboard-write"] });
+
+  test("YAML to TOML and back: the same map, the dropped comments reported, the YAML restored as written", async ({ page }) => {
+    requireBuild();
+    const errors = await guard(page);
+    await open(page, "?src=/configs/classify/graduated.yaml", "cities");
+    const yaml = await docText(page);
+    expect(yaml).toMatch(/^# yaml-language-server:.*\n# Graduated symbols/);
+    await expect(page.locator("#pg-format")).toHaveValue("yaml");
+    await expect(page.locator("#pg-format")).toHaveAccessibleName("Document format");
+    await page.evaluate((sel) => ((window as any).__map = (document.querySelector(sel) as any).getMap()), MAP);
+    const before = await renders(page);
+
+    await switchTo(page, "toml");
+    const toml = await docText(page);
+    expect(toml).toMatch(/^#:schema https:\/\/docs\.maplibre-yaml\.org\/schema\/latest\/map\.schema\.json$/m);
+    expect(toml).toMatch(/^type = "map"$/m);
+    expect(toml).toContain("[[layers]]");
+    expect(toml).not.toContain("Graduated symbols");
+    // The comments aren't kept, and the message says which.
+    await expect(page.locator("#pg-message")).toContainText("Switched to TOML.");
+    await expect(page.locator("#pg-message")).toContainText("Not kept: 4 comments (lines 2, 3, 4, 5).");
+    await expect(page.locator(".cm-content")).toHaveAttribute("aria-label", "Map document (TOML)");
+    // The same map: the document applied in place, the map not rebuilt.
+    await expect.poll(() => renders(page)).toBeGreaterThan(before);
+    await expect(page.locator("#pg-status")).toHaveAttribute("data-state", "ok");
+    await waitForLayer(page, "cities");
+    expect(await page.evaluate((sel) => (document.querySelector(sel) as any).getMap() === (window as any).__map, MAP)).toBe(true);
+
+    // Straight back, no edit in between: the YAML as written, comments and all.
+    await switchTo(page, "yaml");
+    expect(await docText(page)).toBe(yaml);
+    await expect(page.locator("#pg-message")).toHaveText("Back to your YAML, as you wrote it.");
+    await expect(page.locator(".cm-content")).toHaveAttribute("aria-label", "Map document (YAML)");
+    await expect(page.locator("#pg-status")).toHaveAttribute("data-state", "ok");
+
+    // JSON too; an edit after the switch means switching back converts.
+    await switchTo(page, "json");
+    expect(await docText(page)).toMatch(/^\{\n\s+"\$schema": /);
+    await expect(page.locator(".cm-content")).toHaveAttribute("aria-label", "Map document (JSON)");
+    const opacity = () =>
+      page.evaluate((sel) => (document.querySelector(sel) as any).getMap().getPaintProperty("cities", "circle-opacity"), MAP);
+    await rewriteLine(page, /"circle-opacity":/, '"circle-opacity": 0.5,');
+    await expect.poll(opacity).toBe(0.5);
+    await switchTo(page, "yaml");
+    const reconverted = await docText(page);
+    expect(reconverted).not.toBe(yaml);
+    expect(reconverted).toMatch(/circle-opacity: 0\.5$/m);
+    await expect(page.locator("#pg-status")).toHaveAttribute("data-state", "ok");
+    expect(await opacity()).toBe(0.5);
+    expect(errors, `page errors:\n${errors.join("\n")}`).toEqual([]);
+  });
+
+  test("the saved draft keeps its format", async ({ page }) => {
+    requireBuild();
+    const errors = await guard(page);
+    await open(page, "?src=/configs/earthquakes.yaml", "earthquakes");
+    await switchTo(page, "toml");
+    await rewriteLine(page, /^zoom = /, "zoom = 2");
+    await expect.poll(() => page.evaluate(() => localStorage.getItem("mlym-playground-draft"))).toMatch(/^zoom = 2$/m);
+    const written = await docText(page);
+    // No ?src= and no share link: the playground reopens the draft, as TOML.
+    await open(page, "", "earthquakes");
+    await expect(page.locator("#pg-format")).toHaveValue("toml");
+    expect(await docText(page)).toBe(written);
+    await expect(page.locator("#pg-status")).toHaveAttribute("data-state", "ok");
+    expect(errors, `page errors:\n${errors.join("\n")}`).toEqual([]);
+  });
+
+  test("a syntax error refuses the switch and leaves the editor as it was", async ({ page }) => {
+    requireBuild();
+    const errors = await guard(page);
+    await open(page, "?src=/configs/earthquakes.yaml", "earthquakes");
+    await rewriteLine(page, /^\s*zoom:/, "zoom: [1");
+    await page.keyboard.press("ArrowUp");
+    await expect(page.locator("#pg-status")).toHaveAttribute("data-state", "error");
+    const broken = await docText(page);
+    await page.locator("#pg-format").selectOption("toml");
+    await expect(page.locator("#pg-message")).toContainText("Can't switch to TOML: the YAML has a syntax error");
+    await expect(page.locator("#pg-format")).toHaveValue("yaml");
+    await expect(page.locator(".pg-root")).toHaveAttribute("data-format", "yaml");
+    expect(await docText(page)).toBe(broken);
+    expect(errors, `page errors:\n${errors.join("\n")}`).toEqual([]);
+  });
+
+  test("a TOML diagnostic lands on its key, with the quick fix", async ({ page }) => {
+    requireBuild();
+    const errors = await guard(page);
+    await open(page, "?src=/configs/earthquakes.yaml", "earthquakes");
+    await switchTo(page, "toml");
+    await waitForLayer(page, "earthquakes");
+    const rendered = await renders(page);
+    await rewriteLine(page, /^zoom = /, "zom = 1");
+    await page.keyboard.press("ArrowUp");
+    await expect(page.locator("#pg-status")).toHaveAttribute("data-state", "error");
+    await expect(page.locator(".cm-lintRange-error")).toHaveCount(1);
+    await expect(page.locator(".cm-lintRange-error")).toHaveText("zom");
+    expect(await renders(page)).toBe(rendered);
+    await page.locator("#pg-status-btn").click();
+    await page.locator(".cm-panel-lint .cm-diagnosticAction", { hasText: "Change to zoom" }).click();
+    await expect(page.locator("#pg-status")).toHaveAttribute("data-state", "ok");
+    expect(await docText(page)).toMatch(/^zoom = 1$/m);
+    // Schema completion is YAML's alone: none in TOML.
+    await page.keyboard.press("End");
+    await page.keyboard.press("Enter");
+    await page.keyboard.press("Control+Space");
+    await page.waitForTimeout(300);
+    await expect(page.locator(".cm-tooltip-autocomplete")).toHaveCount(0);
+    expect(errors, `page errors:\n${errors.join("\n")}`).toEqual([]);
+  });
+
+  test("a TOML story renders as a story, and its share link reopens it", async ({ page, context }) => {
+    requireBuild();
+    const errors = await guard(page);
+    await open(page, `?src=${STORY_SRC}`);
+    await waitForStoryLayer(page, "quakes");
+    await switchTo(page, "toml");
+    expect(await docText(page)).toMatch(/^type = "scrollytelling"$/m);
+    await expect(page.locator(".pg-root")).toHaveAttribute("data-kind", "scrollytelling");
+    await expect(page.locator(`${STORY} .scrolly-chapter`)).toHaveCount(4);
+    await expect(page.locator("#pg-status")).toHaveAttribute("data-state", "ok");
+    const written = await docText(page);
+
+    await page.locator("#pg-share-btn").click();
+    const link = page.url();
+    expect(link).toMatch(/\/playground\/#toml\/[A-Za-z0-9+\-$]+$/);
+    const shared = await context.newPage();
+    const sharedErrors = await guard(shared);
+    await open(shared, link.slice(link.indexOf("#")));
+    expect(await docText(shared)).toBe(written);
+    await expect(shared.locator("#pg-format")).toHaveValue("toml");
+    await expect(shared.locator(".pg-root")).toHaveAttribute("data-kind", "scrollytelling");
+    await expect(shared.locator(`${STORY} .scrolly-chapter`)).toHaveCount(4);
+    await waitForStoryLayer(shared, "quakes");
+    expect([...errors, ...sharedErrors], `page errors:\n${[...errors, ...sharedErrors].join("\n")}`).toEqual([]);
+  });
+
+  test("a shared TOML link's banner names its hosts once the delayed TOML reader has read it", async ({ page, context }) => {
+    requireBuild();
+    const errors = await guard(page);
+    await open(page, "?src=/configs/earthquakes.yaml", "earthquakes");
+    await switchTo(page, "toml");
+    await page.locator("#pg-share-btn").click();
+    const link = page.url();
+    expect(link).toMatch(/#toml\//);
+
+    const shared = await context.newPage();
+    const sharedErrors = await guard(shared);
+    // Hold the TOML reader's chunk until the banner has been looked at.
+    let release!: () => void;
+    const held = new Promise<void>((r) => (release = r));
+    let asked!: () => void;
+    const requested = new Promise<void>((r) => (asked = r));
+    await shared.route(/\/_astro\/toml\.[\w-]+\.js$/, async (route) => {
+      asked();
+      await held;
+      await route.continue();
+    });
+    await shared.goto(`/playground/${link.slice(link.indexOf("#"))}`, { waitUntil: "domcontentloaded" });
+    await requested;
+    const hosts = shared.locator("#pg-shared-hosts");
+    await expect(shared.locator("#pg-shared")).toBeVisible();
+    await expect(hosts).toHaveText("checking…");
+    release();
+    await expect(hosts).toHaveText("earthquake.usgs.gov, tiles.openfreemap.org");
+    await expect(shared.locator(".pg-root")).toHaveAttribute("data-editor", "ready");
+    await expect(shared.locator("#pg-format")).toHaveValue("toml");
+    await waitForLayer(shared, "earthquakes");
+    expect([...errors, ...sharedErrors], `page errors:\n${[...errors, ...sharedErrors].join("\n")}`).toEqual([]);
+  });
+
+  test("a slow TOML read never lands over a newer document", async ({ page }) => {
+    requireBuild();
+    const errors = await guard(page);
+    let release!: () => void;
+    const held = new Promise<void>((r) => (release = r));
+    let asked!: () => void;
+    const requested = new Promise<void>((r) => (asked = r));
+    await page.route(/\/_astro\/toml\.[\w-]+\.js$/, async (route) => {
+      asked();
+      await held;
+      await route.continue();
+    });
+    const story = [
+      'type = "scrollytelling"',
+      'id = "slow"',
+      "",
+      "[config]",
+      "center = [0, 0]",
+      "zoom = 1",
+      'mapStyle = "https://tiles.openfreemap.org/styles/liberty"',
+      "",
+      "[[chapters]]",
+      'id = "one"',
+      'title = "One"',
+      "center = [0, 0]",
+      "zoom = 1",
+      "",
+    ].join("\n");
+    await open(page, shareHash("toml", story));
+    await requested;
+    // While the TOML reader is held, the reader picks a YAML starter.
+    await page.locator("#pg-starter").selectOption("/configs/earthquakes.yaml");
+    await waitForLayer(page, "earthquakes");
+    const response = page.waitForResponse(/\/_astro\/toml\./);
+    release();
+    await response;
+    await page.waitForTimeout(500);
+    // The story's read finished last, but it was older: the map stays.
+    await expect(page.locator(".pg-root")).toHaveAttribute("data-kind", "map");
+    await expect(page.locator(STORY)).toHaveCount(0);
+    await expect(page.locator("#pg-format")).toHaveValue("yaml");
+    await expect(page.locator("#pg-shared")).toBeHidden();
+    await expect(page.locator("#pg-status")).toHaveAttribute("data-state", "ok");
+    expect(await docText(page)).toMatch(/^# yaml-language-server:/);
+    expect(errors, `page errors:\n${errors.join("\n")}`).toEqual([]);
+  });
+
+  test("a shared link that doesn't read says so; an old #code/ link opens as YAML", async ({ page, context }) => {
+    requireBuild();
+    const errors = await guard(page);
+    await open(page, shareHash("toml", 'type = "map"\nid = no-quotes\n'));
+    await expect(page.locator("#pg-format")).toHaveValue("toml");
+    await expect(page.locator("#pg-shared-hosts")).toHaveText("not known, because the document could not be read");
+    await expect(page.locator("#pg-status")).toHaveAttribute("data-state", "error");
+    await expect(page.locator(".cm-lintRange-error")).toHaveCount(1);
+
+    // A link from before the toggle: #code/ is YAML, whatever the text.
+    const yaml = readFileSync(join(DIST, "configs", "earthquakes.yaml"), "utf8");
+    const old = await context.newPage();
+    const oldErrors = await guard(old);
+    await open(old, shareHash("code", yaml), "earthquakes");
+    await expect(old.locator("#pg-format")).toHaveValue("yaml");
+    await expect(old.locator(".cm-content")).toHaveAttribute("aria-label", "Map document (YAML)");
+    expect(await docText(old)).toBe(yaml);
+    await expect(old.locator("#pg-shared-hosts")).toHaveText("earthquake.usgs.gov, tiles.openfreemap.org");
+    expect([...errors, ...oldErrors], `page errors:\n${[...errors, ...oldErrors].join("\n")}`).toEqual([]);
+  });
+
+  test("a #code/ link with a merge fan-out shows the expansion error instead of hanging", async ({ page }) => {
+    requireBuild();
+    const errors = await guard(page);
+    // 9^6 merges if expanded: the parser refuses it before expanding.
+    let bomb = "type: map\nid: bomb\na0: &a0 { k: v }\n";
+    for (let i = 1; i <= 6; i++) bomb += `a${i}: &a${i}\n  <<: [${Array.from({ length: 9 }, () => `*a${i - 1}`).join(",")}]\n`;
+    bomb += "layers: []\n";
+    const started = Date.now();
+    await open(page, shareHash("code", bomb));
+    await expect(page.locator("#pg-shared-hosts")).toHaveText("not known, because the document could not be read", { timeout: 5_000 });
+    await expect(page.locator("#pg-status")).toHaveAttribute("data-state", "error", { timeout: 5_000 });
+    await page.locator("#pg-status-btn").click();
+    await expect(page.locator(".cm-panel-lint")).toContainText("Unsupported YAML");
+    expect(Date.now() - started).toBeLessThan(15_000);
+    expect(errors, `page errors:\n${errors.join("\n")}`).toEqual([]);
+  });
+
+  test("Download from a TOML session: map.toml, a page that loads it, site paths rewritten", async ({ page }) => {
+    requireBuild();
+    const errors = await guard(page);
+    await open(page, "?src=/configs/classify/graduated.yaml", "cities");
+    await switchTo(page, "toml");
+    await waitForLayer(page, "cities");
+    const toml = await docText(page);
+    expect(toml).toContain('url = "/data/classify/world-cities.geojson"');
+    const [download] = await Promise.all([page.waitForEvent("download"), page.locator("#pg-download-btn").click()]);
+    const files = unzipSync(readFileSync(await download.path()));
+    expect(Object.keys(files).sort()).toEqual(["my-map/README.txt", "my-map/index.html", "my-map/map.toml"]);
+    expect(strFromU8(files["my-map/index.html"])).toContain('<ml-map src="./map.toml"></ml-map>');
+    const saved = strFromU8(files["my-map/map.toml"]);
+    expect(saved).toMatch(/^#:schema https:\/\/docs\.maplibre-yaml\.org\/schema\/latest\/map\.schema\.json\n/);
+    expect(saved).toContain('url = "https://docs.maplibre-yaml.org/data/classify/world-cities.geojson"');
+    expect(saved).toBe(toml.replace('"/data/', '"https://docs.maplibre-yaml.org/data/'));
+    expect(strFromU8(files["my-map/README.txt"])).toContain("map.toml");
+    expect(errors, `page errors:\n${errors.join("\n")}`).toEqual([]);
+  });
+});
+
 test.describe("playground at 390×844 (phone)", () => {
   test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 3 });
 
@@ -420,9 +717,16 @@ test.describe("playground at 390×844 (phone)", () => {
     // 16px editor text: iOS doesn't zoom the page when the editor takes focus.
     expect(await page.locator(".cm-content").evaluate((el) => getComputedStyle(el).fontSize)).toBe("16px");
     // Controls are big enough to tap.
-    for (const id of ["#pg-share-btn", "#pg-download-btn", "#pg-swap", "#pg-starter"]) {
+    for (const id of ["#pg-share-btn", "#pg-download-btn", "#pg-swap", "#pg-starter", "#pg-format"]) {
       expect((await page.locator(id).boundingBox())!.height, id).toBeGreaterThanOrEqual(32);
     }
+    // The format toggle fits the status bar beside the status and "Bigger map".
+    const formats = (await page.locator("#pg-format").boundingBox())!;
+    const swap = (await page.locator("#pg-swap").boundingBox())!;
+    expect(formats.x).toBeGreaterThanOrEqual(0);
+    expect(swap.x + swap.width).toBeLessThanOrEqual(390);
+    expect((await page.locator("#pg-status-btn").boundingBox())!.width).toBeGreaterThan(150);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
     await page.locator("#pg-swap").tap();
     await expect(page.locator("#pg-swap")).toHaveAttribute("aria-pressed", "true");
     await expect.poll(async () => (await page.locator("#pg-preview").boundingBox())!.height).toBeGreaterThan(map.height + 100);
