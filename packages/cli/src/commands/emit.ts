@@ -18,7 +18,7 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync, statSync } from 'no
 import { dirname, join, resolve } from 'node:path';
 import consola from 'consola';
 import {
-  YAMLParser,
+  parseDocumentText,
   toModel,
   projectStyle,
   resolveBasemap,
@@ -266,7 +266,7 @@ export const emitCommand = defineCommand({
     file: {
       type: 'positional',
       required: true,
-      description: 'Path to a map YAML document',
+      description: 'Path to a map document (YAML, JSON or TOML)',
     },
     strict: {
       type: 'boolean',
@@ -315,7 +315,15 @@ export const emitCommand = defineCommand({
     // Only a `map` document compiles: scrollytelling and the pages format sit
     // outside the export claim by design, so reject them here rather than
     // producing a partial style.
-    const parsed = YAMLParser.safeParseMapBlock(contents);
+    // The file extension picks YAML, JSON or TOML; errors name that format.
+    const parsed = await parseDocumentText(contents, {
+      kind: 'map',
+      signals: { fileName: filePath },
+    }).catch((err: Error) => {
+      // Only a failed load of the TOML reader rejects.
+      logger.error(`The TOML reader could not be loaded: ${err.message}`);
+      return process.exit(EXIT_CODES.UNKNOWN_ERROR);
+    });
     if (!parsed.success) {
       logger.error(`${filePath} is not a valid map document.`);
       for (const err of parsed.errors) {

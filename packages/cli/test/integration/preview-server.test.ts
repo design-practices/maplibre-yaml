@@ -235,5 +235,84 @@ describe('preview --help (ml-aot.54)', () => {
     expect(line, stdout).toBeDefined();
     expect(line).toMatch(/Don't open|Do not open/);
     expect(line).not.toMatch(/\bOpen browser automatically\b/);
+    // R17: the document may be YAML, JSON or TOML.
+    expect(stdout).not.toContain('Path to YAML configuration file');
+    expect(stdout).toContain('YAML, JSON or TOML');
+  });
+});
+
+/**
+ * R17: `mlym preview map.toml` serves the map, and an edit reloads it. The
+ * server parses the document and inlines the value, so this checks the page
+ * it serves after each save; the browser side (the `yaml-update` event that
+ * reloads the page) is the same for every format.
+ */
+describe('preview server: a TOML document (R17)', () => {
+  const TOML_DOC = `type = "map"
+id = "toml-preview"
+
+[config]
+center = [0, 0]
+zoom = 2
+mapStyle = "/style.json"
+
+[[layers]]
+id = "dots"
+type = "circle"
+source = { type = "geojson", data = { type = "FeatureCollection", features = [] } }
+`;
+  let dir: string;
+  let server: PreviewServer;
+  let base: string;
+
+  beforeAll(async () => {
+    dir = await mkdtemp(join(tmpdir(), 'mlym-preview-toml-'));
+    await writeFile(join(dir, 'map.toml'), TOML_DOC);
+    const port = await freePort();
+    server = await createPreviewServer(join(dir, 'map.toml'), { port, open: false });
+    await server.start();
+    base = 'http://localhost:' + port;
+  }, 30_000);
+
+  afterAll(async () => {
+    await server?.stop();
+    if (dir) await rm(dir, { recursive: true, force: true });
+  });
+
+  /** The page, once it satisfies `ready` (the watcher reloads after a save). */
+  async function pageWhen(ready: (page: string) => boolean): Promise<string> {
+    let page = '';
+    for (let i = 0; i < 50; i++) {
+      page = await (await fetch(base + '/')).text();
+      if (ready(page)) break;
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    return page;
+  }
+
+  it('serves the TOML map, parsed on the server and inlined as a value', async () => {
+    const page = await (await fetch(base + '/')).text();
+    expect(page).not.toContain('Configuration Error');
+    expect(page).toContain('"id":"toml-preview"');
+    expect(page).toContain("createElement('ml-map')");
+  });
+
+  it('an edit with a TOML syntax error shows it, at its TOML line and column', async () => {
+    await writeFile(join(dir, 'map.toml'), TOML_DOC.replace('[config]', '[config'));
+    const page = await pageWhen((p) => p.includes('Configuration Error'));
+    expect(page).toContain('Configuration Error');
+    expect(page).toContain('TOML syntax error');
+    expect(page).toMatch(/\(\d+:\d+\)/);
+  });
+
+  it('a schema error names the TOML position, and a fix reloads the map', async () => {
+    await writeFile(join(dir, 'map.toml'), TOML_DOC.replace('zoom = 2', 'zoom = "2"'));
+    let page = await pageWhen((p) => p.includes('config.zoom'));
+    expect(page).toContain('config.zoom: Expected number, got string (6:8)');
+
+    await writeFile(join(dir, 'map.toml'), TOML_DOC.replace('toml-preview', 'toml-preview-edited'));
+    page = await pageWhen((p) => p.includes('toml-preview-edited'));
+    expect(page).not.toContain('Configuration Error');
+    expect(page).toContain('"id":"toml-preview-edited"');
   });
 });

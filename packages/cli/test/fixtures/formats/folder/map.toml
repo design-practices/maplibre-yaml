@@ -1,0 +1,13 @@
+type = "map"
+id = "toml-map"
+
+[config]
+center = [-73.98, 40.75]
+zoom = 12
+mapStyle = "https://tiles.openfreemap.org/styles/positron"
+
+[[layers]]
+id = "points"
+type = "circle"
+source = { type = "geojson", data = { type = "FeatureCollection", features = [] } }
+paint = { circle-color = "#e74c3c", circle-radius = 4 }

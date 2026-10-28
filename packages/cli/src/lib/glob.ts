@@ -6,7 +6,8 @@
 // carries an advisory with no fixed release (ml-aot.56).
 import { glob, escapePath, isDynamicPattern } from 'tinyglobby';
 import { statSync } from 'node:fs';
-import { resolve as resolvePath, relative as relativePath } from 'pathe';
+import { open } from 'node:fs/promises';
+import { resolve as resolvePath, relative as relativePath, basename, extname } from 'pathe';
 
 export interface GlobOptions {
   cwd?: string;
@@ -45,10 +46,70 @@ export interface ResolvedTargets {
   unmatched: string[];
   /** Files named literally but excluded by the project's `ignorePatterns`. */
   ignored: string[];
+  /**
+   * JSON and TOML files found under a folder argument that are not map or
+   * story documents (`package.json`, a GeoJSON file, `pyproject.toml`).
+   * `validate --verbose` lists them.
+   */
+  skipped: string[];
+  /** Folder arguments under which no map or story document was found. */
+  emptyFolders: string[];
 }
 
-/** The YAML files a folder argument stands for. */
+/** The YAML files a folder argument stands for: every one of them. */
 const FOLDER_PATTERN = '**/*.{yaml,yml}';
+
+/** The JSON and TOML files under a folder argument, which join only if they read as a document. */
+const FOLDER_CANDIDATE_PATTERN = '**/*.{json,toml}';
+
+/** The CLI's own project config, never a document (see config-loader.ts). */
+const PROJECT_CONFIG_FILE = 'maplibre-yaml.config.json';
+
+/** How much of a JSON or TOML file the folder sniff reads. */
+const SNIFF_BYTES = 64 * 1024;
+
+/** A `$schema` (or TOML `#:schema` directive) under this site's schema folder. */
+const SCHEMA_URL = String.raw`https?://docs\.maplibre-yaml\.org/schema/`;
+
+const DOCUMENT_MARKS: Record<'json' | 'toml', RegExp[]> = {
+  json: [
+    /"type"\s*:\s*"(?:map|scrollytelling)"/,
+    /"pages"\s*:\s*\[/,
+    new RegExp(String.raw`"\$schema"\s*:\s*"` + SCHEMA_URL),
+  ],
+  toml: [
+    /^type[ \t]*=[ \t]*["'](?:map|scrollytelling)["']/m,
+    /^(?:pages[ \t]*=|\[\[[ \t]*pages[ \t]*\]\])/m,
+    new RegExp(String.raw`^(?:#:schema[ \t]+|["']\$schema["'][ \t]*=[ \t]*["'])` + SCHEMA_URL, 'm'),
+  ],
+};
+
+/**
+ * Whether a JSON or TOML file under a folder argument is a map or story
+ * document, judged from the raw text of its first 64 KB, not a parse
+ * (KTD11): a `type` of `map` or `scrollytelling`, a `pages` key, or a
+ * `$schema` under docs.maplibre-yaml.org/schema/. A document with a syntax
+ * error, or one too large to parse quickly, still joins the run and fails
+ * there, rather than vanishing from it.
+ */
+export async function looksLikeDocument(file: string): Promise<boolean> {
+  const format = extname(file).toLowerCase() === '.toml' ? 'toml' : 'json';
+  let text: string;
+  try {
+    const handle = await open(file, 'r');
+    try {
+      const buffer = Buffer.alloc(SNIFF_BYTES);
+      const { bytesRead } = await handle.read(buffer, 0, SNIFF_BYTES, 0);
+      text = buffer.subarray(0, bytesRead).toString('utf-8');
+    } finally {
+      await handle.close();
+    }
+  } catch {
+    return false;
+  }
+  if (text.charCodeAt(0) === 0xfeff) text = text.slice(1);
+  return DOCUMENT_MARKS[format].some((mark) => mark.test(text));
+}
 
 /**
  * Resolve every command-line target (files, folders and/or glob patterns)
@@ -62,7 +123,11 @@ const FOLDER_PATTERN = '**/*.{yaml,yml}';
  *   plain paths, and a name with glob syntax such as `map[1].yaml` must not be
  *   re-read as a pattern), unless the project's `validate.ignorePatterns`
  *   (`options.ignore`) excludes it;
- * - an existing **folder** stands for every `.yaml`/`.yml` file under it;
+ * - an existing **folder** stands for every `.yaml`/`.yml` file under it,
+ *   and for each `.json`/`.toml` file under it that {@link looksLikeDocument}
+ *   (the others are listed in `skipped`; `maplibre-yaml.config.json` is the
+ *   project config and always skipped). A folder with no document is listed
+ *   in `emptyFolders`;
  * - anything else is a **glob**, taken whole first, so `"My Maps/*.yaml"` is
  *   one pattern. Only if the whole argument matches nothing and contains
  *   whitespace is it split, preserving the older `validate "a.yaml b.yaml"`
@@ -76,6 +141,8 @@ export async function resolveTargets(
   const seen = new Set<string>();
   const unmatched: string[] = [];
   const ignored: string[] = [];
+  const skipped = new Set<string>();
+  const emptyFolders: string[] = [];
 
   /** Files for one argument, or null when it names nothing. */
   async function resolveOne(arg: string): Promise<string[] | null> {
@@ -93,7 +160,18 @@ export async function resolveTargets(
       const rel = relativePath(cwd, literal);
       const base = rel === '' ? '' : `${escapePath(rel.startsWith('..') ? literal : rel)}/`;
       const files = await resolveGlobPatterns([base + FOLDER_PATTERN], options);
-      return files.length > 0 ? files : null;
+      for (const candidate of await resolveGlobPatterns([base + FOLDER_CANDIDATE_PATTERN], options)) {
+        if (basename(candidate) !== PROJECT_CONFIG_FILE && (await looksLikeDocument(candidate))) {
+          files.push(candidate);
+        } else {
+          skipped.add(candidate);
+        }
+      }
+      if (files.length === 0) {
+        emptyFolders.push(arg);
+        return [];
+      }
+      return files;
     }
     const files = await resolveGlobPatterns([arg], options);
     return files.length > 0 ? files : null;
@@ -118,7 +196,14 @@ export async function resolveTargets(
     for (const m of matches) seen.add(m);
   }
 
-  return { files: [...seen].sort(), unmatched, ignored };
+  return {
+    files: [...seen].sort(),
+    unmatched,
+    ignored,
+    // A file another argument named is not skipped.
+    skipped: [...skipped].filter((f) => !seen.has(f)).sort(),
+    emptyFolders,
+  };
 }
 
 /** Whether an argument is a glob pattern rather than a plain path. */

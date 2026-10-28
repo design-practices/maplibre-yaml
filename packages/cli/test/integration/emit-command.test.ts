@@ -390,4 +390,47 @@ layers:
       code: 1,
     });
   });
+
+  // R1, R17: emit reads all three formats through the front door.
+  describe('JSON and TOML documents', () => {
+    const FORMATS = join(process.cwd(), 'test/fixtures/formats');
+    // emit fetches a mapStyle URL to inline it; these tests stay offline.
+    const offline = (text: string) => text.replace(/^[ \t]*mapStyle[ \t]*[:=].*\n/m, '');
+
+    for (const name of ['quick-start', 'locale']) {
+      it(`emits the same style from ${name}.toml and ${name}.json as from the YAML original`, async () => {
+        const dir = await mkdir();
+        await writeFile(join(dir, 'map.yaml'), offline(await readFile(join(FORMATS, `${name}.yaml`), 'utf-8')));
+        await writeFile(join(dir, 'map.toml'), offline(await readFile(join(FORMATS, `${name}.toml`), 'utf-8')));
+        await execAsync(`node "${CLI}" convert map.yaml --to json --out map.json`, { cwd: dir });
+
+        const emit = async (file: string) => JSON.parse((await execAsync(`node "${CLI}" emit ${file}`, { cwd: dir })).stdout);
+        const fromYaml = await emit('map.yaml');
+        expect(fromYaml.version).toBe(8);
+        expect(fromYaml.center).toEqual(name === 'quick-start' ? [-160, 20] : [-73.88, 40.84]);
+        expect(await emit('map.toml')).toEqual(fromYaml);
+        expect(await emit('map.json')).toEqual(fromYaml);
+      });
+    }
+
+    it('prints a TOML syntax error with its TOML line:col', async () => {
+      const error = await execAsync(`node "${CLI}" emit "${join(FORMATS, 'bad.toml')}"`).catch((e) => e);
+      expect(error.code).toBe(1);
+      expect(error.stderr).toMatch(/TOML syntax error: .*\(5:1\)/);
+    });
+
+    it('prints a JSON syntax error as JSON, with its line:col', async () => {
+      const error = await execAsync(`node "${CLI}" emit "${join(FORMATS, 'bad.json')}"`).catch((e) => e);
+      expect(error.code).toBe(1);
+      expect(error.stderr).toContain('JSON syntax error');
+      expect(error.stderr).not.toContain('YAML syntax error');
+      expect(error.stderr).toContain('(6:5)');
+    });
+
+    it('prints a TOML schema error at the TOML line:col', async () => {
+      const error = await execAsync(`node "${CLI}" emit "${join(FORMATS, 'quick-start-planted.toml')}"`).catch((e) => e);
+      expect(error.code).toBe(1);
+      expect(error.stderr).toContain('config.zoom: Expected number, got string (7:8)');
+    });
+  });
 });

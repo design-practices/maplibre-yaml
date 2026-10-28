@@ -1,0 +1,7 @@
+[project]
+name = "my-maps"
+version = "0.1.0"
+dependencies = ["maplibre-yaml"]
+
+[tool.ruff]
+line-length = 100
