@@ -225,7 +225,7 @@ export function start(): void {
     if (blockedByPages) {
       setStatus(
         "warning",
-        "This document has pages: — the playground previews one map or one story map at a time.",
+        "This document has pages — the playground previews one map or one story map at a time.",
       );
     }
   }
@@ -398,18 +398,9 @@ export function start(): void {
 
   // ---- the format toggle: YAML, JSON, TOML ------------------------------
 
-  // A labelled native select in the editor's status bar: keyboard and
-  // screen-reader ready, and narrow enough for a phone.
-  const formatLabel = document.createElement("label");
-  formatLabel.className = "sr-only";
-  formatLabel.htmlFor = "pg-format";
-  formatLabel.textContent = "Document format";
-  const formatSelect = document.createElement("select");
-  formatSelect.id = "pg-format";
-  formatSelect.className = "pg-control pg-small";
-  formatSelect.title = "Write the document in YAML, JSON or TOML";
-  for (const f of FORMATS) formatSelect.append(new Option(FORMAT_NAME[f], f));
-  el("pg-swap").before(formatLabel, formatSelect);
+  // A labelled native select in the editor's status bar (playground.astro):
+  // keyboard and screen-reader ready, and narrow enough for a phone.
+  const formatSelect = el("pg-format") as HTMLSelectElement;
 
   formatSelect.addEventListener("change", () => {
     const to = formatSelect.value;
