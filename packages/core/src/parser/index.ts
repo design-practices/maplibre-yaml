@@ -22,4 +22,15 @@ export { YAML_PARSE_OPTIONS, htmlTag } from './yaml-parser';
 // chapter in the message instead): for error cards, CLIs, editors.
 export { displayPath } from './validation-utils';
 export type { ParseError, ParseErrorCode, ParseResult, SafeParseAnyResult } from './yaml-parser';
+// The front door for document text in YAML, JSON or TOML: detects the
+// format and words every error for it.
+export { parseDocumentText } from './document-text';
+export type {
+  DocumentFormat,
+  DocumentKind,
+  DocumentSignals,
+  ParseDocumentTextOptions,
+  FormattedParseResult,
+  DocumentTextResult,
+} from './document-text';
 // Note: RootConfig, MapBlock, ScrollytellingBlock types are exported from ./schemas

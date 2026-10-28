@@ -12,8 +12,6 @@
  * JSON-specific step is the wording of a syntax error.
  */
 
-import type { ParseError } from "../parser/yaml-parser.js";
-
 /**
  * The inline script `type`s that hold a map or story document. Compared
  * case-insensitively and without media-type parameters (`; charset=…`).
@@ -76,15 +74,5 @@ function belongsTo(script: Element, host: Element): boolean {
   return true;
 }
 
-/**
- * Word a syntax error from a JSON script as JSON: the parser (YAML, which
- * reads JSON) says "YAML syntax error", which would send a JSON author
- * looking for YAML. Positions are untouched.
- */
-export function wordForJson(errors: ParseError[]): ParseError[] {
-  return errors.map((err) =>
-    err.code === "yaml-syntax"
-      ? { ...err, message: err.message.replace(/^YAML (syntax|quoting|indentation) error:/, "JSON syntax error:") }
-      : err
-  );
-}
+// One wording for JSON syntax errors, shared with `parseDocumentText`.
+export { wordForJson } from "../parser/document-text.js";

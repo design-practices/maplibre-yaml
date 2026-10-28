@@ -361,11 +361,20 @@ export type ParseErrorCode =
   /** The document validated against no schema (unknown block type, wrong shape). */
   | "schema";
 
+/**
+ * The text format a document was read from. The `YAMLParser` methods read
+ * YAML (and JSON, which is YAML 1.2) and leave it unset; `parseDocumentText`
+ * sets it on every result and error it returns.
+ */
+export type DocumentFormat = "yaml" | "json" | "toml";
+
 export interface ParseError {
   path: string;
   message: string;
   /** Machine-readable classification. Absent on legacy/schema-issue paths. */
   code?: ParseErrorCode;
+  /** The format the document was read as. Set by `parseDocumentText`. */
+  format?: DocumentFormat;
   line?: number;
   column?: number;
   suggestion?: string;
@@ -385,6 +394,8 @@ export interface ParseResult<T = RootConfig> {
   data?: T;
   errors: ParseError[];
   warnings: ValidationWarning[];
+  /** The format the document was read as. Set by `parseDocumentText`. */
+  format?: DocumentFormat;
 }
 
 /**

@@ -11,6 +11,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { YAMLParser } from "../../src/parser/yaml-parser";
+import { parseDocumentText } from "../../src/parser/document-text";
 
 const fixturesDir = join(
   dirname(fileURLToPath(import.meta.url)),
@@ -102,6 +103,24 @@ describe("error-corpus (regression suite for error quality)", () => {
       expect(first.message).toContain(expected.messageContains);
       expect(first.line).toBe(expected.line);
       expect(first.column).toBe(expected.column);
+    });
+  }
+});
+
+describe("error-corpus through the document-text front door (ml-4cn U1)", () => {
+  // The front door must not change a YAML diagnostic: same errors, same
+  // positions, same text, whether the file is named or the text is sniffed.
+  for (const expected of CORPUS) {
+    it(`${expected.file} is byte-identical`, async () => {
+      const content = readFileSync(join(fixturesDir, expected.file), "utf-8");
+      const direct = YAMLParser.safeParseAny(content);
+      for (const signals of [{ fileName: expected.file }, {}]) {
+        const out = await parseDocumentText(content, { signals });
+        expect(out.format).toBe("yaml");
+        expect(out.blockType).toBe(direct.blockType);
+        expect(out.result.errors).toEqual(direct.result.errors.map((e) => ({ ...e, format: "yaml" })));
+        expect(out.result.warnings).toEqual(direct.result.warnings);
+      }
     });
   }
 });
