@@ -3,7 +3,9 @@
  * are classified, and each class has one catalogued sentence.
  */
 import { describe, it, expect } from "vitest";
-import { classifyPmtilesError, FormatError, isFormatError } from "../../src/formats/errors";
+import "../helpers/cloud-host";
+import { FormatError, isFormatError } from "../../src/formats/errors";
+import { classifyPmtilesError } from "../../src/formats/lib/pmtiles";
 import {
   describeFormatFailure,
   describeDataProblem,

@@ -42,7 +42,14 @@ const SEAM_NAMES = [
 
 /** Strings only the libraries contain (their own error messages). */
 const LIBRARY_MARKERS: Record<string, string[]> = {
-  pmtiles: ["Wrong magic number for PMTiles archive", "Server returned no content-length header"],
+  // The library's own errors, and (bundle headroom U5) the failure path's
+  // wording, which moved into the chunk with it.
+  pmtiles: [
+    "Wrong magic number for PMTiles archive",
+    "Server returned no content-length header",
+    "missing content-length on 416",
+    "didn't let this page read the file size",
+  ],
   // The library's own errors, and (bundle headroom U5) the adapter's and its
   // data provider's wording, which moved into the chunk with them.
   flatgeobuf: [
@@ -65,7 +72,15 @@ const LIBRARY_MARKERS: Record<string, string[]> = {
     "the columns this map reads are",
   ],
   "geoparquet-brotli": ["copyUncompressedBlockToOutput: not enough bytes", "Invalid size nibble"],
-  cog: ["Invalid COG protocol URL", "Server responded with full file", "GDAL_NODATA"],
+  // The plugin's and geotiff.js's own, and (bundle headroom U5) the
+  // adapter's: the CSP worker check and its wording.
+  cog: [
+    "Invalid COG protocol URL",
+    "Server responded with full file",
+    "GDAL_NODATA",
+    "doesn't allow the background workers COG images are",
+    "postMessage(1)",
+  ],
   // The update engine (renderer/update): its own wording, which the entry —
   // which decides fallback and runs the queue — never carries.
   update: ["so the document's layer is skipped", "names a layer that comes earlier in the document"],
@@ -233,6 +248,25 @@ describe("the seam", () => {
     expect(importers("")).toEqual([]);
   });
 
+  it("the COG and PMTiles chunks' sources import core as types only (bundle headroom U5, KTD5)", () => {
+    // Everything formats/lib/cog.ts and lib/pmtiles.ts reach, by path from src/.
+    const chunkFiles = ["formats/lib/cog.ts", "formats/lib/cog-reader.ts", "formats/lib/cog-first-block.ts", "formats/lib/pmtiles.ts"];
+    // Leaf modules the CDN chunk carries a copy of (checked below: they import nothing).
+    const leaves = ["formats/cog.ts", "formats/cog-header.ts"];
+    const libraries = ["@geomatico/maplibre-cog-protocol", "pmtiles"];
+    const valueImports = (file: string): string[] => {
+      const code = readFileSync(join(PKG_ROOT, "src", file), "utf8").replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+      return [...code.matchAll(/^(?:import|export)\s+(?!type\b)[^;]*?from\s*["']([^"']+)["']/gm)].map((m) => m[1]!);
+    };
+    for (const file of chunkFiles) {
+      const reached = valueImports(file)
+        .filter((spec) => !libraries.includes(spec))
+        .map((spec) => relative(join(PKG_ROOT, "src"), resolve(PKG_ROOT, "src", dirname(file), spec)).split(sep).join("/") + ".ts");
+      expect(reached.filter((f) => !chunkFiles.includes(f) && !leaves.includes(f)), file).toEqual([]);
+    }
+    for (const leaf of leaves) expect(valueImports(leaf), `${leaf} is no longer a leaf`).toEqual([]);
+  });
+
   it("describes where each build puts the readers as tsup.config.ts does (ml-cnv.19)", () => {
     const header = readFileSync(join(PKG_ROOT, "src/formats/decoders.ts"), "utf8").split("*/")[0]!;
     const config = readFileSync(join(PKG_ROOT, "tsup.config.ts"), "utf8");
@@ -284,8 +318,8 @@ describe.skipIf(!built)("CDN build: register.browser.js + chunks/", () => {
     }
   });
 
-  it("the FlatGeobuf and GeoParquet chunks carry no main-bundle wording: core reaches them through the host (KTD5)", () => {
-    for (const name of ["flatgeobuf", "geoparquet"]) {
+  it("the cloud reader chunks carry no main-bundle wording: core reaches them through the host (KTD5)", () => {
+    for (const name of ["flatgeobuf", "geoparquet", "cog", "pmtiles"]) {
       const code = read(`chunks/${name}.js`);
       // The message catalogue (the seam's own notice, a parse-time hint) stays in the entry.
       for (const marker of ["couldn't be downloaded", "A wrong path often returns a web page instead", "The document is empty. Add a map or a story to it."]) {

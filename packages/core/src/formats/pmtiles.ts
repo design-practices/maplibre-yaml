@@ -23,11 +23,16 @@
  * at once, and the handler awaits the reader on the first TileJSON or tile
  * request. MapLibre's protocol handlers are async, so a basemap style's first
  * requests can never race the registration — they just wait for the reader.
+ * What a failed request says (the library's errors in plain words, the
+ * compressed-host check) travels in that chunk too (formats/lib/pmtiles.ts,
+ * bundle headroom U5), handed core's error and range check as a
+ * {@link PmtilesHost}.
  */
 
 import type { Protocol } from "pmtiles";
-import { getDecoder } from "./decoders";
-import { classifyPmtilesError, FormatError, isFormatError } from "./errors";
+import type { PmtilesHost } from "../renderer/cloud-host";
+import { getDecoder, type Decoders } from "./decoders";
+import { FormatError, isAbortError, isFormatError } from "./errors";
 import { rangeRepliesUnreadable } from "./http";
 
 /** The slice of the maplibre-gl module this decoder needs (injected). */
@@ -68,29 +73,34 @@ export async function archiveMetadata(url: string): Promise<Record<string, unkno
       archive
     );
     if (held) return (await held.getMetadata()) as Record<string, unknown>;
-    const lib = await getDecoder("pmtiles");
+    const lib = await pmtilesReader();
     return (await new lib.PMTiles(archive).getMetadata()) as Record<string, unknown>;
   } catch {
     return undefined;
   }
 }
 
-/** The archive URL inside a `pmtiles://` request URL (tile suffix dropped). */
-function archiveUrl(requestUrl: string): string {
-  const inner = requestUrl.replace(/^pmtiles:\/\//i, "");
-  // Tile requests are `pmtiles://<archive>/{z}/{x}/{y}`.
-  return inner.replace(/\/\d+\/\d+\/\d+(?:\.\w+)?$/, "");
-}
+/**
+ * What the reader chunk's failure path uses of core (see ../renderer/cloud-host).
+ *
+ * @internal
+ */
+export const pmtilesHost: PmtilesHost = {
+  formatError: (failure) => new FormatError(failure),
+  rangeRepliesUnreadable,
+};
 
-/** The URL as a reader sees it: a same-origin path, else the full URL. */
-function displayUrl(url: string): string {
-  try {
-    const here = typeof location !== "undefined" ? location : undefined;
-    const target = new URL(url, here?.href);
-    return here && target.origin === here.origin ? target.pathname + target.search : url;
-  } catch {
-    return url;
-  }
+/**
+ * The reader chunk, given the host before anything in it runs (a failed
+ * download: the seam's `chunk` error). A chunk without the failure path (a
+ * `chunks/` folder older than this bundle) still reads: its failures are
+ * then reported as the library words them.
+ */
+function pmtilesReader(): Promise<Decoders["pmtiles"]> {
+  return getDecoder("pmtiles").then((lib) => {
+    lib.useHost?.(pmtilesHost);
+    return lib;
+  });
 }
 
 /**
@@ -126,10 +136,15 @@ export function install(host: ProtocolHost): InstallResult {
   // vector_layers, bounds, min/max zoom and attribution.
   // A reader that failed to download is dropped, so a later request retries.
   let reader: Promise<Protocol> | undefined;
+  /** The chunk the reader came from: its failure path words a failed request. */
+  let lib: Decoders["pmtiles"] | undefined;
   /** Per archive: whether its range replies can't be read (asked on a failure). */
   const encoded: Record<string, Promise<boolean>> = {};
   const handler = async (params: { url: string }, abortController: AbortController) => {
-    const current = (reader ??= getDecoder("pmtiles").then((m) => new m.Protocol({ metadata: true })));
+    const current = (reader ??= pmtilesReader().then((m) => {
+      lib = m;
+      return new m.Protocol({ metadata: true });
+    }));
     latestReader = current;
     try {
       const protocol = await current.catch((error: unknown) => {
@@ -138,19 +153,10 @@ export function install(host: ProtocolHost): InstallResult {
       });
       return await protocol.tile(params as never, abortController);
     } catch (error) {
-      const archive = archiveUrl(params.url);
-      const classified = classifyPmtilesError(error, displayUrl(archive));
-      // A reply that couldn't be read, or bytes that aren't the archive's, from
-      // a host that serves the file compressed: its range replies are cut
-      // from the compressed copy (jsDelivr's Cloudflare leg). Asked once per file.
-      const code = isFormatError(classified) ? classified.failure.code : undefined;
-      if (code === "cors" || code === "not-format") {
-        encoded[archive] ??= rangeRepliesUnreadable(archive);
-        if (await encoded[archive]) {
-          throw new FormatError({ code: "encoded-range", format: "pmtiles", url: displayUrl(archive) });
-        }
-      }
-      throw classified;
+      // The reader's own download failed (the seam's notice), or a superseded
+      // request: as is. Anything the library threw: in plain words, by the chunk.
+      if (!lib?.tileFailure || isFormatError(error) || isAbortError(error)) throw error;
+      throw await lib.tileFailure(error, params.url, encoded);
     }
   };
   host.addProtocol("pmtiles", handler as never);

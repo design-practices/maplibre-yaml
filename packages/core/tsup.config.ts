@@ -321,6 +321,9 @@ function browserBuild(entry: Record<string, string>, chunks: boolean): Options {
       "fzstd",
       "toml-eslint-parser",
       "eslint-visitor-keys",
+      // The PMTiles reader: the seam names its adapter (formats/lib/pmtiles),
+      // which re-exports the library, so the package is listed here itself.
+      "pmtiles",
       // Resolved to the stub below (the alias), not the package.
       "@bokuweb/zstd-wasm",
       ...Object.values(seam).filter((spec) => !spec.startsWith(".")),

@@ -45,6 +45,12 @@
  * still loads from `chunks/` (not `chunks/chunks/`), and a FlatGeobuf `fitTo`
  * page asks for the file before its chunk has arrived. (A blocked
  * `chunks/flatgeobuf.js` and its `reload()` retry are the first describe's.)
+ * The COG adapter and the PMTiles failure path ride in `chunks/cog.js` and
+ * `chunks/pmtiles.js` the same way: a PMTiles or COG page requests only its
+ * own chunk, a COG `fitTo` page still asks for the file's header before its
+ * chunk has arrived, and with either chunk blocked the format's notice
+ * appears and the other layers draw. (`reload()` does not yet retry a tile
+ * protocol's source: see the `fixme` below.)
  * Requires `pnpm build` (core's dist/).
  */
 import { test, expect, type Page } from "@playwright/test";
@@ -542,6 +548,52 @@ test.describe("live data loads only for documents that refresh (bundle headroom 
   });
 });
 
+/** A PMTiles (`vector`) or COG (`raster`) source, and an inline GeoJSON layer that needs no reader. */
+function tiledDoc(id: string, kind: "pmtiles" | "cog", extra = ""): string {
+  const source =
+    kind === "pmtiles"
+      ? "{ type: vector, url: /gallery-assets/cloud-native/districts.pmtiles }"
+      : "{ type: raster, url: /gallery-assets/cloud-native/imagery.cog.tif }";
+  const layer =
+    kind === "pmtiles"
+      ? '{ id: tiled, type: line, source: tiled, source-layer: districts, paint: { line-color: "#1d3557" } }'
+      : "{ id: tiled, type: raster, source: tiled }";
+  return `
+type: map
+id: ${id}
+config:
+  center: [10.2, 42.15]
+  zoom: 9.6
+  mapStyle: "/examples/verification/configs/local-style.json"
+${extra}
+sources:
+  tiled: ${source}
+layers:
+  - ${layer}
+  - id: marker
+    type: circle
+    source:
+      type: geojson
+      data:
+        type: FeatureCollection
+        features:
+          - { type: Feature, properties: {}, geometry: { type: Point, coordinates: [10.2, 42.15] } }
+    paint: { circle-radius: 8, circle-color: "#d62828" }
+`;
+}
+
+/** Wait until a tiled source's tiles in view have loaded. */
+async function waitForTiled(page: Page, mapId: string, source: string) {
+  await page.waitForFunction(
+    ({ mapId, source }) => {
+      const map = (document.getElementById(mapId) as any)?.getMap?.();
+      return Boolean(map?.getSource(source)) && map.isSourceLoaded(source) && map.areTilesLoaded();
+    },
+    { mapId, source },
+    { timeout: 45_000 }
+  );
+}
+
 /** A page whose one source (`kind: url`) is drawn by a fill or circle layer. */
 function sourceDoc(id: string, url: string, extra = "", type: "fill" | "circle" = "fill"): string {
   return `
@@ -655,4 +707,111 @@ test.describe("cloud adapters ride in their reader chunks (bundle headroom U5)",
     expect(order.filter((e) => e === "file requested")).toHaveLength(1);
     expect(errors).toEqual([]);
   });
+  test("a PMTiles page requests chunks/pmtiles.js once, and no other chunk", async ({ page }) => {
+    const errors = await guard(page);
+    const scripts = scriptsOf(page);
+    await serveSite(page, site, pageHtml(`${SELF}/register.browser.js`, tiledDoc("pm", "pmtiles")));
+    await page.goto("/my-site/index.html", { waitUntil: "domcontentloaded" });
+    await page.evaluate(() => (document.getElementById("map") as any).mapReady());
+    await waitForFeatures(page, "map", "tiled", "districts");
+    await expect(page.locator("#map .ml-map-notice")).toHaveCount(0);
+    expect(chunksOf(scripts)).toEqual([`${SELF}/chunks/pmtiles.js`]);
+    expect(errors).toEqual([]);
+  });
+
+  test("a COG page requests chunks/cog.js once, and no codec for its DEFLATE file", async ({ page }) => {
+    const errors = await guard(page);
+    const scripts = scriptsOf(page);
+    await serveSite(page, site, pageHtml(`${SELF}/register.browser.js`, tiledDoc("cog", "cog")));
+    await page.goto("/my-site/index.html", { waitUntil: "domcontentloaded" });
+    await page.evaluate(() => (document.getElementById("map") as any).mapReady());
+    await waitForTiled(page, "map", "tiled");
+    await expect(page.locator("#map .ml-map-notice")).toHaveCount(0);
+    expect(chunksOf(scripts)).toEqual([`${SELF}/chunks/cog.js`]);
+    expect(errors).toEqual([]);
+  });
+
+  test("a COG fitTo page asks for the file's header before its reader chunk has arrived, and reads it once", async ({
+    page,
+  }) => {
+    const errors = await guard(page);
+    await serveSite(page, site, pageHtml(`${SELF}/register.browser.js`, tiledDoc("fit-cog", "cog", "  fitTo: { source: tiled }")));
+    const order: string[] = [];
+    const headerReads: string[] = [];
+    let fileAsked!: () => void;
+    const asked = new Promise<void>((resolve) => (fileAsked = resolve));
+    page.on("request", (r) => {
+      if (/\/imagery\.cog\.tif(\?|$)/.test(r.url())) {
+        const range = r.headers()["range"] ?? "(none)";
+        if (range === "bytes=0-65535") headerReads.push(range);
+        order.push("file requested");
+        fileAsked();
+      }
+    });
+    await page.route(`**${SELF}/chunks/cog.js*`, async (route) => {
+      order.push("chunk requested");
+      await Promise.race([asked, new Promise((done) => setTimeout(done, 10_000))]);
+      order.push("chunk served");
+      await route.fallback();
+    });
+    await page.goto("/my-site/index.html", { waitUntil: "domcontentloaded" });
+    await page.evaluate(() => (document.getElementById("map") as any).mapReady());
+    await waitForTiled(page, "map", "tiled");
+    expect(order.indexOf("file requested")).toBeGreaterThanOrEqual(0);
+    expect(order.indexOf("file requested"), order.join(" → ")).toBeLessThan(order.indexOf("chunk served"));
+    // One read of the first 64 KB: made ahead of the map, reused by the handler.
+    expect(headerReads).toHaveLength(1);
+    await expect(page.locator("#map .ml-map-notice")).toHaveCount(0);
+    expect(errors).toEqual([]);
+  });
+
+  for (const [kind, label, name] of [
+    ["pmtiles", "The PMTiles reader", "pmtiles"],
+    ["cog", "The Cloud Optimized GeoTIFF \\(COG\\) reader", "cog"],
+  ] as const) {
+    test(`chunks/${name}.js blocked: its notice, and the other layers draw`, async ({ page }) => {
+      const errors = await guard(page);
+      await serveSite(page, site, pageHtml(`${SELF}/register.browser.js`, tiledDoc(`blocked-${kind}`, kind)));
+      // Every request for the file, retries (`?retry=1`) included.
+      await page.route(`**${SELF}/chunks/${name}.js*`, (route) => route.abort("internetdisconnected"));
+      await page.goto("/my-site/index.html", { waitUntil: "domcontentloaded" });
+      await page.evaluate(() => (document.getElementById("map") as any).mapReady());
+      const notice = page.locator("#map .ml-map-notice");
+      await expect(notice).toContainText(new RegExp(`Source tiled didn't load: ${label} \\(.*chunks/${name}\\.js\\) couldn't be downloaded`), {
+        timeout: 30_000,
+      });
+      // The layer that needs no reader draws.
+      await waitForLayer(page, "map", "marker");
+      expect(errors).toEqual([]);
+    });
+
+    // Not yet: a tile protocol's source whose reader chunk failed isn't among
+    // the renderer's failed sources (only LayerManager's own loads are), so
+    // `reload()` sees an unchanged document, clears the notice and asks for
+    // nothing — the source stays blank. As before bundle headroom U5 (the
+    // same at 2b843dc); FlatGeobuf's retry is the first describe's.
+    test.fixme(`chunks/${name}.js blocked, then back: reload() asks again and the source draws`, async ({ page }) => {
+      const errors = await guard(page);
+      const asked: string[] = [];
+      let offline = true;
+      await serveSite(page, site, pageHtml(`${SELF}/register.browser.js`, tiledDoc(`retry-${kind}`, kind)));
+      await page.route(`**${SELF}/chunks/${name}.js*`, (route) => {
+        asked.push(new URL(route.request().url()).search || "(no query)");
+        return offline ? route.abort("internetdisconnected") : route.fallback();
+      });
+      await page.goto("/my-site/index.html", { waitUntil: "domcontentloaded" });
+      await page.evaluate(() => (document.getElementById("map") as any).mapReady());
+      await expect(page.locator("#map .ml-map-notice")).toContainText(`${name}.js`, { timeout: 30_000 });
+      const failedAsks = asked.length;
+      offline = false;
+      await page.evaluate(() => (document.getElementById("map") as any).reload());
+      await page.evaluate(() => (document.getElementById("map") as any).mapReady());
+      await expect.poll(() => asked.length, { timeout: 10_000 }).toBeGreaterThan(failedAsks);
+      expect(asked.at(-1)).toMatch(/^\?retry=\d+$/);
+      if (kind === "pmtiles") await waitForFeatures(page, "map", "tiled", "districts");
+      else await waitForTiled(page, "map", "tiled");
+      await expect(page.locator("#map .ml-map-notice")).toHaveCount(0);
+      expect(errors).toEqual([]);
+    });
+  }
 });

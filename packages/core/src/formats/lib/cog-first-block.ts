@@ -4,7 +4,7 @@
  *
  * @description
  * Before the COG plugin reads a file, core reads its first 64 KB once (the
- * preflight, formats/cog.ts) to check what the plugin can't. geotiff.js, under
+ * preflight, ./cog-reader.ts) to check what the plugin can't. geotiff.js, under
  * the plugin, then asks for exactly the same range — its first 64 KB block —
  * so every COG was read twice. The plugin builds its geotiff.js source
  * internally and fetches through the global `fetch`, so the only seam is that

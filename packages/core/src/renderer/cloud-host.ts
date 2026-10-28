@@ -158,3 +158,31 @@ export interface CloudHost {
   recordPropertyNames(data: object, names: readonly string[]): void;
   messages: CloudMessages;
 }
+
+/**
+ * Everything the COG chunk's adapter (formats/lib/cog-reader.ts) uses from
+ * core, handed in by formats/cog-protocol.ts as the chunk loads.
+ */
+export interface CogHost {
+  /** The plain-language error for a failure (its `message` is the wording a hint shows, too). */
+  formatError(failure: FormatFailure): FormatError;
+  /** A message with its `` `code` `` spans quoted for the console. */
+  consoleText(message: string): string;
+  /**
+   * The file's first-64-KB read the main bundle started while the chunk
+   * downloaded, if it did — handed over once (the preflight reads it
+   * itself otherwise).
+   */
+  takeHeaderRead(fileUrl: string): Promise<Response> | undefined;
+}
+
+/**
+ * Everything the PMTiles chunk's failure path (formats/lib/pmtiles.ts) uses
+ * from core, handed in by formats/pmtiles.ts as the chunk loads.
+ */
+export interface PmtilesHost {
+  /** The plain-language error for a failure. */
+  formatError(failure: FormatFailure): FormatError;
+  /** Whether an archive's host serves its range replies from a compressed copy (asked once per archive). */
+  rangeRepliesUnreadable: typeof http.rangeRepliesUnreadable;
+}

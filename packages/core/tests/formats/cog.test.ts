@@ -18,7 +18,9 @@ vi.mock("@geomatico/maplibre-cog-protocol", () => plugin);
 
 import { isCloudOptimized, isTiff, readCogHeader, readCogHeaderParts, type CogHeader } from "../../src/formats/cog-header";
 import { cogSourceSpec, cogUrl, colorRampColors, colorRampFragment, normalizeHex } from "../../src/formats/cog-spec";
-import { classifyCogError, fileUrlOf, handle } from "../../src/formats/cog";
+import "../helpers/cloud-host";
+import { fileUrlOf } from "../../src/formats/cog";
+import { classifyCogError, handle } from "../../src/formats/lib/cog-reader";
 import { cogHintFor, install } from "../../src/formats/cog-protocol";
 import { getDecoder } from "../../src/formats/decoders";
 import { isFormatError } from "../../src/formats/errors";

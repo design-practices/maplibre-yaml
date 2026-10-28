@@ -27,11 +27,15 @@
  * npm build (`tests/lazy-chunks` asserts both). A chunk shares no code with
  * the main bundle, so esbuild emits no shared chunk and a page with no
  * cloud-native source makes zero extra requests. Some chunks hold only a
- * library, reached by a small module in the main bundle (formats/pmtiles.ts);
- * the FlatGeobuf and GeoParquet chunks hold the library *and* its adapter and
- * data provider (formats/lib/flatgeobuf.ts, formats/lib/geoparquet.ts,
- * bundle headroom U5), handed what they use of core as a `CloudHost`
- * (renderer/cloud-host.ts) — so a page still makes one request per format.
+ * library (protomaps-basemap, reached by formats/protomaps-style.ts); the
+ * cloud-format chunks hold the library *and* its adapter (bundle headroom
+ * U5): FlatGeobuf and GeoParquet their data providers
+ * (formats/lib/flatgeobuf.ts, formats/lib/geoparquet.ts), COG the `cog://`
+ * preflight and handler (formats/lib/cog-reader.ts), PMTiles the failure
+ * path (formats/lib/pmtiles.ts). Each is handed what it uses of core as a
+ * host (renderer/cloud-host.ts), and the protocol registrations stay in the
+ * main bundle (formats/pmtiles.ts, formats/cog-protocol.ts) — so a page
+ * still makes one request per format.
  *
  * ## Adding a format (geoparquet, cog, protomaps-basemap, …)
  *
@@ -68,7 +72,7 @@ import { FormatError } from "./errors";
 import type { CloudFormat } from "./detect";
 
 /**
- * What formats/cog.ts calls in the `cog` chunk (formats/lib/cog.ts), named
+ * What core calls in the `cog` chunk (formats/lib/cog.ts), named
  * here: `@geomatico/maplibre-cog-protocol`'s own declaration types can't be
  * named from core's emitted declarations (TS2742).
  */
@@ -79,6 +83,11 @@ interface CogLibrary {
   isCloudOptimized: typeof import("./cog-header").isCloudOptimized;
   shareFirstBlock: typeof import("./lib/cog-first-block").shareFirstBlock;
   dropFirstBlock: typeof import("./lib/cog-first-block").dropFirstBlock;
+  // The adapter (bundle headroom U5), handed core by formats/cog-protocol.ts.
+  useHost: typeof import("./lib/cog-reader").useHost;
+  handle: typeof import("./lib/cog-reader").handle;
+  preflight: typeof import("./lib/cog-reader").preflight;
+  classifyCogError: typeof import("./lib/cog-reader").classifyCogError;
 }
 
 /**
@@ -88,7 +97,7 @@ interface CogLibrary {
  * these lines.
  */
 const LOADERS = {
-  pmtiles: () => import("pmtiles"),
+  pmtiles: () => import("./lib/pmtiles"),
   flatgeobuf: () => import("./lib/flatgeobuf"),
   "protomaps-basemap": () => import("@protomaps/basemaps"),
   geoparquet: () => import("./lib/geoparquet"),
