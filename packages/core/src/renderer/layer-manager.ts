@@ -36,15 +36,23 @@ import type { DataMerger, MergeStrategy } from "../data/merge/data-merger";
 import { getDecoder, prefetchDecoder, type Decoders } from "../formats/decoders";
 import { sanitizeAttribution } from "../utils/attribution";
 import { declaredColumns, formatOfSource, typeReadsFormat } from "../formats/detect";
+// FlatGeobuf and GeoParquet are read by their reader chunks (bundle
+// headroom, U5): the data providers come from `cloudReaders`, types only here.
 import {
-  FlatGeobufLoader,
-  GeoParquetLoader,
+  abandonStarted,
+  cloudReaders,
+  loadedCloudReaders,
   loadModeOf,
+  sizeLimits,
+  startFlatGeobufOpen,
+  startGeoParquetTail,
   toMapLibreTileSpec,
   withoutFormatKeys,
   type FlatGeobufCallbacks,
   type FormatLoader,
+  type ReaderFormat,
 } from "./cloud-sources";
+import type { StartedOpen, StartedTail } from "./cloud-host";
 
 type Layer = z.infer<typeof LayerSchema>;
 type GeoJSONSourceConfig = z.infer<typeof GeoJSONSourceSchema>;
@@ -1476,21 +1484,77 @@ export class LayerManager {
     config: GeoJSONSourceConfig,
     suspended = false
   ): Promise<void> {
-    this.formatLoaders.get(sourceId)?.destroy();
-    this.callbacks.onDataLoading?.(layerId);
-    const loader = new FlatGeobufLoader(
-      this.map,
-      config.url!,
-      loadModeOf(config as unknown as Record<string, unknown>),
-      this.readerCallbacks(sourceId, layerId)
-    );
-    this.formatLoaders.set(sourceId, loader);
-    if (suspended) loader.suspend();
+    const load = loadModeOf(config as unknown as Record<string, unknown>);
     // A whole-file load the host already started (the `fitTo` prefetch,
     // ml-aot.75) is reused, not repeated; viewport reads ignore it.
     const pending = this.pendingData.get(sourceId);
     this.pendingData.delete(sourceId);
-    await loader.start(pending);
+    const ready = this.readersFor("flatgeobuf", sourceId, layerId, () =>
+      !pending && load.mode === "all" ? startFlatGeobufOpen(config.url!) : undefined
+    );
+    const got = "then" in ready ? await ready : ready;
+    if (!got) return;
+    const { readers, opening } = got;
+    const loader = new readers.FlatGeobufLoader(this.map, config.url!, load, this.readerCallbacks(sourceId, layerId));
+    this.formatLoaders.set(sourceId, loader);
+    if (suspended || this.paused) loader.suspend();
+    await loader.start(pending, opening);
+  }
+
+  /**
+   * The reader chunk for a FlatGeobuf or GeoParquet source: the old reader
+   * destroyed and the source's data loading reported first, as before the
+   * providers moved into their chunks (bundle headroom, U5). A chunk already
+   * loaded is returned at once — the reader starts in the same turn, as it
+   * did — and one still downloading through {@link awaitReaders}.
+   *
+   * @param open - Starts the file's first request, when the read begins
+   *   with one, for the wait (see {@link awaitReaders}).
+   */
+  private readersFor<F extends ReaderFormat, Opening extends StartedOpen | StartedTail>(
+    format: F,
+    sourceId: string,
+    layerId: string,
+    open: () => Opening | undefined
+  ):
+    | { readers: Decoders[F]; opening: Opening | undefined }
+    | Promise<{ readers: Decoders[F]; opening: Opening | undefined } | undefined> {
+    this.formatLoaders.get(sourceId)?.destroy();
+    this.formatLoaders.delete(sourceId);
+    this.callbacks.onDataLoading?.(layerId);
+    const loaded = loadedCloudReaders(format);
+    return loaded ? { readers: loaded, opening: undefined } : this.awaitReaders(format, sourceId, layerId, open);
+  }
+
+  /**
+   * Wait for a reader chunk still downloading. Meanwhile the file's first
+   * request (`open`) is already on its way, so the two downloads overlap.
+   *
+   * @returns `undefined` — nothing to start — when this manager was
+   *   destroyed, or the source removed, replaced or re-read, while the chunk
+   *   downloaded (the first request is then cancelled), or when the download
+   *   failed: the source's data error is then the seam's plain notice (KTD8),
+   *   and `reload()` retries it through the seam's `?retry=` path.
+   */
+  private async awaitReaders<F extends ReaderFormat, Opening extends StartedOpen | StartedTail>(
+    format: F,
+    sourceId: string,
+    layerId: string,
+    open: () => Opening | undefined
+  ): Promise<{ readers: Decoders[F]; opening: Opening | undefined } | undefined> {
+    // This load's callbacks (and generation): a load replaced meanwhile reports nothing.
+    const callbacks = this.readerCallbacks(sourceId, layerId);
+    const generation = this.sourceGenerations.get(sourceId) ?? 0;
+    const moved = () => this.destroyed || !this.isCurrent(sourceId, generation);
+    const opening = open();
+    try {
+      const readers = await cloudReaders(format);
+      if (!moved()) return { readers, opening };
+    } catch (error) {
+      if (!moved()) callbacks.onError(error instanceof Error ? error : new Error(String(error)));
+    }
+    if (opening) abandonStarted(opening);
+    return undefined;
   }
 
   /**
@@ -1505,21 +1569,21 @@ export class LayerManager {
     config: GeoJSONSourceConfig,
     suspended = false
   ): Promise<void> {
-    this.formatLoaders.get(sourceId)?.destroy();
-    this.callbacks.onDataLoading?.(layerId);
-    const columns = declaredColumns(config) ?? this.columnsFor(sourceId) ?? "all";
-    const loader = new GeoParquetLoader(
-      this.map,
-      config.url!,
-      loadModeOf(config as unknown as Record<string, unknown>),
-      columns,
-      this.readerCallbacks(sourceId, layerId)
-    );
-    this.formatLoaders.set(sourceId, loader);
-    if (suspended) loader.suspend();
+    const load = loadModeOf(config as unknown as Record<string, unknown>);
     const pending = this.pendingData.get(sourceId);
     this.pendingData.delete(sourceId);
-    await loader.start(pending);
+    // Both reads (whole, by view) begin with the footer.
+    const ready = this.readersFor("geoparquet", sourceId, layerId, () =>
+      pending && load.mode === "all" ? undefined : startGeoParquetTail(config.url!, sizeLimits(undefined, load).max)
+    );
+    const got = "then" in ready ? await ready : ready;
+    if (!got) return;
+    const { readers, opening } = got;
+    const columns = declaredColumns(config) ?? this.columnsFor(sourceId) ?? "all";
+    const loader = new readers.GeoParquetLoader(this.map, config.url!, load, columns, this.readerCallbacks(sourceId, layerId));
+    this.formatLoaders.set(sourceId, loader);
+    if (suspended || this.paused) loader.suspend();
+    await loader.start(pending, opening);
   }
 
   /**

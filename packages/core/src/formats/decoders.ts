@@ -24,12 +24,14 @@
  *
  * `tsup.config.ts` reads this table: every `name: () => import("spec")` line
  * becomes `chunks/<name>.js` in the CDN build and `formats/<name>.js` in the
- * npm build (`tests/lazy-chunks` asserts both). The modules that *use* a library — formats/pmtiles.ts,
- * formats/flatgeobuf.ts — stay in the main bundle, are small, and reach the
- * library only through {@link getDecoder}. That split is deliberate: a chunk
- * holding only third-party code shares nothing with the main bundle, so
- * esbuild emits no shared chunk and a page with no cloud-native source makes
- * zero extra requests.
+ * npm build (`tests/lazy-chunks` asserts both). A chunk shares no code with
+ * the main bundle, so esbuild emits no shared chunk and a page with no
+ * cloud-native source makes zero extra requests. Some chunks hold only a
+ * library, reached by a small module in the main bundle (formats/pmtiles.ts);
+ * the FlatGeobuf and GeoParquet chunks hold the library *and* its adapter and
+ * data provider (formats/lib/flatgeobuf.ts, formats/lib/geoparquet.ts,
+ * bundle headroom U5), handed what they use of core as a `CloudHost`
+ * (renderer/cloud-host.ts) — so a page still makes one request per format.
  *
  * ## Adding a format (geoparquet, cog, protomaps-basemap, …)
  *
@@ -38,10 +40,12 @@
  *    library may be a devDependency (bundled into the chunk, like pmtiles)
  *    or a dependency (the CDN chunk bundles it; the npm build keeps the bare
  *    `import()` for the consumer's bundler).
- * 2. In your own module (e.g. `formats/geoparquet.ts`), get the library with
- *    `const { parquetReadObjects } = await getDecoder("geoparquet");`. Import
- *    only **types** from the library statically (`import type …`): a value
- *    import would pull the library back into the main bundle.
+ * 2. In your own module (e.g. `formats/pmtiles.ts`), get the library with
+ *    `const { Protocol } = await getDecoder("pmtiles");`. Import only
+ *    **types** from the library statically (`import type …`): a value
+ *    import would pull the library back into the main bundle. (Or, as
+ *    FlatGeobuf and GeoParquet do, put the adapter in the chunk beside the
+ *    library and hand it core through a host.)
  * 3. Never import core modules from the library side, and never import
  *    maplibre-gl there: what a reader needs from maplibre-gl is injected.
  *    (A non-type import of core code from inside a chunk makes esbuild move

@@ -33,7 +33,9 @@ vi.mock("maplibre-gl", () => {
 });
 
 import { install } from "../../src/formats/pmtiles";
-import { FlatGeobufLoader, toMapLibreTileSpec, withoutFormatKeys } from "../../src/renderer/cloud-sources";
+import { toMapLibreTileSpec, withoutFormatKeys } from "../../src/renderer/cloud-sources";
+import "../helpers/cloud-host";
+import { FlatGeobufLoader } from "../../src/formats/lib/flatgeobuf";
 import { isProtocolRegistered, prepareProtocols } from "../../src/renderer/cloud-protocols";
 import { maplibregl, removeProtocol } from "../../src/renderer/maplibre-interop";
 import { LayerManager } from "../../src/renderer/layer-manager";

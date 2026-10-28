@@ -11,12 +11,17 @@
  */
 import { describe, it, expect, vi, afterEach } from "vitest";
 import type { FileMetaData } from "hyparquet";
-import type { GeoParquetFile } from "../../src/formats/geoparquet";
-import { projectedSize, rowsInView, shareInView } from "../../src/formats/geoparquet";
+import "../helpers/cloud-host";
+import type { GeoParquetFile } from "../../src/formats/lib/geoparquet";
 import {
+  projectedSize,
+  rowsInView,
+  shareInView,
   GeoParquetLoader,
   VIEW_DECODE_FACTOR,
   loadGeoParquetWhole,
+} from "../../src/formats/lib/geoparquet";
+import {
   WholeFileTooLarge,
   WHOLE_FILE_MAX_FEATURES,
   WHOLE_FILE_MAX_DECODED_BYTES,

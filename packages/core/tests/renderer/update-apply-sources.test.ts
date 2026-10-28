@@ -46,7 +46,8 @@ import { LayerManager } from "../../src/renderer/layer-manager";
 import { EventHandler } from "../../src/renderer/event-handler";
 import { PollingManager } from "../../src/data/polling-manager";
 import { StreamManager } from "../../src/data/streaming/stream-manager";
-import { FlatGeobufLoader } from "../../src/renderer/cloud-sources";
+import "../helpers/cloud-host";
+import { FlatGeobufLoader } from "../../src/formats/lib/flatgeobuf";
 import type { Layer } from "../../src/schemas/layer.schema";
 import type { LayerSource } from "../../src/schemas/source.schema";
 

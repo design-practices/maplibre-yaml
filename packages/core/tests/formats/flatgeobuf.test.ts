@@ -10,26 +10,27 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import "../helpers/cloud-host";
+import { openWhole } from "../../src/formats/flatgeobuf";
 import {
   decodeBytes,
   probe,
-  openWhole,
   decodeStream,
   isLonLat,
   readIndexLevel,
   validNodeSize,
-} from "../../src/formats/flatgeobuf";
+  FlatGeobufLoader,
+  loadFlatGeobufWhole,
+  VIEWPORT_DEBOUNCE_MS,
+  viewAround,
+} from "../../src/formats/lib/flatgeobuf";
 import { isFormatError } from "../../src/formats/errors";
 import {
-  FlatGeobufLoader,
   loadModeOf,
-  loadFlatGeobufWhole,
   cloudSourceDataLoader,
   WholeFileTooLarge,
   VIEWPORT_DEFAULT_MINZOOM,
   VIEWPORT_DEFAULT_MAX_FEATURES,
-  VIEWPORT_DEBOUNCE_MS,
-  viewAround,
 } from "../../src/renderer/cloud-sources";
 import { loadSourceData } from "../../src/data/source-data";
 

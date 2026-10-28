@@ -170,8 +170,8 @@ export {
 } from "./formats/detect";
 export { FormatError, isFormatError } from "./formats/errors";
 export type { FormatFailure, FormatFailureCode } from "./formats/errors";
-export { decodeBytes as decodeFlatGeobuf } from "./formats/flatgeobuf";
-export { decodeBytes as decodeGeoParquet } from "./formats/geoparquet";
+// Thin async wrappers: the readers are on-demand modules (bundle headroom, U5).
+export { decodeFlatGeobuf, decodeGeoParquet } from "./renderer/cloud-sources";
 
 // Capability policy — what a document may do, given where it is compiled
 export {

@@ -43,12 +43,27 @@ const SEAM_NAMES = [
 /** Strings only the libraries contain (their own error messages). */
 const LIBRARY_MARKERS: Record<string, string[]> = {
   pmtiles: ["Wrong magic number for PMTiles archive", "Server returned no content-length header"],
-  flatgeobuf: ["Not a FlatGeobuf file", "Invalid header size", "FlatBuffers: "],
+  // The library's own errors, and (bundle headroom U5) the adapter's and its
+  // data provider's wording, which moved into the chunk with them.
+  flatgeobuf: [
+    "Not a FlatGeobuf file",
+    "Invalid header size",
+    "FlatBuffers: ",
+    "give it a spatial index",
+    "its spatial index is malformed",
+  ],
   // @protomaps/basemaps (ml-cnv.7): its error and one of its layer ids.
   "protomaps-basemap": ["Flavor not found", "roads_tunnels_highway_casing"],
-  // hyparquet, plus fzstd (zstd) — the main bundle's formats/geoparquet.ts
-  // names none of these.
-  geoparquet: ['parquet filter requires rowFormat: "object"', "parquet requires metadata", "invalid zstd data"],
+  // hyparquet, plus fzstd (zstd), and (bundle headroom U5) the adapter's and
+  // its data provider's wording — the main bundle names none of these.
+  geoparquet: [
+    'parquet filter requires rowFormat: "object"',
+    "parquet requires metadata",
+    "invalid zstd data",
+    "has overviews in a newer format",
+    "is decoded whole: this view holds about",
+    "the columns this map reads are",
+  ],
   "geoparquet-brotli": ["copyUncompressedBlockToOutput: not enough bytes", "Invalid size nibble"],
   cog: ["Invalid COG protocol URL", "Server responded with full file", "GDAL_NODATA"],
   // The update engine (renderer/update): its own wording, which the entry —
@@ -181,6 +196,43 @@ describe("the seam", () => {
     expect(values.filter((s) => /polling-manager|streaming|merge|loading-manager/.test(s))).toEqual([]);
   });
 
+  it("the FlatGeobuf and GeoParquet chunks' sources import core as types only (bundle headroom U5, KTD5)", () => {
+    // Everything formats/lib/flatgeobuf.ts and lib/geoparquet.ts reach, by path from src/.
+    const chunkFiles = ["formats/lib/flatgeobuf.ts", "formats/lib/geoparquet.ts", "formats/lib/cloud-reader.ts"];
+    // Leaf modules each CDN chunk carries a copy of (checked below: they import nothing).
+    const leaves = ["formats/crs.ts", "formats/detect.ts", "formats/geoparquet.ts", "formats/large-data.ts"];
+    // The libraries themselves.
+    const libraries = [
+      "flatgeobuf/geojson",
+      "fzstd",
+      "hyparquet-compressors/src/gzip.js",
+      "hyparquet-compressors/src/lz4.js",
+      "hyparquet/src/index.js",
+    ];
+    const valueImports = (file: string): string[] => {
+      const code = readFileSync(join(PKG_ROOT, "src", file), "utf8").replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+      return [...code.matchAll(/^(?:import|export)\s+(?!type\b)[^;]*?from\s*["']([^"']+)["']/gm)].map((m) => m[1]!);
+    };
+    for (const file of chunkFiles) {
+      const reached = valueImports(file)
+        .filter((spec) => !libraries.includes(spec))
+        .map((spec) => relative(join(PKG_ROOT, "src"), resolve(PKG_ROOT, "src", dirname(file), spec)).split(sep).join("/") + ".ts");
+      expect(reached.filter((f) => !chunkFiles.includes(f) && !leaves.includes(f)), file).toEqual([]);
+    }
+    for (const leaf of leaves) expect(valueImports(leaf), `${leaf} is no longer a leaf`).toEqual([]);
+    // The main bundle reaches formats/lib/ only through the seam (types otherwise).
+    const importers = (dir: string): string[] =>
+      readdirSync(join(PKG_ROOT, "src", dir), { withFileTypes: true }).flatMap((d) => {
+        const path = dir ? `${dir}/${d.name}` : d.name;
+        if (d.isDirectory()) return path === "formats/lib" ? [] : importers(path);
+        if (!d.name.endsWith(".ts") || path === "formats/decoders.ts") return [];
+        return valueImports(path).some((spec) => /(?:^|\/)lib\/[\w-]+$/.test(spec) && resolve(PKG_ROOT, "src", dirname(path), spec).includes(`${sep}formats${sep}lib${sep}`))
+          ? [path]
+          : [];
+      });
+    expect(importers("")).toEqual([]);
+  });
+
   it("describes where each build puts the readers as tsup.config.ts does (ml-cnv.19)", () => {
     const header = readFileSync(join(PKG_ROOT, "src/formats/decoders.ts"), "utf8").split("*/")[0]!;
     const config = readFileSync(join(PKG_ROOT, "tsup.config.ts"), "utf8");
@@ -219,6 +271,27 @@ describe.skipIf(!built)("CDN build: register.browser.js + chunks/", () => {
       // Nothing relative (no import back into the bundle), at most maplibre-gl.
       expect(staticImports(code).filter((s) => s !== "maplibre-gl"), file).toEqual([]);
       for (const marker of LIBRARY_MARKERS[name] ?? []) expect(code.includes(marker), `${file}: ${marker}`).toBe(true);
+    }
+  });
+
+  it("no chunk asks for another through ./chunks/ (it would resolve to chunks/chunks/, bundle headroom U5)", () => {
+    const files = readdirSync(join(DIST, "chunks")).filter((f) => f.endsWith(".js"));
+    expect(files).toContain("geoparquet.js");
+    for (const file of files) {
+      const code = read(`chunks/${file}`);
+      expect(dynamicImports(code).filter((s) => s.includes("chunks/")), file).toEqual([]);
+      expect(code.includes("./chunks/"), file).toBe(false);
+    }
+  });
+
+  it("the FlatGeobuf and GeoParquet chunks carry no main-bundle wording: core reaches them through the host (KTD5)", () => {
+    for (const name of ["flatgeobuf", "geoparquet"]) {
+      const code = read(`chunks/${name}.js`);
+      // The message catalogue (the seam's own notice, a parse-time hint) stays in the entry.
+      for (const marker of ["couldn't be downloaded", "A wrong path often returns a web page instead", "The document is empty. Add a map or a story to it."]) {
+        expect(main.includes(marker), `register.browser.js lacks ${marker}`).toBe(true);
+        expect(code.includes(marker), `chunks/${name}.js has entry wording: ${marker}`).toBe(false);
+      }
     }
   });
 

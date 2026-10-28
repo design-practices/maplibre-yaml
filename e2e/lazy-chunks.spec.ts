@@ -36,7 +36,16 @@
  * first data and then fetches it and polls, a static page (or one with only
  * a legacy `updateStrategy`, or `refresh:` with no interval) never requests
  * it, and a blocked download keeps the first data, says once that updates
- * stopped, and `reload()` retries it. Requires `pnpm build` (core's dist/).
+ * stopped, and `reload()` retries it.
+ *
+ * The FlatGeobuf and GeoParquet adapters and data providers ride inside their
+ * readers' chunks (bundle headroom U5): the last describe asserts a plain
+ * GeoJSON `url:` page requests no `chunks/` file (AE1), a FlatGeobuf or
+ * GeoParquet page requests only its own chunk, once, a brotli file's codec
+ * still loads from `chunks/` (not `chunks/chunks/`), and a FlatGeobuf `fitTo`
+ * page asks for the file before its chunk has arrived. (A blocked
+ * `chunks/flatgeobuf.js` and its `reload()` retry are the first describe's.)
+ * Requires `pnpm build` (core's dist/).
  */
 import { test, expect, type Page } from "@playwright/test";
 import { cpSync, existsSync, mkdtempSync, rmSync } from "node:fs";
@@ -529,6 +538,121 @@ test.describe("live data loads only for documents that refresh (bundle headroom 
     await expect.poll(() => asked.at(-1), { timeout: 10_000 }).toBe(`?retry=${failedAsks}`);
     await expect.poll(polls, { timeout: 10_000 }).toBeGreaterThan(firstLoads + 1);
     await expect(page.locator("#map .ml-map-notice")).toHaveCount(0);
+    expect(errors).toEqual([]);
+  });
+});
+
+/** A page whose one source (`kind: url`) is drawn by a fill or circle layer. */
+function sourceDoc(id: string, url: string, extra = "", type: "fill" | "circle" = "fill"): string {
+  return `
+type: map
+id: ${id}
+config:
+  center: [10.2, 42.15]
+  zoom: 9
+  mapStyle: "/examples/verification/configs/local-style.json"
+${extra}
+sources:
+  data:
+    type: geojson
+    url: ${url}
+layers:
+  - id: data
+    type: ${type}
+    source: data
+    paint: ${type === "fill" ? '{ fill-color: "#e9c46a", fill-opacity: 0.6 }' : '{ circle-radius: 3, circle-color: "#1d3557" }'}
+`;
+}
+
+/** The `chunks/…` scripts a page asked for, in order, under the self-hosted copy. */
+const chunksOf = (scripts: string[]) => scripts.filter((s) => s.includes("/chunks/"));
+const SELF = "/my-site/js/maplibre-yaml";
+
+test.describe("cloud adapters ride in their reader chunks (bundle headroom U5)", () => {
+  test("AE1: a plain GeoJSON url: page requests no chunks/ file", async ({ page }) => {
+    const errors = await guard(page);
+    const scripts = scriptsOf(page);
+    await serveSite(page, site, pageHtml(`${SELF}/register.browser.js`, sourceDoc("plain-url", "/gallery-assets/alpine-countries.geojson", "  fitTo: { source: data }")));
+    await page.goto("/my-site/index.html", { waitUntil: "domcontentloaded" });
+    await page.evaluate(() => (document.getElementById("map") as any).mapReady());
+    await waitForFeatures(page, "map", "data");
+    expect(chunksOf(scripts)).toEqual([]);
+    expect(errors).toEqual([]);
+  });
+
+  test("a FlatGeobuf page requests chunks/flatgeobuf.js once, and no other chunk", async ({ page }) => {
+    const errors = await guard(page);
+    const scripts = scriptsOf(page);
+    await serveSite(page, site, pageHtml(`${SELF}/register.browser.js`, sourceDoc("fgb", "/gallery-assets/cloud-native/districts.fgb")));
+    await page.goto("/my-site/index.html", { waitUntil: "domcontentloaded" });
+    await page.evaluate(() => (document.getElementById("map") as any).mapReady());
+    await waitForFeatures(page, "map", "data");
+    await expect(page.locator("#map .ml-map-notice")).toHaveCount(0);
+    expect(chunksOf(scripts)).toEqual([`${SELF}/chunks/flatgeobuf.js`]);
+    expect(errors).toEqual([]);
+  });
+
+  test("a GeoParquet page requests chunks/geoparquet.js once, and no other chunk", async ({ page }) => {
+    const errors = await guard(page);
+    const scripts = scriptsOf(page);
+    await serveSite(page, site, pageHtml(`${SELF}/register.browser.js`, sourceDoc("gp", "/gallery-assets/cloud-native/districts.parquet")));
+    await page.goto("/my-site/index.html", { waitUntil: "domcontentloaded" });
+    await page.evaluate(() => (document.getElementById("map") as any).mapReady());
+    await waitForFeatures(page, "map", "data");
+    await expect(page.locator("#map .ml-map-notice")).toHaveCount(0);
+    expect(chunksOf(scripts)).toEqual([`${SELF}/chunks/geoparquet.js`]);
+    expect(errors).toEqual([]);
+  });
+
+  test("a brotli GeoParquet footer still loads its codec, from chunks/ (not chunks/chunks/), and draws", async ({ page }) => {
+    const errors = await guard(page);
+    const scripts = scriptsOf(page);
+    await serveSite(
+      page,
+      site,
+      pageHtml(`${SELF}/register.browser.js`, sourceDoc("brotli", "/gallery-assets/cloud-native/points-brotli.parquet", "", "circle"))
+    );
+    await page.goto("/my-site/index.html", { waitUntil: "domcontentloaded" });
+    await page.evaluate(() => (document.getElementById("map") as any).mapReady());
+    await waitForFeatures(page, "map", "data");
+    await expect(page.locator("#map .ml-map-notice")).toHaveCount(0);
+    expect(chunksOf(scripts)).toEqual([`${SELF}/chunks/geoparquet.js`, `${SELF}/chunks/geoparquet-brotli.js`]);
+    expect(errors).toEqual([]);
+  });
+
+  test("a FlatGeobuf fitTo page asks for the file before its reader chunk has arrived (the downloads overlap)", async ({
+    page,
+  }) => {
+    const errors = await guard(page);
+    await serveSite(
+      page,
+      site,
+      pageHtml(`${SELF}/register.browser.js`, sourceDoc("fit-fgb", "/gallery-assets/cloud-native/districts.fgb", "  fitTo: { source: data, padding: 20 }"))
+    );
+    // The network order, as the page saw it. The chunk is held until the
+    // file's request is seen (or 10 s, when it never comes first).
+    const order: string[] = [];
+    let fileAsked!: () => void;
+    const asked = new Promise<void>((resolve) => (fileAsked = resolve));
+    page.on("request", (r) => {
+      if (/\/districts\.fgb(\?|$)/.test(r.url())) {
+        order.push("file requested");
+        fileAsked();
+      }
+    });
+    await page.route(`**${SELF}/chunks/flatgeobuf.js*`, async (route) => {
+      order.push("chunk requested");
+      await Promise.race([asked, new Promise((done) => setTimeout(done, 10_000))]);
+      order.push("chunk served");
+      await route.fallback();
+    });
+    await page.goto("/my-site/index.html", { waitUntil: "domcontentloaded" });
+    await page.evaluate(() => (document.getElementById("map") as any).mapReady());
+    await waitForFeatures(page, "map", "data");
+    expect(order.indexOf("file requested")).toBeGreaterThanOrEqual(0);
+    expect(order.indexOf("file requested"), order.join(" → ")).toBeLessThan(order.indexOf("chunk served"));
+    // One request for the file: the map was framed on the read the layer reuses.
+    expect(order.filter((e) => e === "file requested")).toHaveLength(1);
     expect(errors).toEqual([]);
   });
 });
