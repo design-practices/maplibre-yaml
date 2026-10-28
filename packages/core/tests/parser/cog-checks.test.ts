@@ -6,62 +6,18 @@
  */
 import { describe, it, expect } from "vitest";
 import { YAMLParser } from "../../src/parser";
+import { cogChecks as D, COG_TYPE_WORDS } from "../fixtures/parity";
 
-const v1 = (sources: string) =>
-  YAMLParser.safeParseMapBlock(`type: map
-id: m
-config:
-  center: [10.2, 42.15]
-  zoom: 9
-  mapStyle: https://example.com/style.json
-sources:
-${sources}
-layers: []
-`);
-
-const v2 = (sources: string) =>
-  YAMLParser.safeParseMapBlock(`version: 2
-type: map
-id: m
-style:
-  basemap: https://example.com/style.json
-  center: [10.2, 42.15]
-  zoom: 9
-  sources:
-${sources}
-  layers: []
-`);
-
-const story = (sources: string) =>
-  YAMLParser.safeParseScrollytellingBlock(`type: scrollytelling
-id: s
-config:
-  center: [10.2, 42.15]
-  zoom: 9
-  mapStyle: https://example.com/style.json
-sources:
-${sources}
-layers: []
-chapters:
-  - id: a
-    title: A
-    center: [10.2, 42.15]
-    zoom: 9
-`);
+const v1 = (doc: string) => YAMLParser.safeParseMapBlock(doc);
+const v2 = (doc: string) => YAMLParser.safeParseMapBlock(doc);
+const story = (doc: string) => YAMLParser.safeParseScrollytellingBlock(doc);
 
 type Sources = Record<string, Record<string, unknown>>;
 const sourcesOf = (r: ReturnType<typeof v1>) => (r.data as unknown as { sources: Sources }).sources;
 
 describe("a COG source validates, with tileSize 256 unless the author wrote one", () => {
   it("v1: imagery, elevation, colorRamp; an authored tileSize is kept", () => {
-    const result = v1(`  imagery: { type: raster, url: data/imagery.tif }
-  elevation: { type: raster-dem, url: "cog://data/elevation.tif" }
-  ndvi:
-    type: raster
-    url: data/ndvi.tif
-    colorRamp: { palette: YlGn, min: 0, max: 0.9 }
-  big: { type: raster, url: data/big.tif, tileSize: 512 }
-  plain: { type: raster, url: https://tiles.example.com/tiles.json }`);
+    const result = v1(D.validV1);
     expect(result.errors).toEqual([]);
     // An authored tileSize is kept — with a note that the reader draws 256 (ml-cnv.17).
     expect(result.warnings.map((w) => w.path)).toEqual(["sources.big.tileSize"]);
@@ -75,17 +31,13 @@ describe("a COG source validates, with tileSize 256 unless the author wrote one"
   });
 
   it("v2 (colorRamp under runtime:) and stories", () => {
-    const two = v2(`    ndvi:
-      type: raster
-      url: data/ndvi.tif
-      runtime:
-        colorRamp: { palette: viridis, min: 0, max: 1 }`);
+    const two = v2(D.validV2);
     expect(two.errors).toEqual([]);
     expect(two.warnings).toEqual([]);
     expect(
       (two.data as unknown as { style: { sources: Sources } }).style.sources["ndvi"]!["tileSize"]
     ).toBe(256);
-    const s = story(`  dem: { type: raster-dem, url: data/dem.tiff }`);
+    const s = story(D.validStory);
     expect(s.errors).toEqual([]);
     expect((s.data as unknown as { sources: Sources }).sources["dem"]!["tileSize"]).toBe(256);
   });
@@ -93,10 +45,7 @@ describe("a COG source validates, with tileSize 256 unless the author wrote one"
 
 describe("colorRamp mistakes", () => {
   it("a misspelt palette gets a did-you-mean, at its line", () => {
-    const result = v1(`  ndvi:
-    type: raster
-    url: data/ndvi.tif
-    colorRamp: { palette: virdis, min: 0, max: 1 }`);
+    const result = v1(D.paletteTypo);
     expect(result.success).toBe(false);
     expect(result.errors).toContainEqual(
       expect.objectContaining({
@@ -109,18 +58,7 @@ describe("colorRamp mistakes", () => {
   });
 
   it("colours that aren't hex, min not below max, too many classes, palette and colors together", () => {
-    const result = v1(`  a:
-    type: raster
-    url: a.tif
-    colorRamp: { colors: ["#000", red], min: 1, max: 0 }
-  b:
-    type: raster
-    url: b.tif
-    colorRamp: { palette: Blues, classes: 12, min: 0, max: 1 }
-  c:
-    type: raster
-    url: c.tif
-    colorRamp: { palette: Blues, colors: ["#000", "#fff"], min: 0, max: 1 }`);
+    const result = v1(D.rampMistakes);
     const messages = result.errors.map((e) => `${e.path}: ${e.message}`);
     expect(messages).toContain('sources.a.colorRamp.colors.1: colorRamp colours are written #rrggbb (or #rgb); "red" isn\'t.');
     expect(messages).toContain(
@@ -132,19 +70,7 @@ describe("colorRamp mistakes", () => {
   });
 
   it("a qualitative palette as a smooth ramp, and a tileSize the reader doesn't draw, are warned about (ml-cnv.17)", () => {
-    const result = v1(`  a:
-    type: raster
-    url: a.tif
-    colorRamp: { palette: okabe-ito, min: 0, max: 1 }
-  b:
-    type: raster
-    url: b.tif
-    colorRamp: { palette: Set1, classes: 5, min: 0, max: 1 }
-  c:
-    type: raster
-    url: c.tif
-    tileSize: 512
-    colorRamp: { palette: viridis, min: 0, max: 1 }`);
+    const result = v1(D.rampWarnings);
     expect(result.success).toBe(true);
     const warnings = result.warnings.map((w) => `${w.path}: ${w.message}`);
     expect(warnings).toContainEqual(
@@ -159,7 +85,7 @@ describe("colorRamp mistakes", () => {
   });
 
   it("min and max are required (the schema says so)", () => {
-    const result = v1(`  a: { type: raster, url: a.tif, colorRamp: { palette: viridis } }`);
+    const result = v1(D.rampMissingMinMax);
     expect(result.success).toBe(false);
     expect(result.errors.map((e) => e.message).join("\n")).toContain(
       "colorRamp is missing min: (required; expected a number)."
@@ -167,18 +93,7 @@ describe("colorRamp mistakes", () => {
   });
 
   it("warnings: on elevation, on a source that isn't a COG, beside a hand-written fragment", () => {
-    const result = v1(`  dem:
-    type: raster-dem
-    url: dem.tif
-    colorRamp: { min: 0, max: 1 }
-  tiles:
-    type: raster
-    url: https://tiles.example.com/tiles.json
-    colorRamp: { min: 0, max: 1 }
-  both:
-    type: raster
-    url: "t.tif#color:CartoEarth,1,100"
-    colorRamp: { min: 0, max: 1 }`);
+    const result = v1(D.rampWhereItDoesNothing);
     expect(result.success).toBe(true);
     const warnings = result.warnings.map((w) => `${w.path}: ${w.message}`);
     expect(warnings).toContainEqual(expect.stringContaining("sources.dem.colorRamp: colorRamp: does nothing on a raster-dem"));
@@ -191,7 +106,7 @@ describe("colorRamp mistakes", () => {
   });
 
   it("encoding: terrarium on a COG elevation source warns (the reader writes mapbox)", () => {
-    const result = v1(`  dem: { type: raster-dem, url: dem.tif, encoding: terrarium }`);
+    const result = v1(D.terrariumOnCog);
     expect(result.success).toBe(true);
     expect(result.warnings.map((w) => w.message)).toContainEqual(
       expect.stringContaining("encoding: terrarium has no effect on a COG")
@@ -201,8 +116,8 @@ describe("colorRamp mistakes", () => {
 
 describe("a COG on the wrong source type gets the fix", () => {
   it("type: cog / geotiff / tif → keep the url, use raster", () => {
-    for (const word of ["cog", "geotiff", "tif"]) {
-      const result = v1(`  a: { type: ${word}, url: a.tif }`);
+    for (const word of COG_TYPE_WORDS) {
+      const result = v1(D.cogAsType(word));
       expect(result.success, word).toBe(false);
       expect(result.errors.map((e) => e.message).join("\n")).toContain(
         "is a file format, not a source type. Keep the url: and set type: raster (or raster-dem for elevation)"
@@ -211,7 +126,7 @@ describe("a COG on the wrong source type gets the fix", () => {
   });
 
   it("a .tif on a geojson source is an error", () => {
-    const result = v1(`  a: { type: geojson, url: data/a.tif }`);
+    const result = v1(D.tifOnGeojson);
     expect(result.success).toBe(false);
     expect(result.errors).toContainEqual(
       expect.objectContaining({

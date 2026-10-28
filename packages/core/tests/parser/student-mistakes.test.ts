@@ -7,34 +7,13 @@
 import { describe, it, expect } from "vitest";
 import { YAMLParser } from "../../src/parser/yaml-parser";
 import { ColorSchema } from "../../src/schemas/base.schema";
-
-/** A map document with `config` and the first layer's `paint` swapped in. */
-function doc({
-  config = "  center: [-98, 39]\n  zoom: 3",
-  paint = '      circle-color: "#ef4444"',
-  extra = "",
-}: { config?: string; paint?: string; extra?: string } = {}): string {
-  return `type: map
-id: m
-config:
-${config}
-  mapStyle: "https://demotiles.maplibre.org/style.json"
-${extra}layers:
-  - id: cities
-    type: circle
-    source:
-      type: geojson
-      data: { type: FeatureCollection, features: [] }
-    paint:
-${paint}
-`;
-}
+import { studentMistakes as D, RELATIVE_DATA_URLS, ZOOM_TYPOS } from "../fixtures/parity";
 
 const parse = (yaml: string) => YAMLParser.safeParseMapBlock(yaml);
 
 describe("a misspelled required key is reported as the typo (ml-okw)", () => {
   it("centre: → Unknown key \"centre\" — did you mean \"center\"?, at the typo's line", () => {
-    const result = parse(doc({ config: "  centre: [-98, 39]\n  zoom: 3" }));
+    const result = parse(D.centreTypo);
     expect(result.success).toBe(false);
     expect(result.errors).toEqual([
       {
@@ -48,8 +27,8 @@ describe("a misspelled required key is reported as the typo (ml-okw)", () => {
   });
 
   it("a letter-case slip (Zoom) and a one-letter typo (zom) are caught the same way", () => {
-    for (const typo of ["Zoom", "zom"]) {
-      const result = parse(doc({ config: `  center: [-98, 39]\n  ${typo}: 3` }));
+    for (const typo of ZOOM_TYPOS) {
+      const result = parse(D.zoomTypo(typo));
       expect(result.errors[0]?.message, typo).toBe(
         `Unknown key "${typo}" — did you mean "zoom"? ("zoom" is required here.)`
       );
@@ -58,12 +37,12 @@ describe("a misspelled required key is reported as the typo (ml-okw)", () => {
   });
 
   it("separate lat/lng keys get the [longitude, latitude] form", () => {
-    const result = parse(doc({ config: "  lat: 39\n  lng: -98\n  zoom: 3" }));
+    const result = parse(D.latLng);
     expect(result.errors[0]?.message).toContain("center: [longitude, latitude] — longitude first");
   });
 
   it("a missing key with no look-alike sibling says it is missing, with the line to add (ml-aot.52)", () => {
-    const result = parse(doc({ config: "  zoom: 3" }));
+    const result = parse(D.missingCenter);
     expect(result.errors[0]).toMatchObject({
       path: "config.center",
       message: "config is missing center: — add center: [longitude, latitude].",
@@ -71,7 +50,7 @@ describe("a misspelled required key is reported as the typo (ml-okw)", () => {
   });
 
   it("an optional config key with a spelling variant warns (config passes unknown keys through)", () => {
-    const result = parse(doc({ config: "  center: [-98, 39]\n  zoom: 3\n  bearIng: 10" }));
+    const result = parse(D.optionalKeyVariant);
     expect(result.success).toBe(true);
     expect(result.warnings).toContainEqual(
       expect.objectContaining({
@@ -80,14 +59,14 @@ describe("a misspelled required key is reported as the typo (ml-okw)", () => {
       })
     );
     // A real MapLibre option the schema does not list is still not flagged.
-    const passthrough = parse(doc({ config: "  center: [-98, 39]\n  zoom: 3\n  cooperativeGestures: true" }));
+    const passthrough = parse(D.passthroughOption);
     expect(passthrough.warnings).toEqual([]);
   });
 });
 
 describe("unquoted #hex colours (ml-okw)", () => {
   it("names the property and shows the quoted fix, at its line", () => {
-    const result = parse(doc({ paint: "      circle-radius: 10\n      circle-color: #ef4444" }));
+    const result = parse(D.unquotedHex);
     expect(result.success).toBe(false);
     expect(result.errors).toEqual([
       {
@@ -101,12 +80,12 @@ describe("unquoted #hex colours (ml-okw)", () => {
   });
 
   it("an ordinary comment after an empty key is not mistaken for a lost value", () => {
-    const result = parse(doc({ paint: "      circle-color: # TODO pick one" }));
+    const result = parse(D.emptyKeyComment);
     expect(result.errors.map((e) => e.message).join(" ")).not.toContain("must be quoted");
   });
 
   it("inside a flow map (a YAML syntax error) the error carries a quoting hint", () => {
-    const result = parse(doc({ paint: '      { "circle-color": #ef4444, "circle-radius": 10 }' }).replace("    paint:\n      {", "    paint: {"));
+    const result = parse(D.hexInFlowMap);
     expect(result.errors[0]?.code).toBe("yaml-syntax");
     expect(result.errors[0]?.message).toContain('Hint: colours starting with # must be quoted, e.g. "#ef4444"');
   });
@@ -114,7 +93,7 @@ describe("unquoted #hex colours (ml-okw)", () => {
 
 describe("colour values (ml-aot.15)", () => {
   it("an unknown colour name is an error with a did-you-mean, at the paint path", () => {
-    const result = parse(doc({ paint: '      circle-color: "bleu"' }));
+    const result = parse(D.colourNameTypo);
     expect(result.errors).toEqual([
       expect.objectContaining({
         path: "layers.0.paint.circle-color",
@@ -126,7 +105,7 @@ describe("colour values (ml-aot.15)", () => {
   });
 
   it("curly quotes pasted from slides say to retype them", () => {
-    const result = parse(doc({ paint: "      circle-color: “#ef4444”" }));
+    const result = parse(D.curlyQuotes);
     expect(result.errors[0]).toMatchObject({
       path: "layers.0.paint.circle-color",
       message:
@@ -159,7 +138,7 @@ describe("colour values (ml-aot.15)", () => {
 
 describe("other union failures report the inner field (ml-okw)", () => {
   it('a number written as "10px" names the property and the plain-number fix', () => {
-    const result = parse(doc({ paint: '      circle-radius: "10px"' }));
+    const result = parse(D.numberWithUnits);
     expect(result.errors[0]).toMatchObject({
       path: "layers.0.paint.circle-radius",
       message:
@@ -168,7 +147,7 @@ describe("other union failures report the inner field (ml-okw)", () => {
   });
 
   it("[latitude, longitude] gets the swapped suggestion", () => {
-    const result = parse(doc({ config: "  center: [39, -98]\n  zoom: 3" }));
+    const result = parse(D.latLonSwapped);
     expect(result.errors[0]).toMatchObject({
       path: "config.center.1",
       message:
@@ -177,7 +156,7 @@ describe("other union failures report the inner field (ml-okw)", () => {
   });
 
   it("type: Map says values are case-sensitive", () => {
-    const result = parse(doc().replace("type: map", "type: Map"));
+    const result = parse(D.typeCase);
     expect(result.errors[0]?.message).toBe(
       'Expected "map", got "Map" (values are case-sensitive: write "map")'
     );
@@ -185,16 +164,8 @@ describe("other union failures report the inner field (ml-okw)", () => {
 });
 
 describe("a layer source: that names no source (ml-aot.15, ml-aot.133)", () => {
-  const withSources = (ref: string, layerExtra = "") =>
-    doc({
-      extra: "sources:\n  cities:\n    type: geojson\n    data: { type: FeatureCollection, features: [] }\n",
-    }).replace(
-      "    source:\n      type: geojson\n      data: { type: FeatureCollection, features: [] }",
-      `    source: ${ref}${layerExtra}`
-    );
-
   it("a typo is an error at the source: line, with a did-you-mean (ml-aot.133)", () => {
-    const result = parse(withSources("citeis"));
+    const result = parse(D.sourceTypo);
     expect(result.success).toBe(false);
     expect(result.errors).toEqual([
       {
@@ -211,13 +182,13 @@ describe("a layer source: that names no source (ml-aot.15, ml-aot.133)", () => {
   });
 
   it("a circle layer can't draw from a basemap's vector source without source-layer: an error too", () => {
-    const result = parse(withSources("openmaptiles"));
+    const result = parse(D.basemapSourceNoSourceLayer);
     expect(result.success).toBe(false);
     expect(result.errors[0]?.path).toBe("layers.0.source");
   });
 
   it("with source-layer: the name may be a basemap source: a near miss warns, anything else is silent", () => {
-    const near = parse(withSources("citeis", "\n    source-layer: places"));
+    const near = parse(D.nearMissWithSourceLayer);
     expect(near.success).toBe(true);
     expect(near.warnings).toContainEqual({
       path: "layers.0.source",
@@ -228,19 +199,17 @@ describe("a layer source: that names no source (ml-aot.15, ml-aot.133)", () => {
       column: 13,
     });
 
-    const basemap = parse(withSources("openmaptiles", "\n    source-layer: place"));
+    const basemap = parse(D.basemapSourceWithSourceLayer);
     expect(basemap.success).toBe(true);
     expect(basemap.warnings).toEqual([]);
   });
 });
 
 describe("bare relative data paths are accepted (ml-zft)", () => {
-  it.each(["data/cities.geojson", "cities.geojson", "./cities.geojson", "/data/cities.geojson"])(
+  it.each(RELATIVE_DATA_URLS)(
     "url: %s",
     (url) => {
-      const result = parse(
-        doc().replace("data: { type: FeatureCollection, features: [] }", `url: "${url}"`)
-      );
+      const result = parse(D.relativeDataUrl(url));
       expect(result.errors).toEqual([]);
       expect(result.success).toBe(true);
     }

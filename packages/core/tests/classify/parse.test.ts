@@ -6,26 +6,9 @@
 
 import { describe, it, expect } from "vitest";
 import { YAMLParser } from "../../src/parser/yaml-parser";
+import { classifyParse as D } from "../fixtures/parity";
 
-const HEAD = `type: map
-id: m
-config:
-  center: [0, 0]
-  zoom: 2
-  mapStyle: "https://demotiles.maplibre.org/style.json"
-sources:
-  tracts:
-    type: geojson
-    url: /data/tracts.geojson
-  tiles:
-    type: vector
-    url: https://example.com/tiles.json
-layers:
-`;
-
-function parse(layers: string) {
-  return YAMLParser.safeParseMapBlock(HEAD + layers);
-}
+const parse = (doc: string) => YAMLParser.safeParseMapBlock(doc);
 
 function only(result: ReturnType<typeof parse>) {
   expect(result.success).toBe(false);
@@ -34,173 +17,78 @@ function only(result: ReturnType<typeof parse>) {
 
 describe("valid blocks", () => {
   it("accepts the four forms", () => {
-    const result = parse(`  - id: explicit
-    type: fill
-    source: tracts
-    classify:
-      field: income
-      breaks: [25000, 50000, 75000]
-      palette: Blues
-  - id: computed
-    type: fill
-    source: tracts
-    classify:
-      field: income
-      method: quantile
-      classes: 5
-      palette: ylorrd
-      noData: hide
-  - id: zones
-    type: fill
-    source: tracts
-    classify:
-      field: zone
-      categories:
-        residential: "#f6e8c3"
-        commercial: "#d8b365"
-      other: "#bbbbbb"
-  - id: places
-    type: circle
-    source: tracts
-    classify:
-      field: pop
-      breaks: [1000, 10000]
-      palette: Reds
-      radius: [4, 8, 14]
-`);
+    const result = parse(D.fourForms);
     expect(result.errors).toEqual([]);
     expect(result.success).toBe(true);
     expect(result.warnings).toEqual([]);
   });
 
   it("accepts explicit breaks over a vector tile source", () => {
-    const result = parse(`  - id: v
-    type: fill
-    source: tiles
-    source-layer: tracts
-    classify: { field: income, breaks: [10, 20] }
-`);
+    const result = parse(D.vectorExplicitBreaks);
     expect(result.success).toBe(true);
   });
 });
 
 describe("block errors — positioned, with did-you-mean", () => {
   it("names the method it was probably meant to be", () => {
-    const [error] = only(parse(`  - id: a
-    type: fill
-    source: tracts
-    classify: { field: v, method: natural-breaks }
-`));
+    const [error] = only(parse(D.methodTypo));
     expect(error!.path).toBe("layers.0.classify.method");
     expect(error!.message).toContain('Did you mean "jenks"?');
     expect(error!.line).toBe(18);
   });
 
   it("names the palette it was probably meant to be, case-insensitively", () => {
-    const [error] = only(parse(`  - id: a
-    type: fill
-    source: tracts
-    classify:
-      field: v
-      breaks: [1, 2]
-      palette: ylgnbuu
-`));
+    const [error] = only(parse(D.paletteTypo));
     expect(error!.path).toBe("layers.0.classify.palette");
     expect(error!.message).toContain('Did you mean "YlGnBu"?');
     expect(error!.line).toBe(21);
   });
 
   it("says when a palette has too few colours for the classes", () => {
-    const [error] = only(parse(`  - id: a
-    type: fill
-    source: tracts
-    classify: { field: v, method: quantile, classes: 12, palette: Blues }
-`));
+    const [error] = only(parse(D.paletteTooFewColours));
     expect(error!.message).toMatch(/Blues has colours for up to 9 classes/);
   });
 
   it("refuses more classes than the default palette can colour (ml-aot.78)", () => {
-    const breaks = Array.from({ length: 12 }, (_, i) => (i + 1) * 10); // 13 classes
-    const [error] = only(parse(`  - id: a
-    type: fill
-    source: tracts
-    classify: { field: v, breaks: [${breaks.join(", ")}] }
-`));
+    const [error] = only(parse(D.tooManyClasses));
     expect(error!.path).toBe("layers.0.classify.breaks");
     expect(error!.message).toContain("13 classes");
     expect(error!.message).toContain("colors:");
     // 12 classes still fit viridis; with colors: any count works.
-    expect(parse(`  - id: a
-    type: fill
-    source: tracts
-    classify: { field: v, breaks: [${breaks.slice(0, 11).join(", ")}] }
-`).success).toBe(true);
-    const colors = breaks.map(() => '"#123456"').concat('"#654321"');
-    expect(parse(`  - id: a
-    type: fill
-    source: tracts
-    classify: { field: v, breaks: [${breaks.join(", ")}], colors: [${colors.join(", ")}] }
-`).success).toBe(true);
+    expect(parse(D.twelveClasses).success).toBe(true);
+    expect(parse(D.manyClassesWithColors).success).toBe(true);
   });
 
   it("checks breaks go up", () => {
-    const [error] = only(parse(`  - id: a
-    type: fill
-    source: tracts
-    classify: { field: v, breaks: [10, 5] }
-`));
+    const [error] = only(parse(D.breaksGoDown));
     expect(error!.path).toBe("layers.0.classify.breaks.1");
     expect(error!.message).toContain("breaks must go up");
   });
 
   it("counts colours against classes (n breaks → n + 1)", () => {
-    const [error] = only(parse(`  - id: a
-    type: fill
-    source: tracts
-    classify: { field: v, breaks: [10, 20], colors: [red, blue] }
-`));
+    const [error] = only(parse(D.colourCount));
     expect(error!.path).toBe("layers.0.classify.colors");
     expect(error!.message).toContain("3 classes (2 breaks + 1)");
   });
 
   it("needs a form, and only one", () => {
-    expect(only(parse(`  - id: a
-    type: fill
-    source: tracts
-    classify: { field: v }
-`))[0]!.message).toContain("classify needs one of breaks:");
-    expect(only(parse(`  - id: a
-    type: fill
-    source: tracts
-    classify: { field: v, breaks: [1], method: quantile }
-`))[0]!.message).toContain("not both");
+    expect(only(parse(D.noForm))[0]!.message).toContain("classify needs one of breaks:");
+    expect(only(parse(D.twoForms))[0]!.message).toContain("not both");
   });
 
   it("rejects a colour that is not one, and accepts hide for noData", () => {
-    const errors = only(parse(`  - id: a
-    type: fill
-    source: tracts
-    classify: { field: v, breaks: [1], noData: greyy }
-`));
+    const errors = only(parse(D.noDataTypo));
     expect(errors[0]!.path).toBe("layers.0.classify.noData");
     expect(errors[0]!.message).toContain('Did you mean "grey"?');
   });
 
   it("says palette:, not scheme:", () => {
-    const errors = only(parse(`  - id: a
-    type: fill
-    source: tracts
-    classify: { field: v, breaks: [1], scheme: Blues }
-`));
+    const errors = only(parse(D.schemeKey));
     expect(errors.some((e) => e.message.includes("palette:, not scheme:"))).toBe(true);
   });
 
   it("warns on an unknown key with a did-you-mean", () => {
-    const result = parse(`  - id: a
-    type: fill
-    source: tracts
-    classify: { field: v, breaks: [1], pallete: Blues }
-`);
+    const result = parse(D.unknownKey);
     expect(result.success).toBe(true);
     expect(result.warnings[0]!.message).toContain('Did you mean "palette"?');
   });
@@ -209,17 +97,7 @@ describe("block errors — positioned, with did-you-mean", () => {
 describe("categories map order (ml-aot.80)", () => {
   it("keeps the authored order of numeric keys, as the list form", async () => {
     const { resolveClassify, classifyLegendEntries } = await import("../../src/classify/compile");
-    const result = parse(`  - id: zones
-    type: fill
-    source: tracts
-    classify:
-      field: code
-      categories:
-        10: red
-        2: green
-        b: blue
-        1: black
-`);
+    const result = parse(D.categoriesNumericKeys);
     expect(result.errors).toEqual([]);
     const classify = (result.data as never as { layers: Array<{ classify: never }> }).layers[0]!.classify;
     const record = resolveClassify(classify, "fill");
@@ -233,13 +111,7 @@ describe("categories map order (ml-aot.80)", () => {
   });
 
   it("leaves a map JavaScript would not reorder as written", () => {
-    const result = parse(`  - id: zones
-    type: fill
-    source: tracts
-    classify:
-      field: zone
-      categories: { residential: "#f6e8c3", commercial: "#d8b365" }
-`);
+    const result = parse(D.categoriesWordKeys);
     const classify = (result.data as never as { layers: Array<{ classify: Record<string, unknown> }> }).layers[0]!
       .classify;
     expect(classify["categories"]).toEqual({ residential: "#f6e8c3", commercial: "#d8b365" });
@@ -249,12 +121,7 @@ describe("categories map order (ml-aot.80)", () => {
 
 describe("layer checks", () => {
   it("refuses method: over a vector tile source, and says why", () => {
-    const [error] = only(parse(`  - id: v
-    type: fill
-    source: tiles
-    source-layer: tracts
-    classify: { field: income, method: quantile }
-`));
+    const [error] = only(parse(D.methodOverTiles));
     expect(error!.path).toBe("layers.0.classify.method");
     expect(error!.message).toContain("only ever sees the tiles in view");
     expect(error!.message).toContain("breaks:");
@@ -262,135 +129,67 @@ describe("layer checks", () => {
   });
 
   it("refuses method: over a basemap source the document does not declare", () => {
-    const [error] = only(parse(`  - id: v
-    type: fill
-    source: openmaptiles
-    source-layer: water
-    classify: { field: income, method: jenks }
-`));
+    const [error] = only(parse(D.methodOverBasemap));
     expect(error!.message).toContain("not a GeoJSON source declared in this document");
   });
 
   it("refuses method: over a source read by view, in every spelling", () => {
-    const bare = YAMLParser.safeParseMapBlock(
-      HEAD.replace("url: /data/tracts.geojson", "url: /data/tracts.fgb\n    load: viewport") +
-        `  - id: v
-    type: fill
-    source: tracts
-    classify: { field: income, method: quantile }
-`
-    );
+    const bare = YAMLParser.safeParseMapBlock(D.methodOverViewportBare);
     expect(bare.success).toBe(false);
     expect(bare.errors[0]!.path).toBe("layers.0.classify.method");
     expect(bare.errors[0]!.message).toContain("load: viewport");
 
     // The object form.
-    const object = YAMLParser.safeParseMapBlock(
-      HEAD.replace(
-        "url: /data/tracts.geojson",
-        "url: /data/tracts.fgb\n    load: { mode: viewport, minzoom: 12 }"
-      ) +
-        `  - id: v
-    type: fill
-    source: tracts
-    classify: { field: income, method: quantile }
-`
-    );
+    const object = YAMLParser.safeParseMapBlock(D.methodOverViewportObject);
     expect(object.success).toBe(false);
     expect(object.errors[0]!.path).toBe("layers.0.classify.method");
 
     // An inline source on the layer.
-    const inline = parse(`  - id: v
-    type: fill
-    source: { type: geojson, url: /data/t.fgb, load: { mode: viewport } }
-    classify: { field: income, method: jenks }
-`);
+    const inline = parse(D.methodOverViewportInline);
     expect(inline.success).toBe(false);
     expect(inline.errors[0]!.path).toBe("layers.0.classify.method");
   });
 
   it("keeps explicit breaks: on a source read by view", () => {
-    const result = YAMLParser.safeParseMapBlock(
-      HEAD.replace("url: /data/tracts.geojson", "url: /data/tracts.fgb\n    load: { mode: viewport }") +
-        `  - id: v
-    type: fill
-    source: tracts
-    classify: { field: income, breaks: [10, 20] }
-`
-    );
+    const result = YAMLParser.safeParseMapBlock(D.breaksOverViewport);
     expect(result.errors).toEqual([]);
   });
 
   it("refuses classify plus an authored colour on the same property", () => {
-    const [error] = only(parse(`  - id: a
-    type: fill
-    source: tracts
-    paint:
-      fill-color: red
-    classify: { field: v, breaks: [1] }
-`));
+    const [error] = only(parse(D.paintClash));
     expect(error!.path).toBe("layers.0.paint.fill-color");
     expect(error!.message).toContain("Keep one");
     expect(error!.line).toBe(19);
   });
 
   it("allows an authored colour on another property", () => {
-    const result = parse(`  - id: a
-    type: fill
-    source: tracts
-    paint:
-      fill-color: red
-    classify: { field: v, breaks: [1], property: fill-outline-color }
-`);
+    const result = parse(D.otherPaintProperty);
     expect(result.success).toBe(true);
   });
 
   it("checks property: against the layer type, with a did-you-mean", () => {
-    const [error] = only(parse(`  - id: a
-    type: circle
-    source: tracts
-    classify: { field: v, breaks: [1], property: circle-colour }
-`));
+    const [error] = only(parse(D.propertyTypo));
     expect(error!.message).toContain('Did you mean "circle-color"?');
   });
 
   it("refuses a layer type with no colour to classify", () => {
-    const [error] = only(parse(`  - id: a
-    type: heatmap
-    source: tracts
-    classify: { field: v, breaks: [1] }
-`));
+    const [error] = only(parse(D.heatmapLayer));
     expect(error!.path).toBe("layers.0.classify");
     expect(error!.message).toContain("heatmap layer");
   });
 
   it("refuses radius: off circle layers", () => {
-    const [error] = only(parse(`  - id: a
-    type: fill
-    source: tracts
-    classify: { field: v, breaks: [1], radius: [2, 4] }
-`));
+    const [error] = only(parse(D.radiusOffCircle));
     expect(error!.path).toBe("layers.0.classify.radius");
   });
 
   it("refuses hide over a legacy-syntax filter", () => {
-    const [error] = only(parse(`  - id: a
-    type: fill
-    source: tracts
-    filter: ["==", "kind", "park"]
-    classify: { field: v, breaks: [1], noData: hide }
-`));
+    const [error] = only(parse(D.hideOverLegacyFilter));
     expect(error!.path).toBe("layers.0.filter");
   });
 
   it("reports a layer check beside a block error", () => {
-    const errors = only(parse(`  - id: a
-    type: fill
-    source: tiles
-    source-layer: t
-    paint: { fill-color: red }
-    classify: { field: v, method: quantile, palette: bleus }
-`));
+    const errors = only(parse(D.layerAndBlockErrors));
     const paths = errors.map((e) => e.path);
     expect(paths).toContain("layers.0.classify.palette");
     expect(paths).toContain("layers.0.paint.fill-color");
@@ -399,85 +198,22 @@ describe("layer checks", () => {
 
 describe("v2 and stories", () => {
   it("validates classify on v2 style.layers[] the same way", () => {
-    const ok = YAMLParser.safeParseMapBlock(`version: 2
-type: map
-id: m
-style:
-  center: [0, 0]
-  zoom: 2
-  sources:
-    tracts: { type: geojson, url: /t.geojson }
-  layers:
-    - id: a
-      type: fill
-      source: tracts
-      classify: { field: v, method: equal, classes: 4, palette: Greens }
-`);
+    const ok = YAMLParser.safeParseMapBlock(D.v2Valid);
     expect(ok.errors).toEqual([]);
-    const bad = YAMLParser.safeParseMapBlock(`version: 2
-type: map
-id: m
-style:
-  center: [0, 0]
-  zoom: 2
-  sources:
-    tiles: { type: vector, url: "https://example.com/t.json" }
-  layers:
-    - id: a
-      type: fill
-      source: tiles
-      source-layer: x
-      classify: { field: v, method: equal }
-`);
+    const bad = YAMLParser.safeParseMapBlock(D.v2MethodOverTiles);
     expect(bad.success).toBe(false);
     expect(bad.errors[0]!.path).toBe("style.layers.0.classify.method");
   });
 
   it("refuses method: over a v2 source whose runtime.load reads by view", () => {
-    const bad = YAMLParser.safeParseMapBlock(`version: 2
-type: map
-id: m
-style:
-  center: [0, 0]
-  zoom: 2
-  sources:
-    parcels:
-      type: geojson
-      url: /p.fgb
-      runtime:
-        load: { mode: viewport, minzoom: 12 }
-  layers:
-    - id: a
-      type: fill
-      source: parcels
-      classify: { field: v, method: quantile }
-`);
+    const bad = YAMLParser.safeParseMapBlock(D.v2MethodOverViewport);
     expect(bad.success).toBe(false);
     expect(bad.errors[0]!.path).toBe("style.layers.0.classify.method");
     expect(bad.errors[0]!.message).toContain("load: viewport");
   });
 
   it("validates classify in a story's layers", () => {
-    const result = YAMLParser.safeParseScrollytellingBlock(`type: scrollytelling
-id: s
-config:
-  center: [0, 0]
-  zoom: 2
-  mapStyle: "https://demotiles.maplibre.org/style.json"
-sources:
-  tiles: { type: vector, url: "https://example.com/t.json" }
-layers:
-  - id: a
-    type: fill
-    source: tiles
-    source-layer: x
-    classify: { field: v, method: jenks }
-chapters:
-  - id: one
-    title: One
-    center: [0, 0]
-    zoom: 2
-`);
+    const result = YAMLParser.safeParseScrollytellingBlock(D.storyMethodOverTiles);
     expect(result.success).toBe(false);
     expect(result.errors.some((e) => e.path === "layers.0.classify.method")).toBe(true);
   });
