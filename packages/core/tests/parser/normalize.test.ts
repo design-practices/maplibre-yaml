@@ -303,7 +303,7 @@ describe("date values", () => {
 
 describe("normalizeDocumentValue (exported for values parsed elsewhere)", () => {
   it("returns a normalized copy and leaves the input alone", async () => {
-    const { normalizeDocumentValue } = await import("../../src/index");
+    const { normalizeDocumentValue } = await import("../../src/parser/index");
     const input = {
       $schema: "https://docs.maplibre-yaml.org/schema/latest/map.schema.json",
       type: "map",
@@ -323,7 +323,7 @@ describe("normalizeDocumentValue (exported for values parsed elsewhere)", () => 
   });
 
   it("leaves an input with no dates alone too (no root $schema dropped, no locale flattened in it)", async () => {
-    const { normalizeDocumentValue } = await import("../../src/index");
+    const { normalizeDocumentValue } = await import("../../src/parser/index");
     const input = {
       $schema: "https://docs.maplibre-yaml.org/schema/latest/map.schema.json",
       type: "map",
@@ -341,7 +341,7 @@ describe("normalizeDocumentValue (exported for values parsed elsewhere)", () => 
   });
 
   it("reports a collision with its path as segments", async () => {
-    const { normalizeDocumentValue } = await import("../../src/index");
+    const { normalizeDocumentValue } = await import("../../src/parser/index");
     const { issues } = normalizeDocumentValue({
       config: { locale: { "Popup.Close": "a", Popup: { Close: "b" } } },
     });
