@@ -1,0 +1,19 @@
+# The slow document of the race: requested by `src`, overtaken by update(yaml).
+type = "map"
+id = "race-toml"
+
+[config]
+center = [10.2, 42.15]
+zoom = 9
+mapStyle = "/examples/verification/configs/local-style.json"
+
+[[layers]]
+id = "race-toml-dot"
+type = "circle"
+paint = { circle-radius = 14, circle-color = "#000000" }
+
+[layers.source]
+type = "geojson"
+data = { type = "FeatureCollection", features = [
+  { type = "Feature", properties = {}, geometry = { type = "Point", coordinates = [10.2, 42.15] } },
+] }

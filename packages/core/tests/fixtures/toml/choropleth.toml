@@ -1,0 +1,46 @@
+#:schema https://docs.maplibre-yaml.org/schema/latest/map.schema.json
+type = "map"
+id = "income-choropleth"
+
+[config]
+center = [-75.19, 39.936]
+zoom = 12
+mapStyle = "https://tiles.openfreemap.org/styles/positron"
+
+[sources.tracts]
+type = "geojson"
+url = "/data/classify/sample-tracts.geojson"
+
+[legend]
+position = "bottom-left"
+
+[[layers]]
+id = "income"
+type = "fill"
+source = "tracts"
+label = "Median household income"
+
+[layers.classify]
+field = "median_income"
+method = "quantile"
+classes = 5
+palette = "Blues"
+noData = "hide"
+format = { currency = "USD", max-fraction-digits = 0 }
+
+[layers.paint]
+fill-opacity = 0.85
+fill-outline-color = "#ffffff"
+
+[layers.interactive.hover]
+cursor = "pointer"
+highlight = true
+
+[[layers.interactive.click.popup]]
+h3 = [{ property = "NAME" }]
+
+[[layers.interactive.click.popup]]
+p = [
+  { str = "Median income: " },
+  { property = "median_income", format = { currency = "USD", max-fraction-digits = 0 }, else = "no data" },
+]

@@ -12,6 +12,8 @@
  */
 
 import { describe, it, expect } from "vitest";
+import Ajv from "ajv";
+import addFormats from "ajv-formats";
 import {
   buildSchemas,
   serializeSchema,
@@ -105,6 +107,58 @@ describe("emitted JSON Schema artifacts", () => {
     expect(Array.isArray(anyDef.oneOf)).toBe(true);
     expect(anyDef.oneOf).toHaveLength(3);
     expect(anyDef.anyOf).toBeUndefined();
+  });
+});
+
+describe("the published schemas accept what the parser normalizes (KTD6)", () => {
+  const schemas = buildSchemas();
+  const ajv = new Ajv({ allErrors: true, strict: false });
+  addFormats(ajv);
+  const config = {
+    center: [0, 0],
+    zoom: 2,
+    mapStyle: "https://example.com/style.json",
+    locale: { "Map.Title": "Carte", Popup: { Close: "Fermer", Nav: { "Zoom.In": "Plus" } } },
+  };
+  const map = { $schema: "./map.schema.json", type: "map", id: "m", config, layers: [] };
+  const story = {
+    $schema: "./scrollytelling.schema.json",
+    type: "scrollytelling",
+    id: "s",
+    config,
+    chapters: [{ id: "a", title: "A", center: [0, 0], zoom: 1 }],
+  };
+  const root = { $schema: "./root.schema.json", pages: [{ path: "/", title: "Home", blocks: [] }] };
+
+  it.each([
+    ["map", map],
+    ["scrollytelling", story],
+    ["root", root],
+    ["any", map],
+    ["any", story],
+    ["any", root],
+  ] as const)("%s accepts a root $schema and nested locale tables", (name, doc) => {
+    const validate = ajv.compile(schemas[name]);
+    expect(validate(doc), JSON.stringify(validate.errors)).toBe(true);
+  });
+
+  it("declares $schema on each root $defs entry, beside no top-level $ref key", () => {
+    for (const name of SCHEMA_NAMES) {
+      const def = (schemas[name].$defs as Record<string, any>)[name];
+      for (const shape of def.oneOf ?? [def]) {
+        expect(shape.properties.$schema).toMatchObject({ type: "string" });
+      }
+      expect(schemas[name]).not.toHaveProperty("properties");
+    }
+  });
+
+  it("still rejects a non-string locale leaf and a nested $schema", () => {
+    const validate = ajv.compile(schemas.map);
+    expect(validate({ ...map, config: { ...config, locale: { Popup: { Close: 5 } } } })).toBe(false);
+    expect(validate({ ...map, legend: { $schema: "x" } })).toBe(false);
+    expect(validate.errors).toContainEqual(
+      expect.objectContaining({ instancePath: "/legend", params: { additionalProperty: "$schema" } })
+    );
   });
 });
 

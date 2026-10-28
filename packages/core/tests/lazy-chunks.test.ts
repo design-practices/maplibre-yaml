@@ -54,6 +54,12 @@ const LIBRARY_MARKERS: Record<string, string[]> = {
   // The update engine (renderer/update): its own wording, which the entry —
   // which decides fallback and runs the queue — never carries.
   update: ["so the document's layer is skipped", "names a layer that comes earlier in the document"],
+  // toml-eslint-parser's own errors, and the TOML hints the chunk words
+  // (the entry carries neither: YAML and JSON pages download no TOML code).
+  toml: ["Trailing comma is not permitted in an inline table", "Unspecified values are invalid", "TOML reads the dots in"],
+  // The converter's loss rules and printers (convert/): only `convertDocument`
+  // loads them, and no element imports it.
+  convert: ["and leaving this value out would change the document", "is written out in full", "# yaml-language-server: $schema="],
 };
 
 /** geotiff's codecs, in chunks/cog-<codec>.js (ml-cnv.11): never in a main bundle either. */
@@ -91,7 +97,7 @@ function staticClosure(files: string[]): string[] {
 describe("the seam", () => {
   it("names the readers this version loads on demand", () => {
     expect([...SEAM_NAMES].sort()).toEqual(
-      ["cog", "flatgeobuf", "geoparquet", "geoparquet-brotli", "pmtiles", "protomaps-basemap", "update"]
+      ["cog", "convert", "flatgeobuf", "geoparquet", "geoparquet-brotli", "pmtiles", "protomaps-basemap", "toml", "update"]
     );
     // Every on-demand library has markers, so the "not in the main bundle"
     // checks below cover all of them.
@@ -109,6 +115,42 @@ describe("the seam", () => {
       expect(values.filter((s) => !s.startsWith("./")), file).toEqual([]);
       expect(/["'][^"']*\/(emitter|export)\//.test(code), `${file} reaches emitter/ or export/`).toBe(false);
     }
+  });
+
+  it("the TOML reader's sources import core modules as types only (KTD4)", () => {
+    const dir = join(PKG_ROOT, "src/parser/toml");
+    const files = readdirSync(dir).filter((f) => f.endsWith(".ts"));
+    expect(files.sort()).toEqual(["hints.ts", "index-positions.ts", "index.ts", "reader.ts"]);
+    for (const file of files) {
+      const code = readFileSync(join(dir, file), "utf8").replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+      const values = [...code.matchAll(/^(?:import|export)\s+(?!type\b)[^;]*?from\s*["']([^"']+)["']/gm)].map((m) => m[1]!);
+      // Value imports stay inside the reader (./…) or are the parser itself.
+      expect(values.filter((s) => !s.startsWith("./") && s !== "toml-eslint-parser"), file).toEqual([]);
+    }
+  });
+
+  it("the converter chunk's sources import core modules as types only (KTD9)", () => {
+    const dir = join(PKG_ROOT, "src/convert");
+    // The entry half (index.ts reads the text, tree.ts builds the authored
+    // tree) may import core; everything chunk.ts reaches may not.
+    const chunkFiles = ["chunk.ts", "losses.ts", "print-json.ts", "print-toml.ts", "print-yaml.ts", "types.ts", "wrap.ts"];
+    expect(readdirSync(dir).filter((f) => f.endsWith(".ts")).sort()).toEqual([...chunkFiles, "index.ts", "tree.ts"].sort());
+    for (const file of chunkFiles) {
+      const code = readFileSync(join(dir, file), "utf8").replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+      const values = [...code.matchAll(/^(?:import|export)\s+(?!type\b)[^;]*?from\s*["']([^"']+)["']/gm)].map((m) => m[1]!);
+      // Value imports stay among the chunk's own files.
+      expect(values.filter((s) => !chunkFiles.includes(`${s.replace(/^\.\//, "")}.ts`)), file).toEqual([]);
+    }
+    // No element reaches convertDocument: only the package index exports it.
+    const importers = (dir: string): string[] =>
+      readdirSync(join(PKG_ROOT, dir), { withFileTypes: true }).flatMap((d) =>
+        d.isDirectory()
+          ? importers(join(dir, d.name))
+          : d.name.endsWith(".ts") && /from\s*["'][^"']*convert(?:\/index)?["']/.test(readFileSync(join(PKG_ROOT, dir, d.name), "utf8"))
+            ? [join(dir, d.name)]
+            : []
+      );
+    expect(importers("src").sort()).toEqual(["src/index.ts"]);
   });
 
   it("describes where each build puts the readers as tsup.config.ts does (ml-cnv.19)", () => {
@@ -161,6 +203,27 @@ describe.skipIf(!built)("CDN build: register.browser.js + chunks/", () => {
       expect(code.includes(marker), `chunks/update.js has entry wording: ${marker}`).toBe(false);
     }
     expect(main.includes("so the document's layer is skipped")).toBe(false);
+  });
+
+  it("the TOML reader chunk imports nothing at all (KTD4)", () => {
+    const code = read("chunks/toml.js");
+    expect(staticImports(code)).toEqual([]);
+    expect(dynamicImports(code)).toEqual([]);
+    // The entry's own wording stays in the entry.
+    for (const marker of ["The document is empty. Add a map or a story to it.", "JSON syntax error:"]) {
+      expect(code.includes(marker), `chunks/toml.js has entry wording: ${marker}`).toBe(false);
+    }
+  });
+
+  it("the converter chunk imports nothing at all, and the entry carries none of the converter (KTD9)", () => {
+    const code = read("chunks/convert.js");
+    expect(staticImports(code)).toEqual([]);
+    expect(dynamicImports(code)).toEqual([]);
+    // convertDocument's own wording is in neither: no element imports it.
+    for (const marker of ["The document could not be converted", "choose yaml, json or toml"]) {
+      expect(main.includes(marker), `register.browser.js has ${marker}`).toBe(false);
+      expect(code.includes(marker), `chunks/convert.js has ${marker}`).toBe(false);
+    }
   });
 
   it("the COG chunk keeps its heavy codecs in their own files next to it (ml-cnv.11)", () => {

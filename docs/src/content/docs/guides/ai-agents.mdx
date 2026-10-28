@@ -18,7 +18,9 @@ generate  →  validate -f json  →  repair  →  repeat until valid
 ```
 
 1. **Generate** a map document in [format v1](/guides/format-v2/), the
-   default: the schemas, the examples and every guide use it.
+   default: the schemas, the examples and every guide use it. An agent that
+   writes JSON more reliably can save the same document as `map.json`, with
+   a `$schema` key ([JSON & TOML documents](/guides/json-and-toml/)).
 2. **Validate** it with the CLI's JSON output:
 
    ```bash
@@ -47,6 +49,44 @@ checks the shape of a document, while `validate` also checks rules across
 fields (a layer naming a source that isn't declared, a map with no basemap).
 Always finish with `validate`.
 </Aside>
+
+## JSON and TOML \{#json-and-toml}
+
+An agent may write the document as JSON or TOML instead of YAML — whichever
+its tooling emits more reliably — and run the same loop on it: `validate`
+reads all three, reports at the same line and column, and `-f json` works
+on a `.json` or `.toml` file exactly as on a `.yaml` one. These docs stay
+YAML; see [JSON & TOML documents](/guides/json-and-toml/) for the schema
+line in each format and what else changes.
+
+To move a document between formats, use `mlym convert <file> --to
+yaml|json|toml`:
+
+```bash
+npx maplibre-yaml@latest convert map.toml --to yaml
+npx maplibre-yaml@latest convert map.json --to toml --out map.toml --strict
+```
+
+`--strict` exits `1` and writes nothing if the target can't keep everything
+(comments, anchors, a `null`); without it, what's lost is listed on stderr
+and the command still exits `0`. Add `-f json` to read the result instead of
+prose: one object on stdout, `{ success, from, to, text, losses, errors }`
+(`out` in place of `text` with `--out`), each loss and error with its
+`path`, `line` and `column` as `validate -f json` gives them
+([the convert JSON output](/cli/reference/#convert-json-output)):
+
+```bash
+npx maplibre-yaml@latest convert map.json --to toml --strict -f json
+```
+
+TOML has traps a generated document can hit:
+
+- `filter = null`, or any `null`: TOML has no null. Leave the key out.
+- An unquoted dotted key outside `locale`: `a.b = 1` nests as `a = { b = 1 }`.
+- A bare `#` colour: `circle-color = #e74c3c` starts a comment. Quote it.
+- A layer's own key written after a `[layers.paint]` header: it lands in
+  `paint`, not the layer.
+- `!html`: write `{ "$html" = "…" }` (JSON: `{ "$html": "…" }`).
 
 ## The JSON output \{#the-machine-error-contract}
 

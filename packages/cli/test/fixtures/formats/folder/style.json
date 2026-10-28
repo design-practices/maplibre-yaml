@@ -1,0 +1,11 @@
+{
+  "version": 8,
+  "name": "A basemap",
+  "sources": {
+    "land": { "type": "geojson", "data": { "type": "FeatureCollection", "features": [] } }
+  },
+  "layers": [
+    { "id": "background", "type": "background", "paint": { "background-color": "#f8f4f0" } },
+    { "id": "land", "type": "fill", "source": "land" }
+  ]
+}

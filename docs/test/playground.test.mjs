@@ -9,7 +9,8 @@ import assert from "node:assert/strict";
 import { readFileSync, existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { YAMLParser } from "@maplibre-yaml/core";
+import { YAMLParser, YAML_PARSE_OPTIONS, parseDocumentText, convertDocument } from "@maplibre-yaml/core";
+import { parse as parseYaml } from "yaml";
 import { createSchemaAssist, schemaNameFor } from "../src/playground/schema-assist.mjs";
 import { toDiagnostics, trustNotes, holdWhileTyping, lineColToOffset, cleanMessage, summarize } from "../src/playground/diagnostics.mjs";
 import { encodeShare, decodeShare, shareLink, hostsOf, safeSrc, SHARE_MAX_LENGTH } from "../src/playground/share.mjs";
@@ -85,6 +86,9 @@ test("schema help: hover describes the key under the cursor", () => {
 test("schema help: story documents use the scrollytelling schema", () => {
   assert.equal(schemaNameFor("type: scrollytelling\nid: s\n"), "scrollytelling");
   assert.equal(schemaNameFor("type: map\nid: s\n"), "map");
+  assert.equal(schemaNameFor('{\n  "type": "scrollytelling"\n}', "json"), "scrollytelling");
+  assert.equal(schemaNameFor('#:schema x\ntype = "scrollytelling"\n', "toml"), "scrollytelling");
+  assert.equal(schemaNameFor('type = "map"\n', "toml"), "map");
   const chapter = labels(story.complete(...at("type: scrollytelling\nid: s\nchapters:\n  - id: a\n    |\n")));
   for (const k of ["title", "center", "zoom", "description"]) assert.ok(chapter.includes(k), k);
 });
@@ -144,11 +148,45 @@ test("diagnostics: an error with no position attaches to the start", () => {
 
 test("diagnostics: !html and click.emit get an info note, and only those", () => {
   const text = "popup:\n  - p:\n      - str: !html \"<b>x</b>\"\ninteractive:\n  click:\n    emit:\n      event: select\n# emit: in a comment\n";
-  const notes = trustNotes(text);
+  const notes = trustNotes(text, parseYaml(text, YAML_PARSE_OPTIONS));
   assert.equal(notes.length, 2);
   assert.ok(notes.every((n) => n.severity === "info" && n.href));
   assert.equal(text.slice(notes[0].from, notes[0].to), "!html");
   assert.equal(text.slice(notes[1].from, notes[1].to), "emit");
+  // Read from the parsed value: a document that doesn't parse has none.
+  assert.deepEqual(trustNotes(text, undefined), []);
+});
+
+test("diagnostics: the same notes for a document in JSON and in TOML", async () => {
+  const yaml = config("configs/earthquakes.yaml").replace(/- property: place/, '- str: !html "<b>x</b>"');
+  for (const to of ["json", "toml"]) {
+    const converted = await convertDocument(yaml, { to });
+    assert.ok(converted.success, to);
+    const parsed = await parseDocumentText(converted.text, { kind: "any", format: to });
+    assert.ok(parsed.result.success, to);
+    const notes = trustNotes(converted.text, parsed.result.data, to);
+    assert.equal(notes.length, 1, `${to}: ${JSON.stringify(notes)}`);
+    assert.equal(converted.text.slice(notes[0].from, notes[0].to), "$html", to);
+  }
+  const toml = 'type = "map"\n# emit = "a comment"\n[layers.interactive.click.emit]\nevent = "pick"\n';
+  const emit = trustNotes(toml, { layers: { interactive: { click: { emit: { event: "pick" } } } } }, "toml");
+  assert.deepEqual(emit.map((n) => [toml.slice(n.from, n.to), n.line]), [["emit", 3]]);
+});
+
+test("diagnostics: a TOML error lands on the key, with its quick fix", async () => {
+  const yaml = config("configs/earthquakes.yaml").replace(/^(\s*)zoom:/m, "$1zom:");
+  const converted = await convertDocument(yaml, { to: "toml" });
+  assert.ok(converted.success);
+  const parsed = await parseDocumentText(converted.text, { kind: "any", format: "toml" });
+  const list = toDiagnostics(converted.text, parsed, "toml");
+  const zom = list.find((d) => converted.text.slice(d.from, d.to) === "zom");
+  assert.ok(zom, JSON.stringify(list));
+  assert.deepEqual(zom.fix, { label: "Change to zoom", insert: "zoom" });
+  assert.equal(zom.line, converted.text.split("\n").findIndex((l) => /^zom\s*=/.test(l)) + 1);
+  const syntax = await parseDocumentText('type = "map"\nid = x\n', { kind: "any", format: "toml" });
+  const [d] = toDiagnostics('type = "map"\nid = x\n', syntax, "toml");
+  assert.equal(d.code, "toml-syntax");
+  assert.equal(d.line, 2);
 });
 
 test("diagnostics: a syntax error on the line being typed is held, others show", () => {
@@ -157,6 +195,8 @@ test("diagnostics: a syntax error on the line being typed is held, others show",
     { line: 2, severity: "warning" },
   ];
   assert.deepEqual(holdWhileTyping(list, 4).shown, [list[1]]);
+  const toml = [{ line: 3, code: "toml-syntax", severity: "error" }];
+  assert.deepEqual(holdWhileTyping(toml, 3).shown, []);
   assert.deepEqual(holdWhileTyping(list, 3).shown, list);
   assert.deepEqual(holdWhileTyping(list, null).shown, list);
   assert.equal(summarize([{ severity: "error" }, { severity: "warning" }, { severity: "warning" }, { severity: "info" }]), "1 error, 2 warnings");
@@ -169,10 +209,21 @@ test("share: encode/decode round-trips any document", () => {
     const text = config(`configs/${name}`);
     const hash = encodeShare(text);
     assert.match(hash, /^#code\/[A-Za-z0-9+\-$]+$/, "URL-safe payload");
-    assert.equal(decodeShare(hash), text);
+    assert.deepEqual(decodeShare(hash), { text, format: "yaml" });
   }
   const odd = "id: ünïcödé — 🗺️\n\ttabs & \"quotes\" #?&=\n";
-  assert.equal(decodeShare(encodeShare(odd)), odd);
+  assert.equal(decodeShare(encodeShare(odd)).text, odd);
+});
+
+test("share: JSON and TOML links carry their format; #code/ stays YAML", () => {
+  const toml = 'type = "map"\n';
+  assert.match(encodeShare(toml, "toml"), /^#toml\//);
+  assert.deepEqual(decodeShare(encodeShare(toml, "toml")), { text: toml, format: "toml" });
+  assert.deepEqual(decodeShare(encodeShare("{}", "json")), { text: "{}", format: "json" });
+  // A link made before the toggle: the same payload under #code/ is YAML.
+  assert.deepEqual(decodeShare("#code/" + encodeShare(toml, "toml").slice("#toml/".length)), { text: toml, format: "yaml" });
+  assert.match(shareLink("https://x.example/playground/", toml, "toml").url, /\/playground\/#toml\//);
+  for (const h of ["#json/", "#toml/", "#toml/%%%"]) assert.equal(decodeShare(h), null, h);
 });
 
 test("share: decode refuses anything that isn't a share link", () => {
@@ -272,6 +323,7 @@ test("download: the folder holds the page, the document and a README, pinned to 
   assert.match(s["my-map/README.txt"], /story\.yaml/);
 
   const zipped = unzipSync(downloadZip("type: map\nid: z\n", "map"));
+  assert.deepEqual(Object.keys(unzipSync(downloadZip('type = "map"\n', "map", "toml"))).sort(), ["my-map/README.txt", "my-map/index.html", "my-map/map.toml"]);
   assert.deepEqual(Object.keys(zipped).sort(), ["my-map/README.txt", "my-map/index.html", "my-map/map.yaml"]);
   assert.match(strFromU8(zipped["my-map/map.yaml"]), /^# yaml-language-server: .*\ntype: map\nid: z\n$/);
 });
@@ -321,4 +373,30 @@ test("starters: the story starter is near the top, short, and the docs' complete
 
 test("starters: playground links", () => {
   assert.equal(playgroundHref("/configs/gallery/display-a-map.yaml"), "/playground/?src=/configs/gallery/display-a-map.yaml");
+});
+
+test("download: a JSON or TOML document keeps its format, with its schema hint and site paths", async () => {
+  const yaml = config("configs/classify/graduated.yaml");
+  for (const to of ["json", "toml"]) {
+    const converted = await convertDocument(yaml, { to });
+    assert.ok(converted.success, to);
+    const files = downloadFiles(converted.text, "map", to);
+    assert.deepEqual(Object.keys(files).sort(), ["my-map/README.txt", "my-map/index.html", `my-map/map.${to}`]);
+    assert.ok(files["my-map/index.html"].includes(`<ml-map src="./map.${to}">`), to);
+    const doc = files[`my-map/map.${to}`];
+    assert.ok(doc.includes("https://docs.maplibre-yaml.org/data/classify/world-cities.geojson"), to);
+    assert.ok(!/["']\/data\//.test(doc), `${to}: no site-root path left`);
+    assert.match(doc, to === "toml" ? /^#:schema https:\/\/docs\.maplibre-yaml\.org\/schema\/latest\/map\.schema\.json\n/ : /^\{\n\s+"\$schema": "https:\/\/docs\.maplibre-yaml\.org\/schema\/latest\/map\.schema\.json",\n/);
+    const parsed = await parseDocumentText(doc, { kind: "any", format: to });
+    assert.equal(parsed.result.success, true, `${to}: ${JSON.stringify(parsed.result.errors)}`);
+    assert.match(files["my-map/README.txt"], new RegExp(`map\\.${to}`));
+  }
+  const story = downloadFiles('{\n  "type": "scrollytelling"\n}', "scrollytelling", "json");
+  assert.ok(story["my-map/index.html"].includes('<ml-scrollytelling src="story.json">'));
+  assert.ok(story["my-map/story.json"].startsWith('{\n  "$schema": "https://docs.maplibre-yaml.org/schema/latest/scrollytelling.schema.json",\n  "type"'));
+  // Comments and non-file keys are left as written.
+  assert.equal(
+    rewriteSiteUrls('url = "/data/a.geojson" # was "/data/b"\nhref = "/about"\ntiles = ["/t/{z}.pbf"]\n', undefined, "toml"),
+    'url = "https://docs.maplibre-yaml.org/data/a.geojson" # was "/data/b"\nhref = "/about"\ntiles = ["https://docs.maplibre-yaml.org/t/{z}.pbf"]\n',
+  );
 });

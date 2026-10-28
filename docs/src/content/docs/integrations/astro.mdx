@@ -305,8 +305,8 @@ loads it:
 | The `loadGlobalMapConfig` file | Restart `astro dev`: the module that reads it ran once and kept the old file. |
 
 Add the optional integration and every row becomes "the page reloads by
-itself". It watches the files the loaders read and the YAML, GeoJSON and JSON
-under `public/`:
+itself". It watches the files the loaders read and the YAML, JSON, TOML and
+GeoJSON under `public/`:
 
 ```js title="astro.config.mjs"
 import { defineConfig } from "astro/config";

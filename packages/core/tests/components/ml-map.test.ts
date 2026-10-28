@@ -1027,3 +1027,225 @@ layers: []
     });
   });
 });
+
+// U4 (ml-4cn): every way a document comes in reads YAML, JSON and TOML
+// through the one front door. The TOML reader is the real lazy chunk here.
+describe("documents in YAML, JSON and TOML (U4)", () => {
+  beforeEach(() => {
+    document.body.innerHTML = "";
+    if (!customElements.get("ml-map")) customElements.define("ml-map", MLMap);
+  });
+  const STYLE = "https://demotiles.maplibre.org/style.json";
+  const YAML_DOC = `type: map
+id: formats
+config:
+  center: [3, 4]
+  zoom: 5
+  mapStyle: "${STYLE}"
+layers:
+  - id: pts
+    type: circle
+    source:
+      type: geojson
+      data: { type: FeatureCollection, features: [] }
+    paint: { circle-color: "#d62828" }
+`;
+  const TOML_DOC = `type = "map"
+id = "formats"
+
+[config]
+center = [3, 4]
+zoom = 5
+mapStyle = "${STYLE}"
+
+[[layers]]
+id = "pts"
+type = "circle"
+paint = { circle-color = "#d62828" }
+
+[layers.source]
+type = "geojson"
+data = { type = "FeatureCollection", features = [] }
+`;
+  const tick = (ms = 10) => new Promise((resolve) => setTimeout(resolve, ms));
+  /** Wait until the element shows a map or a card (the TOML reader is a dynamic import). */
+  const settled = async (el: MLMap) => {
+    for (let i = 0; i < 200 && !el.getRenderer() && !el.querySelector(".ml-map-error"); i++) await tick(5);
+  };
+  const withScript = (type: string, text: string) => {
+    const element = document.createElement("ml-map") as MLMap;
+    const script = document.createElement("script");
+    script.setAttribute("type", type);
+    script.textContent = text;
+    element.appendChild(script);
+    return element;
+  };
+  /** What the renderer was built with, minus nothing: the map the document draws. */
+  const drawn = (el: MLMap) => {
+    const r = el.getRenderer() as any;
+    return { config: r?.config, layers: r?.layers };
+  };
+
+  it("AE1: a TOML config attribute renders the same map as the YAML original; JSON text too", async () => {
+    const yaml = withScript("text/yaml", YAML_DOC);
+    const toml = document.createElement("ml-map") as MLMap;
+    toml.setAttribute("config", TOML_DOC);
+    const json = document.createElement("ml-map") as MLMap;
+    json.setAttribute("config", JSON.stringify({
+      type: "map",
+      id: "formats",
+      config: { center: [3, 4], zoom: 5, mapStyle: STYLE },
+      layers: [{ id: "pts", type: "circle", source: { type: "geojson", data: { type: "FeatureCollection", features: [] } }, paint: { "circle-color": "#d62828" } }],
+    }));
+    document.body.append(yaml, toml, json);
+    for (const el of [yaml, toml, json]) await settled(el);
+    expect(toml.querySelector(".ml-map-error")).toBeNull();
+    expect(json.querySelector(".ml-map-error")).toBeNull();
+    expect(drawn(toml)).toEqual(drawn(yaml));
+    expect(drawn(json)).toEqual(drawn(yaml));
+    expect(toml.getDocument()).toEqual(yaml.getDocument());
+  });
+
+  it("AE1: YAML whose string values contain ` = ` stays YAML", async () => {
+    const el = document.createElement("ml-map") as MLMap;
+    el.setAttribute("config", YAML_DOC.replace("id: formats", 'id: formats\ntitle: "a = b"'));
+    document.body.appendChild(el);
+    await settled(el);
+    expect(el.querySelector(".ml-map-error")).toBeNull();
+    expect(el.getDocument()?.id).toBe("formats");
+  });
+
+  it.each(["application/toml", "text/toml", "application/x-toml", "text/x-toml"])(
+    "an inline <script type=%j> renders, and the stylesheet hides it",
+    async (type) => {
+      const el = withScript(type, TOML_DOC);
+      document.body.appendChild(el);
+      await settled(el);
+      expect(el.querySelector(".ml-map-error")).toBeNull();
+      expect(el.getRenderer()?.config.center).toEqual([3, 4]);
+      const { defaultStyles } = await import("../../src/components/styles");
+      expect(defaultStyles).toContain(`ml-map script[type="${type}"]`);
+    }
+  );
+
+  it("a script type that looks like a document but isn't supported is named in the card, not 'No configuration provided' (R5)", async () => {
+    const quiet = vi.spyOn(console, "error").mockImplementation(() => {});
+    const el = withScript("text/x-yaml5", YAML_DOC);
+    document.body.appendChild(el);
+    await tick(600);
+    const card = el.querySelector(".ml-map-error")!.textContent!;
+    expect(card).toContain('<script type="text/x-yaml5">');
+    expect(card).toContain("isn't a type maplibre-yaml reads");
+    expect(card).not.toContain("No configuration provided");
+    quiet.mockRestore();
+  });
+
+  it("an empty supported script with a src says the script is empty and its src is not loaded, not that its type is unsupported", async () => {
+    const quiet = vi.spyOn(console, "error").mockImplementation(() => {});
+    const el = document.createElement("ml-map") as MLMap;
+    const script = document.createElement("script");
+    script.setAttribute("type", "text/yaml");
+    script.setAttribute("src", "maps/city.yaml");
+    el.appendChild(script);
+    document.body.appendChild(el);
+    await tick(600);
+    const card = el.querySelector(".ml-map-error")!.textContent!;
+    expect(card).not.toContain("isn't a type maplibre-yaml reads");
+    expect(card).toContain('<script type="text/yaml"> is empty');
+    expect(card).toContain("src attribute is not loaded");
+    expect(card).toContain('<ml-map src="maps/city.yaml">');
+    expect(card).not.toContain("No configuration provided");
+    quiet.mockRestore();
+  });
+
+  it("an empty supported script says it is empty, ahead of an unsupported one after it", async () => {
+    const quiet = vi.spyOn(console, "error").mockImplementation(() => {});
+    const el = withScript("application/json", "");
+    const other = document.createElement("script");
+    other.setAttribute("type", "text/x-yaml5");
+    other.textContent = YAML_DOC;
+    el.appendChild(other);
+    document.body.appendChild(el);
+    await tick(600);
+    const card = el.querySelector(".ml-map-error")!.textContent!;
+    expect(card).toContain('<script type="application/json"> is empty');
+    expect(card).not.toContain("isn't a type maplibre-yaml reads");
+    expect(card).not.toContain("src attribute");
+    quiet.mockRestore();
+  });
+
+  it("a TOML config attribute whose multi-line string holds a column-0 `Source:` line renders (no signal, sniffed)", async () => {
+    const el = document.createElement("ml-map") as MLMap;
+    el.setAttribute(
+      "config",
+      TOML_DOC.replace('id = "formats"', 'id = "formats"\ndescription = """\nQuakes this week.\nSource: NASA earthquake feed\n"""')
+    );
+    document.body.appendChild(el);
+    await settled(el);
+    expect(el.querySelector(".ml-map-error")).toBeNull();
+    expect(el.getDocument()?.id).toBe("formats");
+  });
+
+  it.each(["module", "importmap", "application/ld+json"])("a %j script still says 'No configuration provided'", async (type) => {
+    const quiet = vi.spyOn(console, "error").mockImplementation(() => {});
+    const el = withScript(type, "{}");
+    document.body.appendChild(el);
+    await tick(600);
+    expect(el.querySelector(".ml-map-error")!.textContent).toContain("No configuration provided");
+    quiet.mockRestore();
+  });
+
+  it("a duplicate key in a JSON config attribute is an error with a position (was silently last-wins)", async () => {
+    const quiet = vi.spyOn(console, "error").mockImplementation(() => {});
+    const el = document.createElement("ml-map") as MLMap;
+    const errors: any[] = [];
+    el.addEventListener("ml-map:error", (e) => errors.push(...((e as CustomEvent).detail.errors ?? [])));
+    el.setAttribute("config", `{
+  "type": "map",
+  "id": "dup",
+  "config": { "center": [0, 0], "zoom": 2, "zoom": 3, "mapStyle": "${STYLE}" },
+  "layers": []
+}`);
+    document.body.appendChild(el);
+    await settled(el);
+    expect(el.getRenderer()).toBeNull();
+    expect(errors[0]).toMatchObject({ format: "json", line: 4 });
+    expect(errors[0].message).toMatch(/unique|duplicate/i);
+    expect(el.querySelector(".ml-map-error")!.textContent).toContain("line 4");
+    quiet.mockRestore();
+  });
+
+  it("a merge fan-out document in the config attribute shows the yaml-expansion card", async () => {
+    const quiet = vi.spyOn(console, "error").mockImplementation(() => {});
+    let s = "type: map\nid: bomb\na0: &a0 { k: v }\n";
+    for (let i = 1; i <= 6; i++) s += `a${i}: &a${i}\n  <<: [${Array.from({ length: 9 }, () => `*a${i - 1}`).join(",")}]\n`;
+    const el = document.createElement("ml-map") as MLMap;
+    const errors: any[] = [];
+    el.addEventListener("ml-map:error", (e) => errors.push(...((e as CustomEvent).detail.errors ?? [])));
+    el.setAttribute("config", `${s}layers: []\n`);
+    const started = Date.now();
+    document.body.appendChild(el);
+    await settled(el);
+    expect(Date.now() - started).toBeLessThan(1000);
+    expect(errors[0]?.code).toBe("yaml-expansion");
+    expect(el.querySelector(".ml-map-error")!.textContent).toMatch(/sequence of aliases/i);
+    quiet.mockRestore();
+  });
+
+  it("the config property given TOML text, before connect, renders when the element connects (getter null until read)", async () => {
+    const el = document.createElement("ml-map") as MLMap;
+    el.config = TOML_DOC;
+    expect(el.config).toBeNull();
+    document.body.appendChild(el);
+    await settled(el);
+    expect(el.getRenderer()?.config.zoom).toBe(5);
+    expect(el.config?.id).toBe("formats");
+  });
+
+  it("YAML and JSON text still render in the same turn (no await before the map is built)", () => {
+    const el = document.createElement("ml-map") as MLMap;
+    el.setAttribute("config", YAML_DOC);
+    document.body.appendChild(el);
+    expect(el.getRenderer()).toBeTruthy();
+  });
+});

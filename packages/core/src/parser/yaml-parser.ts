@@ -273,7 +273,7 @@ import {
 } from "./expand-sugar";
 import { checkClassify, checkClassifiedLegendItems } from "../classify/checks";
 import { checkLayerSources, refNotFoundMessage } from "./source-refs";
-import { restoreCategoryOrder } from "../classify/category-order";
+import { restoreCategoryOrder, type AuthoredOrder } from "../classify/category-order";
 import { RootSchema } from "../schemas/page.schema";
 import { MapBlockSchema } from "../schemas/map.schema";
 import { MapBlockV2Schema, type MapBlockV2 } from "../schemas/map-v2.schema";
@@ -286,6 +286,7 @@ import {
   hashSyntaxHint,
   positionForKey,
   positionForPath,
+  registerPositions,
   suggest,
   unknownTypeMessage,
   typeKindForOptions,
@@ -294,6 +295,7 @@ import {
   SOURCE_TYPES,
   BLOCK_TYPES,
   type HashCommentValue,
+  type PositionIndex,
   type ValidationWarning,
 } from "./validation-utils";
 import { isLikelyMisspelling } from "../utils/suggest";
@@ -304,8 +306,43 @@ import { applyCogDefaults, checkCogSources } from "./cog-checks";
 import { reservedPrefixWarnings } from "./reserved-prefix";
 import { boundsProblem } from "../utils/bounds";
 import { explainIndentationError, explainQuoteError } from "./yaml-errors";
+import { normalizeDates, normalizeDocument, normalizeOrThrow, withNormalized, type Normalized } from "./normalize";
 
 const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/**
+ * Where a value came from, when it was read from text that is not YAML (a
+ * TOML document, KTD5). Given to the value entry points, it makes them
+ * report positions in that text: the YAML they synthesize answers its
+ * positions from `positions`, and `categories` keep `authoredOrder` (R9).
+ */
+export interface ValueSource {
+  positions: PositionIndex;
+  authoredOrder?: AuthoredOrder;
+}
+
+/**
+ * The source of the value being validated, while a value entry point runs with one.
+ *
+ * @remarks
+ * Module state, and safe only because the whole validation chain under
+ * {@link readingFrom} is synchronous: nothing awaits between setting it and
+ * restoring it, so no other document's parse can observe it. A value entry
+ * point that ever awaits inside `parse` must thread the source explicitly
+ * instead.
+ */
+let reading: ValueSource | undefined;
+
+/** Run `parse` with every Document it parses answering positions from `source`. */
+function readingFrom<T>(source: ValueSource, parse: () => T): T {
+  const outer = reading;
+  reading = source;
+  try {
+    return parse();
+  } finally {
+    reading = outer;
+  }
+}
 
 export type { ValidationWarning } from "./validation-utils";
 
@@ -358,14 +395,25 @@ export type ParseErrorCode =
   | "yaml-expansion"
   /** A merge key pointed at something that is not a map. */
   | "yaml-merge"
+  /** Malformed TOML (or TOML nested too deep to read). */
+  | "toml-syntax"
   /** The document validated against no schema (unknown block type, wrong shape). */
   | "schema";
+
+/**
+ * The text format a document was read from. The `YAMLParser` methods read
+ * YAML (and JSON, which is YAML 1.2) and leave it unset; `parseDocumentText`
+ * sets it on every result and error it returns.
+ */
+export type DocumentFormat = "yaml" | "json" | "toml";
 
 export interface ParseError {
   path: string;
   message: string;
   /** Machine-readable classification. Absent on legacy/schema-issue paths. */
   code?: ParseErrorCode;
+  /** The format the document was read as. Set by `parseDocumentText`. */
+  format?: DocumentFormat;
   line?: number;
   column?: number;
   suggestion?: string;
@@ -385,6 +433,8 @@ export interface ParseResult<T = RootConfig> {
   data?: T;
   errors: ParseError[];
   warnings: ValidationWarning[];
+  /** The format the document was read as. Set by `parseDocumentText`. */
+  format?: DocumentFormat;
 }
 
 /**
@@ -469,6 +519,7 @@ export class YAMLParser {
       );
     }
 
+    normalizeOrThrow(parsed);
     // Expand geo-sugar before the schema sees the block, so the expanded
     // `data:` is what validates (mirrors the safeParse seam). A sugar error
     // becomes a thrown Error here — acceptable on the throwing path.
@@ -532,7 +583,10 @@ export class YAMLParser {
     syntaxError?: ParseError;
   } {
     const lineCounter = new LineCounter();
-    const doc = parseDocument(yaml, { lineCounter, ...YAML_PARSE_OPTIONS });
+    // YAML synthesized from a value read elsewhere (TOML) has no merge keys:
+    // a key the author named `<<` is a key there, as it is in JSON.
+    const doc = parseDocument(yaml, { lineCounter, ...YAML_PARSE_OPTIONS, ...(reading ? { merge: false } : {}) });
+    if (reading) registerPositions(doc, reading.positions);
 
     if (doc.errors.length > 0) {
       const err = doc.errors[0]!;
@@ -585,11 +639,15 @@ export class YAMLParser {
    * `doc`/`lineCounter` needed to position schema issues, so a caller that must
    * inspect the value *before* choosing a schema (version detection) can do so
    * on this one materialization rather than parsing twice.
+   *
+   * The value is normalized here ({@link normalizeDocument}: root `$schema`,
+   * nested `locale` tables), the earliest point every text and value entry
+   * sees it; callers fold `normalized` into their result.
    */
   private static materialize(
     yaml: string
   ):
-    | { value: unknown; doc: Document; lineCounter: LineCounter }
+    | { value: unknown; doc: Document; lineCounter: LineCounter; normalized: Normalized }
     | { error: ParseError } {
     const { doc, lineCounter, syntaxError } = this.parseToDocument(yaml);
     if (syntaxError) {
@@ -601,7 +659,8 @@ export class YAMLParser {
       return { error: materialized.error };
     }
 
-    return { value: materialized.value, doc, lineCounter };
+    const normalized = normalizeDocument(materialized.value, { doc, lineCounter });
+    return { value: materialized.value, doc, lineCounter, normalized };
   }
 
   /**
@@ -703,7 +762,7 @@ export class YAMLParser {
 
     // A `categories:` map with numeric keys keeps the order it was written
     // in (JavaScript would list the numbers first).
-    restoreCategoryOrder(result.data, doc);
+    restoreCategoryOrder(result.data, doc, reading?.authoredOrder);
 
     // Hand-written legend items beside a classified layer (ml-aot.94).
     warnings.push(...checkClassifiedLegendItems(value, { doc, lineCounter }));
@@ -776,17 +835,20 @@ export class YAMLParser {
     if (expand) {
       const expansion = expand(materialized.value);
       if ("error" in expansion) {
-        return { success: false, errors: [expansion.error], warnings: [] };
+        return withNormalized({ success: false, errors: [expansion.error], warnings: [] }, materialized.normalized);
       }
       remaps = expansion.remaps;
     }
-    return this.validateAgainst(
-      materialized.value,
-      materialized.doc,
-      materialized.lineCounter,
-      schema,
-      resolveRefs,
-      remaps
+    return withNormalized(
+      this.validateAgainst(
+        materialized.value,
+        materialized.doc,
+        materialized.lineCounter,
+        schema,
+        resolveRefs,
+        remaps
+      ),
+      materialized.normalized
     );
   }
 
@@ -868,7 +930,9 @@ export class YAMLParser {
     // disposable value; `validate` receives the *caller's* object, so clone
     // first — a consumer that reuses its input must not find a sugar key
     // silently rewritten under it.
-    const cloned = structuredClone(config);
+    // Dates become text first: structuredClone keeps them as Date objects.
+    const cloned = structuredClone(normalizeDates(config));
+    normalizeOrThrow(cloned);
     const expansion = expandSugarInRoot(cloned);
     if ("error" in expansion) {
       throw new Error(expansion.error.message);
@@ -924,6 +988,7 @@ export class YAMLParser {
       );
     }
 
+    normalizeOrThrow(parsed);
     // Expand geo-sugar (v1 positions) before validation, mirroring the
     // safeParseMapBlock seam. A sugar error throws on this convenience path.
     const expansion = expandSugarInMapBlock(parsed, 1);
@@ -984,7 +1049,14 @@ export class YAMLParser {
     if ("error" in m) {
       return { success: false, errors: [m.error], warnings: [] };
     }
+    return withNormalized(this.validateMapBlock(m, positioned), m.normalized);
+  }
 
+  /** {@link parseMapBlockText} past materialization: version, sugar, validation. */
+  private static validateMapBlock(
+    m: { value: unknown; doc: Document; lineCounter: LineCounter },
+    positioned: boolean
+  ): ParseResult<MapBlock | MapBlockV2> {
     const detected = this.detectMapVersion(m.value);
     if ("error" in detected) {
       return { success: false, errors: [detected.error], warnings: [] };
@@ -1094,14 +1166,17 @@ export class YAMLParser {
    *
    * Positions are stripped: they would refer to the serialized YAML, not to
    * anything the caller wrote, and a line number pointing at text the author
-   * never saw is worse than none.
+   * never saw is worse than none. Given a `source` (the value was read from
+   * TOML text), positions point into that text instead.
    */
   static safeParseMapBlockValue(
-    value: unknown
+    value: unknown,
+    source?: ValueSource
   ): ParseResult<MapBlock | MapBlockV2> {
     let asYaml: string;
     try {
-      asYaml = stringifyYAML(value);
+      // A value read from TOML (`source`) holds no date objects: the reader keeps dates as their text.
+      asYaml = stringifyYAML(source ? value : normalizeDates(value));
     } catch (error) {
       return {
         success: false,
@@ -1117,6 +1192,7 @@ export class YAMLParser {
       };
     }
 
+    if (source) return readingFrom(source, () => this.parseMapBlockText(asYaml, true));
     const result = this.parseMapBlockText(asYaml, false);
     const stripPosition = <T extends { line?: number; column?: number }>(
       entry: T
@@ -1183,6 +1259,7 @@ export class YAMLParser {
       );
     }
 
+    normalizeOrThrow(parsed);
     // Geo-sugar on the story's layer sources (ml-ddg), as parseMapBlock does.
     const expansion = expandSugarInScrollytellingBlock(parsed);
     if ("error" in expansion) {
@@ -1239,9 +1316,9 @@ export class YAMLParser {
     // ml-ddg: `location:`/`region:`/`route:` sugar on a story's sources.
     const expansion = expandSugarInScrollytellingBlock(m.value);
     if ("error" in expansion) {
-      return { success: false, errors: [expansion.error], warnings: [] };
+      return withNormalized({ success: false, errors: [expansion.error], warnings: [] }, m.normalized);
     }
-    return withFormatChecks(
+    return withNormalized(withFormatChecks(
       withDocumentChecks(
         this.validateAgainst(
           m.value,
@@ -1258,7 +1335,7 @@ export class YAMLParser {
       m.value,
       1,
       positioned ? { doc: m.doc, lineCounter: m.lineCounter } : undefined
-    );
+    ), m.normalized);
   }
 
   /**
@@ -1270,14 +1347,17 @@ export class YAMLParser {
    * The scrollytelling twin of {@link safeParseMapBlockValue}: round-trips
    * through YAML so errors, unknown-key suggestions and sugar expansion are
    * identical to the YAML entry points. Positions are stripped — they would
-   * point into serialized text the author never wrote.
+   * point into serialized text the author never wrote — unless a `source`
+   * says what text the value was read from.
    */
   static safeParseScrollytellingBlockValue(
-    value: unknown
+    value: unknown,
+    source?: ValueSource
   ): ParseResult<ScrollytellingBlock> {
     let asYaml: string;
     try {
-      asYaml = stringifyYAML(value);
+      // A value read from TOML (`source`) holds no date objects: the reader keeps dates as their text.
+      asYaml = stringifyYAML(source ? value : normalizeDates(value));
     } catch (error) {
       return {
         success: false,
@@ -1293,6 +1373,7 @@ export class YAMLParser {
       };
     }
 
+    if (source) return readingFrom(source, () => this.parseScrollytellingText(asYaml, true));
     const result = this.parseScrollytellingText(asYaml, false);
     const stripPosition = <T extends { line?: number; column?: number }>(
       entry: T
@@ -1326,6 +1407,9 @@ export class YAMLParser {
    * values, as does a document that has neither `type:` nor `pages:`.
    * This method never throws.
    *
+   * A `source` says that `yaml` was synthesized from a value read from other
+   * text (TOML): positions then point into that text.
+   *
    * @example
    * ```typescript
    * const { blockType, result } = YAMLParser.safeParseAny(yamlString);
@@ -1336,7 +1420,8 @@ export class YAMLParser {
    * }
    * ```
    */
-  static safeParseAny(yaml: string): SafeParseAnyResult {
+  static safeParseAny(yaml: string, source?: ValueSource): SafeParseAnyResult {
+    if (source) return readingFrom(source, () => this.safeParseAny(yaml));
     // Parse once (with a LineCounter) to inspect the top-level `type:`
     // discriminator and surface positioned syntax errors.
     const { doc: yamlDoc, syntaxError } = this.parseToDocument(yaml);
@@ -2125,6 +2210,21 @@ function enumHint(received: string, options: string[]): string | undefined {
   const sameCase = options.find((o) => o.toLowerCase() === lower);
   if (sameCase) return sameCase;
   return suggest(received, options);
+}
+
+/**
+ * Parse YAML (or JSON) text and materialize it with validation's guards —
+ * the merge fan-out refusal and the alias budget ({@link toJSSafe}) — and
+ * nothing else: no normalization, no validation. The syntax error is
+ * {@link YAMLParser}'s own, with its line, column and explanations.
+ *
+ * @internal For `readDocumentValue` (parser/document-value.ts).
+ */
+export function materializeYamlValue(yaml: string): { value: unknown } | { error: ParseError } {
+  // parseToDocument is private to the class's API, not to this module.
+  const { doc, syntaxError } = YAMLParser["parseToDocument"](yaml);
+  if (syntaxError) return { error: syntaxError };
+  return toJSSafe(doc);
 }
 
 /**

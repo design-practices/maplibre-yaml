@@ -229,6 +229,31 @@ export interface SourcePosition {
 }
 
 /**
+ * Positions from the text a value was read from, when that text was not
+ * YAML (a TOML document, KTD5). The value is validated as YAML synthesized
+ * from it; this answers for the text the author wrote instead.
+ */
+export interface PositionIndex {
+  /** Where the value at `path` starts, else its nearest ancestor that was written. */
+  valueAt(path: readonly (string | number)[]): SourcePosition | undefined;
+  /** Where the key at the end of `path` is written, if it is. */
+  keyAt(path: readonly (string | number)[]): SourcePosition | undefined;
+}
+
+/** Synthetic YAML documents → the index of the text their value came from. */
+const indexed = new WeakMap<Document, PositionIndex>();
+
+/**
+ * Answer positions in `doc` from `index`: every position helper below, and
+ * so every check, reports the original text's lines and columns.
+ *
+ * @internal
+ */
+export function registerPositions(doc: Document, index: PositionIndex): void {
+  indexed.set(doc, index);
+}
+
+/**
  * Resolve the source position of the value at `path`.
  *
  * @remarks
@@ -241,6 +266,8 @@ export function positionForPath(
   lineCounter: LineCounter,
   path: (string | number)[]
 ): SourcePosition | undefined {
+  const index = indexed.get(doc);
+  if (index) return index.valueAt(path);
   let current = [...path];
   while (current.length > 0) {
     const node: any = doc.getIn(current, true);
@@ -269,6 +296,8 @@ export function positionForKey(
   objectPath: (string | number)[],
   key: string
 ): SourcePosition | undefined {
+  const index = indexed.get(doc);
+  if (index) return index.keyAt([...objectPath, key]) ?? index.valueAt([...objectPath, key]);
   const parent: any =
     objectPath.length === 0 ? doc.contents : doc.getIn(objectPath, true);
   if (isMap(parent)) {
@@ -363,6 +392,18 @@ function fullyUnwrap(schema: z.ZodTypeAny): z.ZodTypeAny {
     break;
   }
   return s;
+}
+
+/**
+ * The keys an object schema (or each member of a union of them) lists.
+ *
+ * @internal
+ */
+export function schemaKeys(schema: z.ZodTypeAny): string[] {
+  const s: any = fullyUnwrap(schema);
+  const options: z.ZodTypeAny[] | undefined = s?._def?.options;
+  if (options) return [...new Set(options.flatMap(schemaKeys))];
+  return s?._def?.typeName === "ZodObject" ? Object.keys(s._def.shape()) : [];
 }
 
 /** Whether a field schema (after peeling wrappers) is the shared expression schema. */

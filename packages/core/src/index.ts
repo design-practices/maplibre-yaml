@@ -266,5 +266,10 @@ export type {
   PaletteData,
 } from "./classify";
 
+// Converting a document between YAML, JSON and TOML (`mlym convert`, the
+// playground's toggle). The printers are a lazy chunk; no element imports this.
+export { convertDocument, UNREADABLE_CODES } from "./convert/index";
+export type { ConvertOptions, ConvertResult, ConvertLoss, ConvertError } from "./convert/index";
+
 // Note: Components are exported separately via './components' entry point
 // to avoid auto-registering custom elements when not needed

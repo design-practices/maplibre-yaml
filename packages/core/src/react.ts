@@ -18,21 +18,23 @@
  *
  * ## What it types
  *
- * - `src` — URL of a YAML document.
+ * - `src` — URL of a YAML, JSON or TOML document.
  * - `base` — where site paths start on a subpath deployment (`"/my-repo/"`).
  * - `camera` — who owns the camera across document updates: `"document"`
  *   (the default) or `"host"` (updates never move it).
- * - `config` — on React 19 a `MapBlock` object or its JSON string (React 19
- *   sets it as a property); on React 18 a JSON string only, because React 18
+ * - `config` — on React 19 a `MapBlock` object or document text (React 19
+ *   sets it as a property); on React 18 document text only, because React 18
  *   sets unknown props on custom elements as attributes and an object would
- *   arrive as `"[object Object]"`.
+ *   arrive as `"[object Object]"`. The text can be YAML, JSON or TOML; the
+ *   same string on a re-render reads nothing.
  * - `ref` — `useRef<MLMap>(null)`, so `ref.current.mapReady()` is typed.
  * - `onml-map:*` event props (React 19 only; React 18 ignores them), each
  *   typed with its `CustomEvent` detail from {@link MLMapEventMap} — the
  *   live-document ones included: `onml-map:update-applied`,
  *   `onml-map:update-rejected` and `onml-map:state-change`.
  * - `children` — slot children (`<div slot="top-right">`) and an inline
- *   `<script type="text/yaml">` (or `application/yaml`, `application/json`),
+ *   `<script type="text/yaml">` (or `application/yaml`, `application/json`,
+ *   `application/toml`),
  *   through the standard HTML attributes.
  *
  * Works with `@types/react` 18 and 19. The React major is detected from the
@@ -67,12 +69,13 @@ export type MLMapEventProps = {
 
 /** The props `<ml-map>` accepts in JSX, for the installed React major. */
 export type MLMapProps = DetailedHTMLProps<HTMLAttributes<MLMap>, MLMap> & {
-  /** URL of a YAML map document, fetched when the element connects. */
+  /** URL of a YAML, JSON or TOML map document, fetched when the element connects. */
   src?: string;
   /**
    * The map document. React 19: a `MapBlock` object (keep its identity
-   * stable, or pass a JSON string) or a JSON string. React 18: a JSON
-   * string only (`JSON.stringify(config)`).
+   * stable, or pass text) or document text. React 18: document text only
+   * (`JSON.stringify(config)`, or YAML or TOML text). Text in any of the
+   * three formats is read with line and column positions.
    */
   config?: IsReact19Types extends true ? MapBlock | string : string;
   /**

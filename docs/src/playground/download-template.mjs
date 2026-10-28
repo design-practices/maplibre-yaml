@@ -2,7 +2,8 @@
  * The pages a playground download puts next to the document: the quick
  * start's page (`/getting-started/quick-start/`) and the story-map page
  * (`/integrations/scrollytelling-html/`), unchanged but for the file they
- * load.
+ * load: `map.yaml`, `map.json` or `map.toml` (`story.*` for a story), after
+ * the playground's format.
  *
  * Kept under docs/src so `scripts/sync-cdn-pins.mjs` keeps the
  * `@maplibre-yaml/core@<minor>` pin on the current release with every other
@@ -10,7 +11,8 @@
  * the quick start's.
  */
 
-export const MAP_PAGE = `<!DOCTYPE html>
+/** The map page, loading `file` (`map.yaml`, `map.json`, `map.toml`). */
+export const mapPage = (file) => `<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
@@ -43,12 +45,13 @@ export const MAP_PAGE = `<!DOCTYPE html>
     </style>
   </head>
   <body>
-    <ml-map src="./map.yaml"></ml-map>
+    <ml-map src="./${file}"></ml-map>
   </body>
 </html>
 `;
 
-export const STORY_PAGE = `<!DOCTYPE html>
+/** The story page, loading `file` (`story.yaml`, `story.json`, `story.toml`). */
+export const storyPage = (file) => `<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
@@ -75,7 +78,7 @@ export const STORY_PAGE = `<!DOCTYPE html>
     </style>
   </head>
   <body>
-    <ml-scrollytelling src="story.yaml"></ml-scrollytelling>
+    <ml-scrollytelling src="${file}"></ml-scrollytelling>
   </body>
 </html>
 `;

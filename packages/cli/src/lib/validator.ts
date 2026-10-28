@@ -5,11 +5,19 @@
 import { readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { resolve } from 'pathe';
-import { YAMLParser, type ParseError } from '@maplibre-yaml/core';
+import {
+  parseDocumentText,
+  stripBom,
+  type DocumentFormat,
+  type DocumentTextResult,
+  type ParseError,
+} from '@maplibre-yaml/core';
 import type { ValidationResult, ValidationError } from '../types.js';
+import { tomlReaderFailureMessage } from './formatter.js';
 
 /**
- * Validate a single YAML configuration file
+ * Validate a single map or story document, in YAML, JSON or TOML (the file
+ * extension picks the format; a file with another extension is sniffed).
  */
 export async function validateFile(filePath: string): Promise<ValidationResult> {
   const absolutePath = resolve(filePath);
@@ -46,8 +54,25 @@ export async function validateFile(filePath: string): Promise<ValidationResult> 
   }
 
   // Detect the document type (map, scrollytelling, or root) and validate
-  // against the matching schema
-  const { result } = YAMLParser.safeParseAny(content);
+  // against the matching schema. The front door strips a byte-order mark,
+  // which Node's readFile keeps, and words errors for the file's format.
+  let parsed: DocumentTextResult;
+  try {
+    parsed = await parseDocumentText(content, { kind: 'any', signals: { fileName: absolutePath } });
+  } catch (error) {
+    // Only a failed load of the TOML reader rejects (KTD1).
+    return {
+      file: filePath,
+      valid: false,
+      errors: [{
+        path: '',
+        message: tomlReaderFailureMessage(error),
+        severity: 'error',
+      }],
+      warnings: [],
+    };
+  }
+  const { result, format } = parsed;
 
   // Advisory findings (unknown keys, deprecations, expression hints) flow
   // through the parser's warnings channel in both the valid and invalid cases.
@@ -71,9 +96,9 @@ export async function validateFile(filePath: string): Promise<ValidationResult> 
   }
 
   // Convert parse errors to validation errors
-  const lines = content.split(/\r?\n/);
+  const lines = stripBom(content).split(/\r?\n/);
   const errors: ValidationError[] = result.errors.map((err: ParseError) => {
-    const located = isRootFallback(err, lines)
+    const located = isRootFallback(err, lines, format)
       ? {}
       : { line: err.line, column: err.column };
     return {
@@ -98,13 +123,18 @@ export async function validateFile(filePath: string): Promise<ValidationResult> 
  * undefined` "at line 1, column 1"). The parser points at the nearest node
  * that exists; for a missing top-level key that is the root mapping, which
  * tells the reader nothing (ml-aot.54). A real top-level key at column 1
- * (`type: mapp`) keeps its location.
+ * keeps its location: `type: mapp` in YAML, `"type": "mapp"` in JSON, and
+ * `type = "mapp"` or a `[config]` table header in TOML.
  */
-function isRootFallback(err: ParseError, lines: string[]): boolean {
+function isRootFallback(err: ParseError, lines: string[], format: DocumentFormat): boolean {
   if (err.line === undefined || err.column !== 1 || !err.path) return false;
-  const key = err.path.split('.')[0];
+  const key = `["']?${err.path.split('.')[0]!.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}["']?`;
   const text = lines[err.line - 1] ?? '';
-  return !new RegExp(`^["']?${key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}["']?\\s*:`).test(text);
+  const keyLine =
+    format === 'toml'
+      ? new RegExp(`^(?:${key}\\s*[=.]|\\[\\[?\\s*${key}\\s*[.\\]])`)
+      : new RegExp(`^${key}\\s*:`);
+  return !keyLine.test(text);
 }
 
 /**

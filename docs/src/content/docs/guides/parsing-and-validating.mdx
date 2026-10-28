@@ -49,8 +49,9 @@ if (!result.success) {
 - `result.errors` and `result.warnings` are lists of
   `{ path, message, line, column }`, with an optional `suggestion` (the key
   you probably meant). `path` points into the document with dots
-  (`config.center`); `line` and `column` are there when the source was YAML
-  text. These are the fields of the CLI's JSON output
+  (`config.center`); `line` and `column` are there when the source was
+  text (YAML or JSON here, or any format through
+  [`parseDocumentText`](#any-format)). These are the fields of the CLI's JSON output
   ([Using AI agents](/guides/ai-agents/#the-machine-error-contract)).
 - `result.data` is the validated document when `result.success` is `true`.
   It keeps the format it was written in, [v1 or v2](/guides/format-v2/);
@@ -68,6 +69,81 @@ Every method and type is in the
 [TypeScript API reference](/reference/api/maplibre-yaml/core/classes/yamlparser/),
 and rendering the result with `MapRenderer` is on the
 [JavaScript API](/integrations/vanilla-js/#yamlparser) page.
+
+## Text in any format: `parseDocumentText` \{#any-format}
+
+The `YAMLParser` methods read YAML, and JSON, which is part of YAML 1.2.
+For a document that may be YAML, JSON or [TOML](/guides/json-and-toml/),
+use `parseDocumentText`. It is what `<ml-map>`, the CLI, the Astro loaders
+and the playground call, so it reads the format the way they do and words
+each error for it:
+
+```ts
+import { parseDocumentText } from "@maplibre-yaml/core";
+
+const result = await parseDocumentText(text, {
+  kind: "map", // "map", "story", or "any" (the default)
+  signals: { fileName: "maps/city.toml" },
+});
+if (!result.success) {
+  for (const error of result.errors) {
+    console.error(`${error.format} ${error.path}: ${error.message} (line ${error.line})`);
+  }
+}
+```
+
+- **The format** comes from `format` (`"yaml"`, `"json"` or `"toml"`) when
+  you pass it; else from `signals`: `scriptType`, `url`, `fileName`,
+  `responseUrl` and `contentType`, in that order; else from the text itself
+  ([How the format is chosen](/guides/json-and-toml/#detection)).
+- **The result** is what the matching `YAMLParser` method returns, plus
+  `format`. With `kind: "any"` it is `{ blockType, result, format }`, as
+  `safeParseAny` returns.
+- **Every error** carries `format`, the format the text was read as. A
+  syntax error has `code: "yaml-syntax"` in YAML and in JSON (JSON is read
+  by the YAML parser), and `code: "toml-syntax"` in TOML, with its line and
+  column in every format.
+- **It is async** because TOML is read by a module that loads the first time
+  TOML arrives; YAML and JSON never load it. The promise never rejects
+  because of what the text says: a syntax error or an invalid document
+  resolves as an error result. It rejects only when that TOML module can't
+  be downloaded.
+
+### Convert with `convertDocument`
+
+`convertDocument` is what [`mlym convert`](/guides/json-and-toml/#convert)
+runs. It writes the document as authored in the target format and lists
+what the target can't keep:
+
+```ts
+import { convertDocument } from "@maplibre-yaml/core";
+
+const out = await convertDocument(yamlText, { to: "toml" });
+if (out.success) {
+  for (const loss of out.losses) console.warn(loss.message); // comments, anchors, nulls
+  console.log(out.text);
+} else {
+  console.error(out.errors); // a syntax error, or a value TOML can't hold, by path
+}
+```
+
+`from` (or `signals`) names the input's format; without it the text decides.
+`out.validation` is the input's `parseDocumentText` result. A document that
+parses converts even when it doesn't validate, so check
+`out.validation.result.success` before you save the output, as
+`mlym convert` does.
+
+### A value you parsed yourself: `normalizeDocumentValue`
+
+When a document reaches your code as a value (a JSON or TOML library
+parsed it, or Astro's content layer did) and you check it with your own
+schema, pass it through `normalizeDocumentValue` first. It returns
+`{ value, issues, warnings }`: a copy with dates as text, the root `$schema`
+key removed and nested `locale` tables flattened into dotted keys, which is
+what every format goes through before validation. `issues` are problems
+that fail the document, such as a `locale` key written both nested and
+dotted. The `YAMLParser` methods that take a value
+(`safeParseMapBlockValue`) do this themselves.
 
 ## Documents from people you don't control
 

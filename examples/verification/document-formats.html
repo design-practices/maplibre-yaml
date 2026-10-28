@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Documents in YAML, JSON and TOML</title>
+  <!--
+    0.10 (ml-4cn, U4): every way a page hands <ml-map> or <ml-scrollytelling>
+    a document reads YAML, JSON and TOML, and the newest document wins.
+
+    On this page, top to bottom:
+      1. src="document-formats/map.toml"              teal dots
+      2. <script type="application/toml">             purple dot
+      3. config attribute holding TOML text           orange dot
+      4. config attribute holding JSON text           blue dot
+      5. a YAML map; "Update with TOML" calls el.update(tomlText) and the
+         dot turns from grey to gold; the outcome is printed beside it
+      6. the race: "Run the race" sets src="document-formats/race.toml"
+         (a black dot) and at once calls update(yamlText) (a green dot).
+         The YAML wins; the TOML document, read after it, is dropped. Then
+         update(tomlText) followed by update(yamlText): the first resolves
+         "superseded", the second "applied".
+      7. <script type="text/x-yaml5">: the card names that type instead of
+         "No configuration provided"
+      8. a story from src="document-formats/story.toml": two chapters
+
+    PASS = maps 1-4 draw their dots; 5 and 6 behave as described; 7 shows a
+    card naming text/x-yaml5; the story shows its two chapters. The Network
+    panel shows chunks/toml.js requested exactly once for the whole page.
+
+    Blocked reader: in DevTools, block the request URL pattern
+    "chunks/toml.js" (Network request blocking) and reload. Maps 1-3 and the
+    story show "Couldn't read the TOML document"; map 4 (JSON) and 5 (YAML)
+    still draw. Unblock it and press "Reload maps": each TOML map asks for
+    chunks/toml.js?retry=1 and draws.
+
+    The e2e server mounts packages/core at /cdn/@maplibre-yaml/core@<version>/,
+    the way unpkg/jsDelivr serve the published package (run `pnpm build`
+    first). Serve from the repo root:  pnpm verify:serve
+    Then open: http://localhost:4174/examples/verification/document-formats.html
+  -->
+  <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; }
+    header, h2 { margin: 0; padding: 8px 16px; font-size: 13px; }
+    header { background: #1d3557; color: white; }
+    h2 { background: #f1faee; display: flex; gap: 12px; align-items: center; }
+    ml-map { display: block; height: 220px; }
+    output { font: 12px ui-monospace, monospace; }
+  </style>
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }
+  </script>
+</head>
+<body>
+  <header>
+    YAML, JSON and TOML documents through every entry point — PASS = every map draws its dot; chunks/toml.js once.
+    <button id="reload-all" type="button">Reload maps</button>
+  </header>
+
+  <h2>1. src="document-formats/map.toml"</h2>
+  <ml-map id="toml-src" src="/examples/verification/document-formats/map.toml"></ml-map>
+
+  <h2>2. &lt;script type="application/toml"&gt;</h2>
+  <ml-map id="toml-inline">
+    <script type="application/toml">
+type = "map"
+id = "toml-inline"
+
+[config]
+center = [10.2, 42.15]
+zoom = 9
+mapStyle = "/examples/verification/configs/local-style.json"
+
+[[layers]]
+id = "toml-inline-dot"
+type = "circle"
+paint = { circle-radius = 12, circle-color = "#7b2cbf" }
+
+[layers.source]
+type = "geojson"
+data = { type = "FeatureCollection", features = [ { type = "Feature", properties = {}, geometry = { type = "Point", coordinates = [10.2, 42.15] } } ] }
+    </script>
+  </ml-map>
+
+  <h2>3. config attribute, TOML text</h2>
+  <ml-map id="toml-attr" config='type = "map"
+id = "toml-attr"
+
+[config]
+center = [10.2, 42.15]
+zoom = 9
+mapStyle = "/examples/verification/configs/local-style.json"
+
+[[layers]]
+id = "toml-attr-dot"
+type = "circle"
+paint = { circle-radius = 12, circle-color = "#f4a261" }
+
+[layers.source]
+type = "geojson"
+data = { type = "FeatureCollection", features = [ { type = "Feature", properties = {}, geometry = { type = "Point", coordinates = [10.2, 42.15] } } ] }
+'></ml-map>
+
+  <h2>4. config attribute, JSON text</h2>
+  <ml-map id="json-attr" config='{
+  "type": "map",
+  "id": "json-attr",
+  "config": { "center": [10.2, 42.15], "zoom": 9, "mapStyle": "/examples/verification/configs/local-style.json" },
+  "layers": [
+    {
+      "id": "json-attr-dot",
+      "type": "circle",
+      "source": { "type": "geojson", "data": { "type": "FeatureCollection", "features": [ { "type": "Feature", "properties": {}, "geometry": { "type": "Point", "coordinates": [10.2, 42.15] } } ] } },
+      "paint": { "circle-radius": 12, "circle-color": "#457b9d" }
+    }
+  ]
+}'></ml-map>
+
+  <h2>5. update(tomlText) on a running YAML map <button id="update-toml" type="button">Update with TOML</button> <output id="update-outcome"></output></h2>
+  <ml-map id="update">
+    <script type="text/yaml">
+type: map
+id: update
+config:
+  center: [10.2, 42.15]
+  zoom: 9
+  mapStyle: "/examples/verification/configs/local-style.json"
+layers:
+  - id: update-dot
+    type: circle
+    source:
+      type: geojson
+      data: { type: FeatureCollection, features: [ { type: Feature, properties: {}, geometry: { type: Point, coordinates: [10.2, 42.15] } } ] }
+    paint: { circle-radius: 12, circle-color: "#8d99ae" }
+    </script>
+  </ml-map>
+
+  <h2>6. the race <button id="run-race" type="button">Run the race</button> <output id="race-outcome"></output></h2>
+  <ml-map id="race">
+    <script type="text/yaml">
+type: map
+id: race-start
+config:
+  center: [10.2, 42.15]
+  zoom: 9
+  mapStyle: "/examples/verification/configs/local-style.json"
+layers: []
+    </script>
+  </ml-map>
+
+  <h2>7. &lt;script type="text/x-yaml5"&gt; (not a type maplibre-yaml reads)</h2>
+  <ml-map id="unsupported">
+    <script type="text/x-yaml5">
+type: map
+    </script>
+  </ml-map>
+
+  <h2>8. a story from src="document-formats/story.toml"</h2>
+  <ml-scrollytelling id="story" src="/examples/verification/document-formats/story.toml"></ml-scrollytelling>
+
+  <script>
+    // Every ml-map:* outcome event, per element, for a human reading the
+    // console (`window.__events`) and the e2e spec's secondary checks.
+    window.__events = [];
+    for (const el of document.querySelectorAll("ml-map")) {
+      for (const type of ["ml-map:load", "ml-map:error", "ml-map:update-applied", "ml-map:update-rejected"]) {
+        el.addEventListener(type, (event) => window.__events.push({ id: el.id, type, detail: event.detail }));
+      }
+    }
+
+    const tomlDot = (id, colour) => `type = "map"
+id = "${id}"
+
+[config]
+center = [10.2, 42.15]
+zoom = 9
+mapStyle = "/examples/verification/configs/local-style.json"
+
+[[layers]]
+id = "${id}-dot"
+type = "circle"
+paint = { circle-radius = 12, circle-color = "${colour}" }
+
+[layers.source]
+type = "geojson"
+data = { type = "FeatureCollection", features = [ { type = "Feature", properties = {}, geometry = { type = "Point", coordinates = [10.2, 42.15] } } ] }
+`;
+    const yamlDot = (id, colour) => `type: map
+id: ${id}
+config:
+  center: [10.2, 42.15]
+  zoom: 9
+  mapStyle: "/examples/verification/configs/local-style.json"
+layers:
+  - id: ${id}-dot
+    type: circle
+    source:
+      type: geojson
+      data: { type: FeatureCollection, features: [ { type: Feature, properties: {}, geometry: { type: Point, coordinates: [10.2, 42.15] } } ] }
+    paint: { circle-radius: 12, circle-color: "${colour}" }
+`;
+
+    // 5. A paint change written as TOML, applied in place.
+    window.updateWithToml = async () => {
+      const el = document.getElementById("update");
+      const result = await el.update(tomlDot("update", "#e9c46a"));
+      document.getElementById("update-outcome").textContent = result.outcome;
+      return result;
+    };
+    document.getElementById("update-toml").addEventListener("click", () => window.updateWithToml());
+
+    // 6. src (TOML, slow: a fetch and a parse) overtaken by update(yaml),
+    // then update(toml) overtaken by update(yaml).
+    window.runRace = async () => {
+      const el = document.getElementById("race");
+      el.setAttribute("src", "/examples/verification/document-formats/race.toml");
+      const first = await el.update(yamlDot("race-yaml", "#2b9348"));
+      const slow = el.update(tomlDot("race-toml-text", "#000000"));
+      const fast = el.update(yamlDot("race-yaml-2", "#2b9348"));
+      const outcomes = { src: "dropped", update: first.outcome, slow: (await slow).outcome, fast: (await fast).outcome };
+      document.getElementById("race-outcome").textContent = JSON.stringify(outcomes);
+      return outcomes;
+    };
+    document.getElementById("run-race").addEventListener("click", () => window.runRace());
+
+    document.getElementById("reload-all").addEventListener("click", () => {
+      for (const id of ["toml-src", "toml-inline", "toml-attr"]) document.getElementById(id).reload();
+    });
+  </script>
+  <script type="module" src="/cdn/@maplibre-yaml/core@0.10.0/register.js"></script>
+</body>
+</html>

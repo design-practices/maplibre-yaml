@@ -11,16 +11,33 @@
  * `circle-*` keys only.
  *
  * It never reports problems. Diagnostics have one source, core's
- * `YAMLParser` (see diagnostics.mjs), so nothing is reported twice.
+ * `parseDocumentText` (see diagnostics.mjs), so nothing is reported twice.
+ *
+ * YAML only: the completions and hovers walk YAML indentation, so the editor
+ * turns them off while the document is JSON or TOML.
  */
 
 /** @typedef {{ label: string, detail?: string, info?: string, type: "property" | "enum" }} Option */
 /** @typedef {{ from: number, to: number, options: Option[] }} Completion */
 /** @typedef {{ from: number, to: number, title: string, detail: string, text: string }} Hover */
 
-/** Which schema a document needs: stories have their own. */
-export function schemaNameFor(text) {
-  return /^type:\s*["']?scrollytelling\b/m.test(text) ? "scrollytelling" : "map";
+/** A top-level `type` that names a story, as each format writes it. */
+const STORY_TYPE = {
+  yaml: /^type:\s*["']?scrollytelling\b/m,
+  json: /"type"\s*:\s*"scrollytelling"/,
+  toml: /^type\s*=\s*["']scrollytelling["']/m,
+};
+
+/**
+ * Which schema a document needs: stories have their own. Read from the text,
+ * so it holds while the document is half-typed and doesn't parse; the
+ * playground prefers the parser's answer when there is one.
+ *
+ * @param {string} text
+ * @param {"yaml" | "json" | "toml"} [format]
+ */
+export function schemaNameFor(text, format = "yaml") {
+  return (STORY_TYPE[format] ?? STORY_TYPE.yaml).test(text) ? "scrollytelling" : "map";
 }
 
 const KEY = "[A-Za-z0-9_$-]+";

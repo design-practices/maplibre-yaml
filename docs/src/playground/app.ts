@@ -1,26 +1,42 @@
 /**
  * The playground page's controller: which document to open, the preview
- * pipeline, the status line, share, download and the phone layout. The
- * editor itself (CodeMirror) is a dynamic import, so the map can start
- * drawing while the editor's code downloads.
+ * pipeline, the status line, the YAML / JSON / TOML toggle, share, download
+ * and the phone layout. The editor itself (CodeMirror) is a dynamic import,
+ * so the map can start drawing while the editor's code downloads.
+ *
+ * Every read of the document goes through core's front door,
+ * `parseDocumentText`, in the format the toggle names: the diagnostics, the
+ * story detection, the value the preview renders, the trust notes and the
+ * share banner all come from that one result.
  *
  * Design: docs/plans/2026-10-22-docs-playground-design.md (ml-vjs.17).
  */
-import { YAMLParser, YAML_PARSE_OPTIONS } from "@maplibre-yaml/core";
-import { parse as parseYaml } from "yaml";
+import {
+  parseDocumentText,
+  convertDocument,
+  UNREADABLE_CODES,
+  type DocumentTextResult,
+  type ConvertLoss,
+} from "@maplibre-yaml/core";
 import { toDiagnostics, trustNotes, holdWhileTyping, summarize, type Diagnostic } from "./diagnostics.mjs";
 import { decodeShare, shareLink, hostsOf, safeSrc } from "./share.mjs";
 import { schemaNameFor } from "./schema-assist.mjs";
-import type { EditorHandle } from "./editor";
+import type { EditorHandle, Format } from "./editor";
 
 /** Re-render this long after typing stops (design D4). */
 const DEBOUNCE_MS = 400;
 /** A syntax error on the line being typed shows after this much idle (§3.1). */
 const HOLD_MS = 1200;
 const DRAFT_KEY = "mlym-playground-draft";
+/** The draft's format; a draft saved before the toggle has none and is YAML. */
+const DRAFT_FORMAT_KEY = "mlym-playground-draft-format";
+const FORMATS: Format[] = ["yaml", "json", "toml"];
+const FORMAT_NAME: Record<Format, string> = { yaml: "YAML", json: "JSON", toml: "TOML" };
+const isFormat = (f: unknown): f is Format => FORMATS.includes(f as Format);
 const PHONE = "(max-width: 50rem)";
 
 type Kind = "map" | "scrollytelling";
+type Opened = { text: string; format: Format };
 type MapLike = HTMLElement & {
   config: unknown;
   getMap?: () => any;
@@ -65,6 +81,15 @@ export function start(): void {
   let runTimer = 0;
   let holdTimer = 0;
   let schemaName = "";
+  /** The format the editor holds; the toggle, a share link or a draft sets it. */
+  let format: Format = "yaml";
+  /** Bumped by every run(): a slow read (TOML's first) never lands over a newer one. */
+  let generation = 0;
+  /**
+   * The text before the last format switch, kept so switching straight back
+   * with no edit restores it as written (comments and all), not reconverted.
+   */
+  let beforeSwitch: { format: Format; text: string; switchedTo: Format; converted: string } | null = null;
 
   const text = () => (editor ? editor.getValue() : pendingText);
   // Read-only, for the browser suite (e2e/playground.spec.ts): CodeMirror
@@ -125,24 +150,72 @@ export function start(): void {
       typingLine = null;
       showDiagnostics();
     }, HOLD_MS);
+    saveDraft();
+  }
+
+  function saveDraft(): void {
     try {
       localStorage.setItem(DRAFT_KEY, text());
+      localStorage.setItem(DRAFT_FORMAT_KEY, format);
     } catch {
       // private mode: the draft just isn't kept
     }
   }
 
-  function run(): void {
+  /**
+   * Read the document: one `parseDocumentText` call per text and format,
+   * shared by the preview and the share banner, so both see the same
+   * result. It never rejects; a TOML reader that couldn't be downloaded is
+   * an error result, and the next edit tries again.
+   */
+  let lastRead: { source: string; format: Format; result: Promise<DocumentTextResult> } | null = null;
+  function read(source: string, fmt: Format): Promise<DocumentTextResult> {
+    if (lastRead && lastRead.source === source && lastRead.format === fmt) return lastRead.result;
+    const entry = {
+      source,
+      format: fmt,
+      result: parseDocumentText(source, { kind: "any", format: fmt }).catch((): DocumentTextResult => {
+        if (lastRead === entry) lastRead = null;
+        return {
+          blockType: "unknown",
+          format: fmt,
+          result: {
+            success: false,
+            errors: [
+              {
+                path: "",
+                message: `The ${FORMAT_NAME[fmt]} reader couldn't be downloaded. Check the connection, then edit the document to try again.`,
+              },
+            ],
+            warnings: [],
+          },
+        } as DocumentTextResult;
+      }),
+    };
+    lastRead = entry;
+    return entry.result;
+  }
+
+  async function run(): Promise<void> {
     window.clearTimeout(runTimer);
+    const gen = ++generation;
     const source = text();
+    const fmt = format;
     const t0 = performance.now();
-    const parsed = YAMLParser.safeParseAny(source);
-    const diagnostics = [...toDiagnostics(source, parsed), ...trustNotes(source)];
+    const parsed = await read(source, fmt);
+    // A newer edit, document or format is being read: this result is old.
+    if (gen !== generation) return;
+    const value = parsed.result.success ? parsed.result.data : undefined;
+    const diagnostics = [...toDiagnostics(source, parsed, fmt), ...trustNotes(source, value, fmt)];
     root.dataset.parseMs = (performance.now() - t0).toFixed(1);
     allDiagnostics = diagnostics;
     const firstError = diagnostics.find((d) => d.severity === "error") ?? diagnostics.find((d) => d.severity === "warning");
     firstProblem = firstError ? firstError.from : null;
-    loadSchemaFor(source);
+    // The parser knows a story when the document reads; while it doesn't,
+    // the text decides (the schema help works on half-typed YAML).
+    loadSchemaFor(
+      parsed.blockType === "map" || parsed.blockType === "scrollytelling" ? parsed.blockType : schemaNameFor(source, fmt),
+    );
 
     // Any error, held or not, keeps the document from the map.
     const errors = diagnostics.some((d) => d.severity === "error");
@@ -150,27 +223,22 @@ export function start(): void {
     blockedByPages = valid && parsed.blockType !== "map" && parsed.blockType !== "scrollytelling";
     if (valid && !blockedByPages) {
       lastKind = parsed.blockType as Kind;
-      if (source !== lastRendered || previewKind !== parsed.blockType) render(source, lastKind);
+      if (source !== lastRendered || previewKind !== parsed.blockType) render(source, value, lastKind);
     }
     showDiagnostics();
     if (blockedByPages) {
       setStatus(
         "warning",
-        "This document has pages: — the playground previews one map or one story map at a time.",
+        "This document has pages — the playground previews one map or one story map at a time.",
       );
     }
   }
 
-  function render(source: string, kind: Kind): void {
-    // Hand the element the document as written (YAML to plain values, with
-    // core's options so `!html` stays a tag), so it validates it exactly as
-    // it would a src= file. Never a trusted policy: one code path for all.
-    let doc: any;
-    try {
-      doc = parseYaml(source, YAML_PARSE_OPTIONS);
-    } catch {
-      return;
-    }
+  function render(source: string, doc: unknown, kind: Kind): void {
+    // Hand the element the document as the front door read it (plain
+    // values, whatever the format), and the element validates it again on
+    // its own value path, as it would any document. Never a trusted policy:
+    // one code path for all.
     if (previewKind !== kind) {
       preview?.remove();
       preview = document.createElement(kind === "map" ? "ml-map" : "ml-scrollytelling") as MapLike;
@@ -205,8 +273,7 @@ export function start(): void {
   // ---- schema help ------------------------------------------------------
 
   const schemas = new Map<string, Promise<unknown>>();
-  function loadSchemaFor(source: string): void {
-    const name = schemaNameFor(source);
+  function loadSchemaFor(name: string): void {
     if (name === schemaName || !editor) return;
     schemaName = name;
     if (!schemas.has(name)) {
@@ -224,12 +291,21 @@ export function start(): void {
 
   // ---- opening a document -----------------------------------------------
 
-  function setText(next: string): void {
+  /** Open a document (a starter, a share link, a format switch) with a fresh undo history. */
+  function setText(next: string, fmt: Format = format): void {
     pane.scrollTop = 0; // a story opens on its first chapter
-    if (editor) editor.setValue(next);
+    beforeSwitch = null;
+    setFormat(fmt);
+    if (editor) editor.setValue(next, fmt);
     else pendingText = next;
     typingLine = null;
-    run();
+    void run();
+  }
+
+  function setFormat(fmt: Format): void {
+    format = fmt;
+    formatSelect.value = fmt;
+    root.dataset.format = fmt;
   }
 
   async function fetchConfig(src: string): Promise<string | null> {
@@ -241,22 +317,33 @@ export function start(): void {
     }
   }
 
-  function showShared(source: string | null): void {
-    if (source === null) {
+  /**
+   * The banner for a document opened from a share link: the hosts it will
+   * make the browser contact, read from the same parse the preview renders,
+   * once it resolves. A document that doesn't read names no hosts, and the
+   * banner says so rather than "no other sites".
+   */
+  let sharedToken = 0;
+  function showShared(shared: Opened | null): void {
+    const token = ++sharedToken;
+    if (shared === null) {
       sharedBanner.hidden = true;
       return;
     }
-    let hosts: string[] = [];
-    try {
-      hosts = hostsOf(parseYaml(source, YAML_PARSE_OPTIONS));
-    } catch {
-      // a broken shared document fetches nothing
-    }
-    sharedHosts.textContent = hosts.length ? hosts.join(", ") : "no other sites";
+    sharedHosts.textContent = "checking…";
     sharedBanner.hidden = false;
+    void read(shared.text, shared.format).then((parsed) => {
+      if (token !== sharedToken) return;
+      if (!parsed.result.success) {
+        sharedHosts.textContent = "not known, because the document could not be read";
+        return;
+      }
+      const hosts = hostsOf(parsed.result.data);
+      sharedHosts.textContent = hosts.length ? hosts.join(", ") : "no other sites";
+    });
   }
 
-  async function initialText(): Promise<string> {
+  async function initialText(): Promise<Opened> {
     const shared = decodeShare(location.hash);
     if (shared !== null) {
       showShared(shared);
@@ -267,19 +354,23 @@ export function start(): void {
       const fetched = await fetchConfig(src);
       if (fetched !== null) {
         starter.value = src;
-        return fetched;
+        return { text: fetched, format: "yaml" };
       }
       message.textContent = `Couldn't open ${src}. Showing the default map instead.`;
     } else {
       try {
         const draft = localStorage.getItem(DRAFT_KEY);
-        if (draft) return draft;
+        const draftFormat = localStorage.getItem(DRAFT_FORMAT_KEY);
+        if (draft) return { text: draft, format: isFormat(draftFormat) ? draftFormat : "yaml" };
       } catch {
         // no storage: start fresh
       }
     }
     starter.value = defaultSrc;
-    return (await fetchConfig(defaultSrc)) ?? "type: map\nid: my-map\nconfig:\n  center: [0, 20]\n  zoom: 1.5\n  mapStyle: \"https://tiles.openfreemap.org/styles/liberty\"\nlayers: []\n";
+    const text =
+      (await fetchConfig(defaultSrc)) ??
+      "type: map\nid: my-map\nconfig:\n  center: [0, 20]\n  zoom: 1.5\n  mapStyle: \"https://tiles.openfreemap.org/styles/liberty\"\nlayers: []\n";
+    return { text, format: "yaml" };
   }
 
   starter.addEventListener("change", async () => {
@@ -293,21 +384,101 @@ export function start(): void {
     history.replaceState(null, "", `${location.pathname}?src=${src}`);
     showShared(null);
     message.textContent = "";
-    setText(fetched);
+    setText(fetched, "yaml");
   });
 
   window.addEventListener("hashchange", () => {
     const shared = decodeShare(location.hash);
-    if (shared !== null && shared !== text()) {
+    if (shared !== null && (shared.text !== text() || shared.format !== format)) {
       starter.value = "";
       showShared(shared);
-      setText(shared);
+      setText(shared.text, shared.format);
     }
   });
 
   el("pg-shared-close").addEventListener("click", () => {
     sharedBanner.hidden = true;
   });
+
+  // ---- the format toggle: YAML, JSON, TOML ------------------------------
+
+  // A labelled native select in the editor's status bar (playground.astro):
+  // keyboard and screen-reader ready, and narrow enough for a phone.
+  const formatSelect = el("pg-format") as HTMLSelectElement;
+
+  formatSelect.addEventListener("change", () => {
+    const to = formatSelect.value;
+    if (isFormat(to)) void switchFormat(to);
+  });
+
+  /**
+   * Convert the document to another format (core's `convertDocument`) and
+   * say what the new format doesn't keep. Refused, with the editor as it
+   * was, when the text has a syntax error; a document with schema errors
+   * converts anyway, so they can be fixed in the new format. Switching
+   * straight back, with no edit in between, restores the text as written.
+   */
+  async function switchFormat(to: Format): Promise<void> {
+    const from = format;
+    const source = text();
+    if (to === from) return;
+    message.replaceChildren();
+    if (beforeSwitch && beforeSwitch.format === to && beforeSwitch.switchedTo === from && beforeSwitch.converted === source) {
+      const restored = beforeSwitch.text;
+      setText(restored, to);
+      message.textContent = `Back to your ${FORMAT_NAME[to]}, as you wrote it.`;
+      saveDraft();
+      return;
+    }
+    formatSelect.disabled = true;
+    let result: Awaited<ReturnType<typeof convertDocument>>;
+    try {
+      result = await convertDocument(source, { from, to });
+    } catch {
+      message.textContent = `Couldn't switch to ${FORMAT_NAME[to]}: part of the converter didn't download. Check the connection and try again.`;
+      formatSelect.value = from;
+      return;
+    } finally {
+      formatSelect.disabled = false;
+    }
+    if (text() !== source || format !== from) {
+      message.textContent = `The document changed while it was being converted. Choose ${FORMAT_NAME[to]} again to switch.`;
+      formatSelect.value = format;
+      return;
+    }
+    if (!result.success) {
+      formatSelect.value = from;
+      const first = result.errors[0];
+      const unreadable = result.errors.find((e) => e.code !== undefined && UNREADABLE_CODES.has(e.code));
+      // The converter's own errors name the path of the value it can't write.
+      message.textContent = unreadable
+        ? `Can't switch to ${FORMAT_NAME[to]}: the ${FORMAT_NAME[from]} has a syntax error${unreadable.line ? ` on line ${unreadable.line}` : ""}. Fix it, then switch.`
+        : `Can't switch to ${FORMAT_NAME[to]}: ${first ? firstLine(first.message) : "the document can't be written in it"}.`;
+      return;
+    }
+    setText(result.text, to);
+    beforeSwitch = { format: from, text: source, switchedTo: to, converted: result.text };
+    saveDraft();
+    message.textContent = switchedMessage(from, to, result.losses);
+  }
+
+  const firstLine = (m: string) => m.split("\n")[0]!.replace(/[.:]\s*$/, "");
+
+  /** "Switched to TOML. Not kept: 3 comments (lines 2, 3, 9); …. Switch back before editing to get your YAML as written." */
+  function switchedMessage(from: Format, to: Format, losses: ConvertLoss[]): string {
+    const comments = losses.filter((l) => l.kind === "comment");
+    const others = losses.filter((l) => l.kind !== "comment");
+    const lost: string[] = [];
+    if (comments.length) {
+      const lines = comments.map((c) => c.line).filter((n): n is number => typeof n === "number");
+      const shown = lines.slice(0, 5).join(", ") + (lines.length > 5 ? ", …" : "");
+      lost.push(`${comments.length} comment${comments.length === 1 ? "" : "s"}${lines.length ? ` (line${lines.length === 1 ? "" : "s"} ${shown})` : ""}`);
+    }
+    for (const l of others.slice(0, 3)) lost.push(firstLine(l.message));
+    if (others.length > 3) lost.push(`${others.length - 3} more`);
+    const kept = lost.length ? ` Not kept: ${lost.join("; ")}.` : "";
+    return `Switched to ${FORMAT_NAME[to]}.${kept} Switch back before editing to get your ${FORMAT_NAME[from]} as you wrote it.`;
+  }
 
   // ---- status button: jump to the first problem ---------------------------
 
@@ -322,12 +493,12 @@ export function start(): void {
   // ---- share ----------------------------------------------------------------
 
   el("pg-share-btn").addEventListener("click", async () => {
-    const link = shareLink(location.origin + location.pathname, text());
+    const link = shareLink(location.origin + location.pathname, text(), format);
     message.replaceChildren();
     if (link.url === null) {
       message.append(
         `This map is too long for a link (${link.length.toLocaleString("en")} characters). Use Download, or `,
-        copyYamlButton(),
+        copyTextButton(),
         ".",
       );
       return;
@@ -347,15 +518,16 @@ export function start(): void {
         : where;
   });
 
-  function copyYamlButton(): HTMLButtonElement {
+  function copyTextButton(): HTMLButtonElement {
+    const name = FORMAT_NAME[format];
     const b = document.createElement("button");
     b.type = "button";
     b.className = "pg-link-button";
-    b.textContent = "copy the YAML";
+    b.textContent = `copy the ${name}`;
     b.addEventListener("click", async () => {
       try {
         await navigator.clipboard.writeText(text());
-        message.textContent = "YAML copied.";
+        message.textContent = `${name} copied.`;
       } catch {
         message.textContent = "Couldn't copy: select the text in the editor and copy it.";
       }
@@ -367,7 +539,7 @@ export function start(): void {
 
   el("pg-download-btn").addEventListener("click", async () => {
     const { downloadZip } = await import("./download.mjs");
-    const zip = downloadZip(text(), lastKind);
+    const zip = downloadZip(text(), lastKind, format);
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob([zip], { type: "application/zip" }));
     a.download = "my-map.zip";
@@ -429,13 +601,14 @@ export function start(): void {
   setStatus("loading", "Loading…");
   const editorReady = import("./editor");
   initialText().then(async (initial) => {
-    pendingText = initial;
+    pendingText = initial.text;
+    setFormat(initial.format);
     // The map starts from the text right away; the editor arrives after.
-    run();
+    void run();
     const { mount } = await editorReady;
     editorHost.replaceChildren();
     editor = mount(editorHost, pendingText, {
-      label: "Map document (YAML)",
+      format,
       onChange: () => {
         typingLine = editor!.cursorLine();
         schedule();
@@ -448,8 +621,9 @@ export function start(): void {
       },
     });
     root.dataset.editor = "ready";
-    // Diagnostics and schema help for the text as loaded.
+    // Diagnostics and schema help for the text as loaded (and the format
+    // switched to meanwhile, if any).
     schemaName = "";
-    run();
+    void run();
   });
 }

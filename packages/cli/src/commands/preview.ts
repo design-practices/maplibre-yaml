@@ -13,7 +13,7 @@ const PREVIEW_ARGS = {
   config: {
     type: 'positional',
     required: true,
-    description: 'Path to YAML configuration file',
+    description: 'Path to a map or story document (YAML, JSON or TOML)',
   },
   port: {
     type: 'string',

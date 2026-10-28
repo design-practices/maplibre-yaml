@@ -8,7 +8,8 @@ import { resolve, dirname, join, basename, extname, relative, isAbsolute } from 
 import { readFile } from 'node:fs/promises';
 import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { YAMLParser, type ParseError } from '@maplibre-yaml/core';
+import { isFormatError, parseDocumentText, type ParseError } from '@maplibre-yaml/core';
+import { tomlReaderFailureMessage } from '../lib/formatter.js';
 import { logger } from '../lib/logger.js';
 import { getDebugPanelHTML, getDebugPanelCSS, getDebugPanelJS } from './debug-panel.js';
 import type { PreviewOptions } from '../types.js';
@@ -290,7 +291,23 @@ export function createPreviewHTML(input: PreviewPageInput): string {
 }
 
 /**
- * Create a preview server for a YAML configuration
+ * One error for the error page: `path: message (line:column)`, the position
+ * in the document's own format. A YAML or JSON syntax error already quotes it.
+ */
+function describeError(e: ParseError): string {
+  const quoted = e.line !== undefined && e.message.includes('at line ' + e.line);
+  const where = e.line !== undefined && !quoted ? ' (' + e.line + ':' + (e.column ?? 1) + ')' : '';
+  return (e.path ? e.path + ': ' : '') + e.message + where;
+}
+
+/**
+ * Create a preview server for a map or story document in YAML, JSON or TOML
+ *
+ * @remarks
+ * The server parses the document (the file extension picks the format) and
+ * inlines the validated value into the page, so the browser never needs the
+ * TOML reader. The watcher follows the one file: an edit reloads the page,
+ * a rename to another extension needs a restart.
  */
 export async function createPreviewServer(
   configPath: string,
@@ -313,11 +330,14 @@ export async function createPreviewServer(
   async function loadConfig(): Promise<{ valid: boolean; config?: any; error?: string }> {
     try {
       const content = await readFile(absoluteConfigPath, 'utf-8');
-      const { blockType, result } = YAMLParser.safeParseAny(content);
+      const { blockType, result } = await parseDocumentText(content, {
+        kind: 'any',
+        signals: { fileName: absoluteConfigPath },
+      });
 
       if (!result.success) {
         currentConfig = null;
-        currentError = result.errors.map((e: ParseError) => e.path ? e.path + ': ' + e.message : e.message).join('\n');
+        currentError = result.errors.map(describeError).join('\n');
         return { valid: false, error: currentError };
       }
 
@@ -333,7 +353,7 @@ export async function createPreviewServer(
         // Valid document, but not something preview can render yet
         const kind = blockType === 'root' ? 'multi-page root document' : '"' + blockType + '" block';
         currentConfig = null;
-        currentError = 'Visual preview currently supports only "type: map" blocks.\n\n'
+        currentError = 'Visual preview currently supports only map and story documents (a type of map or scrollytelling).\n\n'
           + 'This file is a valid ' + kind + ' -- it passed validation, but preview cannot render it yet. '
           + 'Preview support for ' + (blockType === 'root' ? 'root documents' : blockType) + ' is planned for a future release.';
         return { valid: false, error: currentError };
@@ -345,7 +365,12 @@ export async function createPreviewServer(
       return { valid: true, config: result.data };
     } catch (error) {
       currentConfig = null;
-      currentError = error instanceof Error ? error.message : String(error);
+      currentError =
+        isFormatError(error) && error.failure.code === 'chunk'
+          ? tomlReaderFailureMessage(error)
+          : error instanceof Error
+            ? error.message
+            : String(error);
       return { valid: false, error: currentError };
     }
   }

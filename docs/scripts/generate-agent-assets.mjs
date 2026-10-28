@@ -31,7 +31,12 @@ import {
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { cloudflarePageRedirectLines } from '../redirects.mjs';
-import { SHARE_PREFIX, SHARE_WARN_LENGTH } from '../src/playground/share.mjs';
+import * as share from '../src/playground/share.mjs';
+
+// The playground's share-link prefix for a YAML document (`#code/`); the
+// playground keeps one prefix per format (`#json/`, `#toml/` beside it).
+const SHARE_PREFIX = share.SHARE_PREFIXES.yaml;
+const { SHARE_WARN_LENGTH } = share;
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DOCS_ROOT = join(__dirname, '..');
@@ -309,6 +314,57 @@ layers:
     paint:
       fill-opacity: 0.85`;
 
+/**
+ * The quick-start map in JSON and in TOML, for llms-full.txt's JSON and TOML
+ * section. docs/test/agent-assets.test.mjs validates both.
+ */
+const JSON_EXAMPLE = `{
+  "$schema": "${SITE}/schema/latest/map.schema.json",
+  "type": "map",
+  "id": "quakes",
+  "config": {
+    "center": [-120, 37],
+    "zoom": 4,
+    "mapStyle": "https://tiles.openfreemap.org/styles/liberty"
+  },
+  "sources": {
+    "quakes": { "type": "geojson", "url": "${QUAKES_URL}" }
+  },
+  "layers": [
+    {
+      "id": "quakes",
+      "type": "circle",
+      "source": "quakes",
+      "paint": { "circle-color": "#e74c3c", "circle-radius": 5 },
+      "interactive": {
+        "click": { "popup": [{ "h3": [{ "property": "place" }] }] }
+      }
+    }
+  ]
+}`;
+
+const TOML_EXAMPLE = `#:schema ${SITE}/schema/latest/map.schema.json
+type = "map"
+id = "quakes"
+
+[config]
+center = [-120, 37]
+zoom = 4
+mapStyle = "https://tiles.openfreemap.org/styles/liberty"
+
+[sources.quakes]
+type = "geojson"
+url = "${QUAKES_URL}"
+
+[[layers]]
+id = "quakes"
+type = "circle"
+source = "quakes"
+paint = { circle-color = "#e74c3c", circle-radius = 5 }
+
+[[layers.interactive.click.popup]]
+h3 = [{ property = "place" }]`;
+
 /** The CDN page that shows a map document, pinned to core's release line. */
 function htmlPage(version) {
   return `<!doctype html>
@@ -359,6 +415,12 @@ maplibre-yaml turns a YAML document into a map. A document is a
 \`type: scrollytelling\` story map (rendered by \`<ml-scrollytelling src>\`).
 The web components and the \`mlym\` CLI both dispatch on the top-level
 \`type\` field.
+
+JSON and TOML documents are accepted too: the same document saved as
+\`map.json\` or \`map.toml\` validates and renders the same way, and the file
+extension (or a content type) says which format it is. YAML is the default
+and what every example here uses; write JSON when your tooling emits JSON.
+${SITE}/guides/json-and-toml/
 
 **Write format v1, the default.** Every schema, example and guide uses it.
 Format v2 (\`version: 2\`, split into \`style:\` and \`runtime:\`) is an opt-in
@@ -494,6 +556,15 @@ until \`valid: true\`. Exit code 0 means valid, 1 errors (or warnings in strict
 mode, which is on when \`CI\` is set), 2 a file that wasn't found. Fix warnings
 too: they name things that validate but don't do what the author meant.
 
+Validate runs on JSON and TOML documents the same way. To turn a document
+an API or another tool handed you (say, JSON) into the format you want to
+keep, use \`mlym convert\`: \`npx maplibre-yaml@latest convert map.json --to
+yaml\`; add \`--strict\` in a pipeline to fail instead of silently dropping
+something the target format can't hold, and \`-f json\` for one JSON object
+on stdout, \`{ success, from, to, text, losses: [{ kind, message, path, line,
+column }], errors: [...] }\` (\`out\` in place of \`text\` with \`--out\`),
+instead of the losses as prose on stderr.
+
 ## Don't write these
 
 They validate, but do nothing or have a newer form, and validation warns:
@@ -508,6 +579,21 @@ They validate, but do nothing or have a newer form, and validation warns:
 - \`interactive.mouseenter\` / \`mouseleave\`: use \`hover:\`.
 - Schema descriptions that start "No effect (deprecated)" or "Deprecated"
   mark the rest.
+
+In a TOML document, these fail or mean something other than intended:
+
+- \`filter = null\`, or any \`null\`: TOML has no null, so it is a syntax
+  error. Leave the key out; a \`setFilter\` action with no \`filter\` clears
+  the filter.
+- An unquoted dotted key outside \`locale\`: \`a.b = 1\` nests as
+  \`a = { b = 1 }\`. Quote a key that contains a dot (\`"name.en" = "Paris"\`).
+  Only under \`locale\` do dotted keys stay flat.
+- A bare \`#\` colour: \`circle-color = #e74c3c\` is a syntax error, because \`#\`
+  starts a comment. Quote it: \`circle-color = "#e74c3c"\`.
+- A layer's own key (\`minzoom\`, \`source\`) after a \`[layers.paint]\` header:
+  every key after a header belongs to that table. Write plain keys first.
+- \`!html\`: JSON and TOML have no tags. Write \`{ "$html" = "<em>…</em>" }\`
+  (JSON: \`{ "$html": "…" }\`), under the same trust rule.
 
 ## Most instructive complete configs
 
@@ -526,9 +612,73 @@ are files on this site: copy them into your own site at the same path.
 `;
 }
 
+/** llms-full.txt's summary of JSON and TOML documents and TOML's gaps. */
+const JSON_AND_TOML_SECTION = `A map or story document can be YAML, JSON or TOML. The same validator
+reads all three and reports errors at the line and column written. The
+format comes from the file extension (.yaml/.yml, .json, .toml), an inline
+<script type> (text/yaml, application/json, application/toml) or a response
+content type; unlabelled text is sniffed (a first \`{\` is JSON, \`key = value\`
+lines are TOML, anything else is YAML). Name files with their real
+extension. Guide: ${SITE}/guides/json-and-toml/
+
+The schema line: YAML \`${MODELINE}\`; JSON a root
+\`"$schema": "${SITE}/schema/latest/map.schema.json"\` key; TOML a first line
+\`#:schema ${SITE}/schema/latest/map.schema.json\`. A root \`$schema\` key is
+accepted and ignored in every format.
+
+The same map in JSON:
+
+\`\`\`json
+${JSON_EXAMPLE}
+\`\`\`
+
+And in TOML:
+
+\`\`\`toml
+${TOML_EXAMPLE}
+\`\`\`
+
+TOML's gaps, and what to write instead:
+
+- No null. Leave the key out: a key that isn't written is unset, and a
+  \`setFilter\` action without \`filter\` clears the filter. \`filter = null\` is a
+  syntax error. An expression comparing with null can't be written; use
+  \`["!", ["has", "x"]]\`.
+- No anchors, aliases or merge keys. Share data with a named source
+  (\`[sources.quakes]\`, then \`source = "quakes"\` or
+  \`source = { "$ref" = "#/sources/quakes" }\`); write repeated values out.
+- No tags. \`!html\` is \`{ "$html" = "…" }\` (JSON \`{ "$html": "…" }\`), and the
+  same trust rule decides whether it renders as markup.
+- Quote keys that start with \`$\` (\`"$ref"\`, \`"$html"\`, \`"$schema"\`) and every
+  string value, colours included: a bare \`#\` starts a comment.
+- Dotted bare keys nest (\`a.b = 1\` is \`a = { b = 1 }\`); quote a key that
+  contains a dot. Under \`locale\`, nested tables flatten back to dotted keys,
+  so \`maplibre-yaml.Legend.Title = "Leyenda"\` and
+  \`"maplibre-yaml.Legend.Title" = "Leyenda"\` mean the same; writing one key
+  both ways is an error.
+- An unquoted date (\`2024-01-02\`) is read as the text written, as in YAML.
+- After a header such as \`[layers.paint]\`, every key belongs to that table
+  until the next header. Write a table's plain keys before its sub-tables.
+- \`[[layers.interactive.click.popup]]\` (and \`[layers.paint]\`,
+  \`[[chapters.onChapterEnter]]\`) attaches to the most recent \`[[layers]]\`
+  (or \`[[chapters]]\`) above it. Keep each layer's headers under it.
+
+JSON: no comments (an error, not ignored) and every string quoted. JSON5 and
+JSONC are not supported.
+
+\`npx maplibre-yaml@latest convert map.yaml --to toml\` (or \`--to json\`,
+\`--to yaml\`) converts a document and lists on stderr what the target can't
+keep (comments, anchors, nulls); \`--strict\` fails instead.
+`;
+
 export function buildLlmsFullTxt(version) {
   const parts = [];
   parts.push(buildLlmsTxt(version));
+  parts.push('\n\n' + '='.repeat(78));
+  parts.push('# JSON AND TOML DOCUMENTS');
+  parts.push('='.repeat(78) + '\n');
+  parts.push(JSON_AND_TOML_SECTION);
+
   parts.push('\n\n' + '='.repeat(78));
   parts.push('# FULL JSON SCHEMA REFERENCE');
   parts.push('='.repeat(78) + '\n');

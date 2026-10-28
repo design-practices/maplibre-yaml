@@ -12,8 +12,8 @@
  *   cached modules are invalidated and the browser reloads, so even a
  *   module-level `await loadGlobalMapConfig(...)` (which otherwise kept the
  *   old file until a restart, ml-aot.24) picks up the edit;
- * - YAML / GeoJSON / JSON under `public/` (what `<Map src>` fetches) -- the
- *   browser reloads;
+ * - YAML / JSON / TOML / GeoJSON under `public/` (what `<Map src>` fetches) --
+ *   the browser reloads;
  * - maplibre-gl and `@maplibre-yaml/core/register` are pre-bundled when the
  *   dev server starts, so the first page with a map does not trigger a
  *   dependency re-optimization and a reload.
@@ -62,7 +62,7 @@ function watchedFiles() {
 export const CLIENT_DEPS = Object.freeze(["maplibre-gl", "@maplibre-yaml/core/register"]);
 
 /** Extensions under `public/` whose edits reload the page. */
-const PUBLIC_EXTENSIONS = new Set([".yaml", ".yml", ".geojson", ".json"]);
+const PUBLIC_EXTENSIONS = new Set([".yaml", ".yml", ".json", ".toml", ".geojson"]);
 
 /**
  * The `@maplibre-yaml/astro` integration (dev-server reloads for map files).

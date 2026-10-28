@@ -25,9 +25,26 @@ function signature(entries: Array<[string, unknown]>): string {
   return JSON.stringify([...entries].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)));
 }
 
-/** Every `categories:` map in the YAML whose JS key order would differ. */
-function authoredMaps(doc: Document): Map<string, Authored[]> {
+/**
+ * Every table named `key` in a document that was not read as YAML (a TOML
+ * document), as written: its keys in order, each with its scalar value.
+ * Tables whose order JavaScript keeps may be left out.
+ */
+export type AuthoredOrder = (key: string) => Authored[];
+
+/** Every `categories:` map in the YAML (or in `order`) whose JS key order would differ. */
+function authoredMaps(doc: Document, order?: AuthoredOrder): Map<string, Authored[]> {
   const found = new Map<string, Authored[]>();
+  const add = (entries: Authored) => {
+    const jsOrder = Object.keys(Object.fromEntries(entries));
+    if (jsOrder.every((key, i) => key === entries[i]![0])) return;
+    const key = signature(entries);
+    found.set(key, [...(found.get(key) ?? []), entries]);
+  };
+  if (order) {
+    order("categories").forEach(add);
+    return found;
+  }
   visit(doc, {
     Pair(_, pair) {
       if (!isScalar(pair.key) || pair.key.value !== "categories" || !isMap(pair.value)) return;
@@ -37,10 +54,7 @@ function authoredMaps(doc: Document): Map<string, Authored[]> {
         const value = isScalar(item.value) ? item.value.value : undefined;
         entries.push([String(item.key.value), value]);
       }
-      const jsOrder = Object.keys(Object.fromEntries(entries));
-      if (jsOrder.every((key, i) => key === entries[i]![0])) return;
-      const key = signature(entries);
-      found.set(key, [...(found.get(key) ?? []), entries]);
+      add(entries);
     },
   });
   return found;
@@ -49,10 +63,11 @@ function authoredMaps(doc: Document): Map<string, Authored[]> {
 /**
  * Rewrite, in place, every classify `categories:` map of a validated
  * document whose numeric keys JavaScript would reorder into the list form
- * in the authored order. Documents without one are untouched.
+ * in the authored order. Documents without one are untouched. `order`, when
+ * given, is read instead of the YAML tree (R9: a TOML document's own order).
  */
-export function restoreCategoryOrder(data: unknown, doc: Document): void {
-  const maps = authoredMaps(doc);
+export function restoreCategoryOrder(data: unknown, doc: Document, order?: AuthoredOrder): void {
+  const maps = authoredMaps(doc, order);
   if (maps.size === 0) return;
   const walk = (node: unknown): void => {
     if (Array.isArray(node)) {

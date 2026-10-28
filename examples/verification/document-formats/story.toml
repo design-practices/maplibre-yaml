@@ -1,0 +1,33 @@
+#:schema https://docs.maplibre-yaml.org/schema/latest/scrollytelling.schema.json
+# A story in TOML, fetched by <ml-scrollytelling src="…/story.toml"> (U4).
+type = "scrollytelling"
+id = "toml-story"
+
+[config]
+center = [10.2, 42.15]
+zoom = 9
+mapStyle = "/examples/verification/configs/local-style.json"
+
+[[layers]]
+id = "toml-story-dot"
+type = "circle"
+paint = { circle-radius = 10, circle-color = "#e76f51" }
+
+[layers.source]
+type = "geojson"
+data = { type = "FeatureCollection", features = [
+  { type = "Feature", properties = {}, geometry = { type = "Point", coordinates = [10.2, 42.15] } },
+] }
+
+[[chapters]]
+id = "first"
+title = "A story written in TOML"
+description = "<p>Read from story.toml: the same chapters a YAML story would have.</p>"
+center = [10.2, 42.15]
+zoom = 9
+
+[[chapters]]
+id = "second"
+title = "Second chapter"
+center = [10.3, 42.2]
+zoom = 10

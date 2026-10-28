@@ -1,0 +1,71 @@
+{
+  "type": "scrollytelling",
+  "id": "ring-of-fire",
+  "theme": "dark",
+  "config": {
+    "mapStyle": "https://demotiles.maplibre.org/style.json",
+    "center": [160, 10],
+    "zoom": 1.5
+  },
+  "layers": [
+    {
+      "id": "volcanoes",
+      "type": "circle",
+      "source": { "type": "geojson", "url": "./volcanoes.geojson" },
+      "paint": { "circle-radius": 7, "circle-color": "#fbbf24" }
+    }
+  ],
+  "chapters": [
+    {
+      "id": "intro",
+      "title": "The Ring of Fire",
+      "description": "<p>Three quarters of the world's active volcanoes sit on a 40,000 km horseshoe around the Pacific.</p>",
+      "center": [160, 10],
+      "zoom": 1.5
+    },
+    {
+      "id": "japan",
+      "title": "Japan: the tall ones",
+      "description": "<p>Volcanoes above <strong>2,500 m</strong> turn red.</p>",
+      "center": [137, 35],
+      "zoom": 5,
+      "pitch": 45,
+      "onChapterEnter": [
+        {
+          "action": "setPaintProperty",
+          "layer": "volcanoes",
+          "property": "circle-color",
+          "value": "#ef4444"
+        },
+        {
+          "action": "setFilter",
+          "layer": "volcanoes",
+          "filter": [">=", ["get", "elevation"], 2500]
+        }
+      ],
+      "onChapterExit": [
+        { "action": "setFilter", "layer": "volcanoes", "filter": null },
+        {
+          "action": "setPaintProperty",
+          "layer": "volcanoes",
+          "property": "circle-color",
+          "value": "#fbbf24"
+        }
+      ]
+    },
+    {
+      "id": "pacific",
+      "title": "The whole basin",
+      "description": "<p>A <code>fitBounds</code> action frames the rim.</p>",
+      "center": [-170, 10],
+      "zoom": 2,
+      "onChapterEnter": [
+        {
+          "action": "fitBounds",
+          "bounds": [100, -50, 290, 62],
+          "options": { "padding": 40, "duration": 1500 }
+        }
+      ]
+    }
+  ]
+}

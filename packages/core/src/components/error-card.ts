@@ -7,6 +7,7 @@ import type { ParseError } from "../parser/yaml-parser.js";
 import { escapeHtml } from "../utils/html.js";
 import { displayPath } from "../parser/validation-utils.js";
 import { defaultStrings, type Strings } from "../i18n/strings.js";
+import type { ErrorCardContent } from "./student-messages.js";
 
 /** Class on the card element; `<ml-map>` removes elements carrying it. */
 export const ERROR_CARD_CLASS = "ml-map-error";
@@ -119,4 +120,28 @@ export function createErrorCard(doc: Document, options: ErrorCardOptions): HTMLE
     </div>
   `;
   return template.content.firstElementChild as HTMLElement;
+}
+
+/**
+ * The TOML reader couldn't be downloaded (R19). Unlike a data-format
+ * reader's notice, which names one layer and leaves the others drawing, this
+ * is the whole document: none of it can be read without the reader.
+ * `reload()` downloads it again.
+ */
+export function tomlReaderCard(error: unknown): ErrorCardContent {
+  const url = (error as { url?: unknown } | null)?.url;
+  return {
+    title: "Couldn't read the TOML document",
+    errors: [
+      {
+        path: "",
+        message:
+          `This document is TOML, and the TOML reader (${typeof url === "string" ? url : "chunks/toml.js"}) ` +
+          "couldn't be downloaded. maplibre-yaml loads it on demand from the folder its script came from: " +
+          "if you copied maplibre-yaml to your own site, copy the whole dist/ folder (not just register.js), " +
+          "or load it from the CDN. Offline or a content blocker can also stop it.",
+      },
+    ],
+    hint: "Once it can be downloaded, call reload() on the element or reload the page. YAML and JSON documents need no reader.",
+  };
 }

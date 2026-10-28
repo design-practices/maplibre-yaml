@@ -213,6 +213,10 @@ export default defineConfig([
       "hyparquet",
       "hyparquet-compressors",
       "fzstd",
+      // The TOML reader (parser/toml, the `toml` chunk): a devDependency
+      // bundled into its on-demand module, with its one dependency.
+      "toml-eslint-parser",
+      "eslint-visitor-keys",
     ],
     esbuildPlugins: [geotiffBrowserOnly as never],
     esbuildOptions(options) {
@@ -271,6 +275,8 @@ function browserBuild(entry: Record<string, string>, chunks: boolean): Options {
       "hyparquet",
       "hyparquet-compressors",
       "fzstd",
+      "toml-eslint-parser",
+      "eslint-visitor-keys",
       // Resolved to the stub below (the alias), not the package.
       "@bokuweb/zstd-wasm",
       ...Object.values(seam).filter((spec) => !spec.startsWith(".")),

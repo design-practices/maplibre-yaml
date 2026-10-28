@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { exec } from 'node:child_process';
 import { promisify } from 'node:util';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, cpSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'pathe';
 
@@ -376,6 +376,191 @@ describe('validate command (integration)', () => {
       const r = await run('test/fixtures/invalid-missing-config.yaml');
       expect(r.stdout).toContain('error config: The document is missing config:');
       expect(r.stdout).not.toContain('at line 1, column 1');
+    });
+  });
+
+  // R1, R7, R14, AE4: JSON and TOML documents, named or found in a folder.
+  describe('JSON and TOML documents (R14)', () => {
+    const FORMATS = 'test/fixtures/formats';
+    const tmpDirs: string[] = [];
+    const tempDir = () => {
+      const d = mkdtempSync(join(tmpdir(), 'mlym-formats-'));
+      tmpDirs.push(d);
+      return d;
+    };
+    afterAll(() => {
+      for (const d of tmpDirs) rmSync(d, { recursive: true, force: true });
+    });
+    const run = async (args: string, options: { cwd?: string } = {}) => {
+      try {
+        const { stdout, stderr } = await execAsync(`node "${CLI}" validate ${args}`, options);
+        return { code: 0, stdout, stderr };
+      } catch (error: any) {
+        return { code: error.code as number, stdout: error.stdout as string, stderr: error.stderr as string };
+      }
+    };
+
+    it('AE4: a folder validates only map.json and map.toml', async () => {
+      const r = await run(`${FORMATS}/folder`);
+      expect(r.code).toBe(0);
+      expect(r.stdout).toContain('✓ test/fixtures/formats/folder/map.json');
+      expect(r.stdout).toContain('✓ test/fixtures/formats/folder/map.toml');
+      expect(r.stdout).toContain('2 file(s) valid');
+      for (const other of ['package.json', 'style.json', 'points.json', 'pyproject.toml']) {
+        expect(r.stdout + r.stderr).not.toContain(other);
+      }
+    });
+
+    it('AE4: --verbose reports the four skipped files', async () => {
+      const r = await run(`${FORMATS}/folder --verbose`);
+      expect(r.code).toBe(0);
+      for (const other of ['package.json', 'style.json', 'points.json', 'pyproject.toml']) {
+        expect(r.stdout).toContain(`- Skipped test/fixtures/formats/folder/${other}: not a map or story document`);
+      }
+      expect(r.stdout).toContain('Skipped 4 JSON or TOML file(s)');
+    });
+
+    it('--verbose with a machine format keeps the skipped list off stdout', async () => {
+      const r = await run(`${FORMATS}/folder --verbose --format json`);
+      expect(r.code).toBe(0);
+      expect(JSON.parse(r.stdout).files).toHaveLength(2);
+      expect(r.stderr).toContain('Skipped 4 JSON or TOML file(s)');
+    });
+
+    it('a JSON map with a syntax error in a folder joins the run and fails', async () => {
+      const dir = tempDir();
+      cpSync(`${FORMATS}/folder/map.toml`, join(dir, 'map.toml'));
+      cpSync(`${FORMATS}/bad.json`, join(dir, 'bad.json'));
+      const r = await run('.', { cwd: dir });
+      expect(r.code).toBe(1);
+      expect(r.stdout).toContain('✗ bad.json');
+      expect(r.stdout).toContain('JSON syntax error');
+      expect(r.stdout).toContain('at line 6, column 5');
+      expect(r.stdout).toContain('✓ map.toml');
+    });
+
+    it('a 6 MB TOML map with inline coordinates joins a folder run and validates', async () => {
+      const dir = tempDir();
+      const features: string[] = [];
+      for (let f = 0; f < 1000; f++) {
+        const coords: string[] = [];
+        for (let i = 0; i < 240; i++) coords.push(`[${(-74 + i * 0.0001).toFixed(6)}, ${(40.7 + f * 0.0001).toFixed(6)}]`);
+        features.push(
+          `[[sources.trails.data.features]]\ntype = "Feature"\nproperties = { id = ${f} }\n` +
+            `geometry = { type = "LineString", coordinates = [${coords.join(', ')}] }\n`
+        );
+      }
+      const text =
+        'type = "map"\nid = "big"\n\n[config]\ncenter = [-74, 40.7]\nzoom = 10\n' +
+        'mapStyle = "https://tiles.openfreemap.org/styles/positron"\n\n' +
+        '[[layers]]\nid = "trails"\ntype = "line"\nsource = "trails"\n\n' +
+        '[sources.trails]\ntype = "geojson"\n\n[sources.trails.data]\ntype = "FeatureCollection"\n\n' +
+        features.join('\n');
+      expect(text.length).toBeGreaterThan(6 * 1000 * 1000);
+      writeFileSync(join(dir, 'big.toml'), text);
+      const r = await run('.', { cwd: dir });
+      expect(r.stdout).toContain('✓ big.toml');
+      expect(r.code).toBe(0);
+    }, 120_000);
+
+    it('maplibre-yaml.config.json is never validated as a document', async () => {
+      const dir = tempDir();
+      writeFileSync(join(dir, 'maplibre-yaml.config.json'), JSON.stringify({ validate: { strict: false } }));
+      cpSync(`${FORMATS}/folder/map.json`, join(dir, 'map.json'));
+      const r = await run('. --verbose', { cwd: dir });
+      expect(r.code).toBe(0);
+      expect(r.stdout).toContain('✓ map.json');
+      expect(r.stdout).not.toContain('✗ maplibre-yaml.config.json');
+      expect(r.stdout).toContain('- Skipped maplibre-yaml.config.json');
+    });
+
+    it("a glob '**/*.json' keeps today's behaviour and reports package.json", async () => {
+      const r = await run(`'${FORMATS}/folder/**/*.json'`);
+      expect(r.code).toBe(1);
+      expect(r.stdout).toContain('✓ test/fixtures/formats/folder/map.json');
+      expect(r.stdout).toContain('✗ test/fixtures/formats/folder/package.json');
+      expect(r.stdout).toContain('✗ test/fixtures/formats/folder/style.json');
+      expect(r.stdout).toContain('✗ test/fixtures/formats/folder/points.json');
+    });
+
+    it('a JSON file named explicitly always validates', async () => {
+      const r = await run(`${FORMATS}/folder/package.json`);
+      expect(r.code).toBe(1);
+      expect(r.stdout).toContain('✗ test/fixtures/formats/folder/package.json');
+      expect(r.stdout).toContain('Unable to determine document type. Expected an object with "type": "map"');
+    });
+
+    it('a folder with no documents says so and exits 2, as an unmatched argument did', async () => {
+      const dir = tempDir();
+      cpSync(`${FORMATS}/folder/package.json`, join(dir, 'package.json'));
+      cpSync(`${FORMATS}/folder/pyproject.toml`, join(dir, 'pyproject.toml'));
+      const r = await run('.', { cwd: dir });
+      expect(r.code).toBe(2);
+      expect(r.stdout).toContain('No map or story documents found in .');
+      expect(r.stdout).toContain('--verbose lists the files skipped');
+      expect(r.stdout).not.toContain('File not found');
+    });
+
+    it('an empty folder says so too', async () => {
+      const r = await run(`"${tempDir()}"`);
+      expect(r.code).toBe(2);
+      expect(r.stdout).toContain('No map or story documents found in ');
+    });
+
+    describe('bad.json: "JSON syntax error" with its line and column in every format', () => {
+      it('human', async () => {
+        const r = await run(`${FORMATS}/bad.json`);
+        expect(r.code).toBe(1);
+        expect(r.stdout).toContain('error JSON syntax error:');
+        expect(r.stdout).not.toContain('YAML');
+        expect(r.stdout).toContain('at line 6, column 5');
+      });
+
+      it('json', async () => {
+        const r = await run(`${FORMATS}/bad.json --format json`);
+        const error = JSON.parse(r.stdout).files[0].errors[0];
+        expect(error.message).toMatch(/^JSON syntax error:/);
+        expect(error).toMatchObject({ line: 6, column: 5 });
+      });
+
+      it('sarif', async () => {
+        const r = await run(`${FORMATS}/bad.json --format sarif`);
+        const result = JSON.parse(r.stdout).runs[0].results[0];
+        expect(result.message.text).toMatch(/^JSON syntax error:/);
+        expect(result.locations[0].physicalLocation.region).toMatchObject({ startLine: 6, startColumn: 5 });
+      });
+
+      it('vscode', async () => {
+        const r = await run(`${FORMATS}/bad.json --format vscode`);
+        expect(r.stdout).toMatch(/bad\.json:6:5: error: JSON syntax error:/);
+      });
+    });
+
+    it('a TOML syntax error says "TOML syntax error" at the TOML line and column', async () => {
+      const r = await run(`${FORMATS}/bad.toml --format vscode`);
+      expect(r.code).toBe(1);
+      expect(r.stdout).toMatch(/bad\.toml:5:1: error: TOML syntax error:/);
+    });
+
+    it('TOML schema findings carry TOML positions in every format', async () => {
+      const human = await run(`${FORMATS}/quick-start-planted.toml`);
+      expect(human.stdout).toContain('error config.zoom: Expected number, got string');
+      expect(human.stdout).toContain('at line 7, column 8');
+      const json = JSON.parse((await run(`${FORMATS}/quick-start-planted.toml --format json`)).stdout);
+      expect(json.files[0].errors[0]).toMatchObject({ path: 'config.zoom', line: 7, column: 8 });
+      const sarif = JSON.parse((await run(`${FORMATS}/quick-start-planted.toml --format sarif`)).stdout);
+      expect(sarif.runs[0].results[0].locations[0].physicalLocation.region).toMatchObject({ startLine: 7, startColumn: 8 });
+      const vscode = await run(`${FORMATS}/quick-start-planted.toml --format vscode`);
+      expect(vscode.stdout).toContain('quick-start-planted.toml:7:8: error: [config.zoom] Expected number, got string');
+    });
+
+    it('BOM-prefixed YAML and JSON files validate', async () => {
+      const dir = tempDir();
+      writeFileSync(join(dir, 'bom.yaml'), '\uFEFF' + readFileSync('test/fixtures/valid-basic.yaml', 'utf-8'));
+      writeFileSync(join(dir, 'bom.json'), '\uFEFF' + readFileSync(`${FORMATS}/folder/map.json`, 'utf-8'));
+      const r = await run('bom.yaml bom.json', { cwd: dir });
+      expect(r.stdout).toContain('2 file(s) valid');
+      expect(r.code).toBe(0);
     });
   });
 });

@@ -65,12 +65,18 @@ const gallery = galleryStarters();
             <span id="pg-status-text" aria-live="polite">Loading…</span>
           </button>
           <span id="pg-status-hint" class="sr-only">Moves to the first problem and opens the list of problems.</span>
+          <label for="pg-format" class="sr-only">Document format</label>
+          <select id="pg-format" class="pg-control pg-small" title="Write the document in YAML, JSON or TOML">
+            <option value="yaml">YAML</option>
+            <option value="json">JSON</option>
+            <option value="toml">TOML</option>
+          </select>
           <button id="pg-swap" type="button" class="pg-control pg-small pg-swap" aria-pressed="false">Bigger map</button>
         </div>
         <div id="pg-editor" class="pg-editor"><p class="pg-loading">Loading the editor…</p></div>
         <p class="pg-hint">
           <kbd>Tab</kbd> indents. To leave the editor, press <kbd>Esc</kbd> then <kbd>Tab</kbd>.
-          <kbd>Ctrl</kbd>+<kbd>Space</kbd> lists the keys you can write here.
+          In YAML, <kbd>Ctrl</kbd>+<kbd>Space</kbd> lists the keys you can write here.
         </p>
       </section>
       <section id="pg-preview" class="pg-preview" aria-label="Map preview">
@@ -89,7 +95,8 @@ const gallery = galleryStarters();
     <h2>How the playground works</h2>
     <p>
       The editor holds a map document: the same YAML you would save as <code>map.yaml</code> next
-      to an <code>index.html</code>. The map redraws a moment after you stop typing, and keeps
+      to an <code>index.html</code>. The format menu switches it to JSON or TOML and says what
+      the new format doesn't keep (see <a href="/guides/json-and-toml/">JSON and TOML</a>). The map redraws a moment after you stop typing, and keeps
       the view you panned to unless you change <code>center</code>, <code>zoom</code> or another
       part of the view yourself.
     </p>
@@ -100,7 +107,7 @@ const gallery = galleryStarters();
         an error, the map keeps showing your last working version.
       </li>
       <li>
-        <strong>Suggestions:</strong> start a new line, or press <kbd>Ctrl</kbd>+<kbd>Space</kbd>,
+        <strong>Suggestions:</strong> in YAML, start a new line or press <kbd>Ctrl</kbd>+<kbd>Space</kbd>
         for the keys and values that fit there, each with its description.
       </li>
       <li>

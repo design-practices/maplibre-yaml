@@ -69,7 +69,11 @@ popup:
   as markup, so data can't inject HTML into your page. A `str` tagged `!html`
   (`str: !html "<em>new</em>"`) is markup only on a page that trusts the
   document; `<ml-map>` doesn't, so it shows the tags as text and logs a
-  warning.
+  warning. JSON and TOML have no tags, so they write the same value as an
+  object: `{ "$html": "<em>new</em>" }` in JSON,
+  `{ "$html" = "<em>new</em>" }` in TOML
+  ([JSON & TOML](/guides/json-and-toml/#html)). It is the value `!html`
+  produces, so the same trust rule applies.
 - **Links** take an absolute URL (`https://`, `mailto:`, `tel:`) or a path on
   your site (`/about`, `notes.html`, `#top`); any other scheme, such as
   `javascript:`, is shown as plain text. A link opens in a new tab unless you

@@ -13,64 +13,18 @@
 import { describe, it, expect } from "vitest";
 import { YAMLParser } from "../../src/parser";
 import type { ValidationWarning } from "../../src/parser/validation-utils";
+import { inertKeys as D, FETCH_STRATEGIES } from "../fixtures/parity";
 
 const find = (warnings: ValidationWarning[], path: string, text: string) =>
   warnings.find((w) => w.path === path && w.message.includes(text));
 
-const map = (source: string) =>
-  YAMLParser.safeParseMapBlock(`type: map
-id: m
-config:
-  center: [10.2, 42.15]
-  zoom: 9
-  mapStyle: https://example.com/style.json
-sources:
-  data:
-    type: geojson
-    url: https://example.com/d.geojson
-${source}
-layers:
-  - id: dots
-    type: circle
-    source: data
-`);
-
-const ROOT = `config:
-  title: Site
-  theme: dark
-  dataFetching:
-    defaultStrategy: build
-    timeout: 5000
-pages:
-  - path: /
-    title: Home
-    blocks:
-      - type: content
-        content:
-          - h1: [{ str: Hello }]
-      - type: mixed
-        blocks:
-          - type: content
-            content:
-              - p: [{ str: Side }]
-      - type: map-fullpage
-        id: full
-        config:
-          center: [0, 0]
-          zoom: 2
-          mapStyle: https://example.com/style.json
-  - path: /two
-    title: Two
-    blocks:
-      - type: content
-        content:
-          - p: [{ str: Again }]
-`;
+const map = (doc: string) => YAMLParser.safeParseMapBlock(doc);
+const ROOT = D.root;
 
 describe("fetchStrategy: build | hybrid has no effect (ml-j2p.1)", () => {
-  for (const strategy of ["build", "hybrid"]) {
+  for (const strategy of FETCH_STRATEGIES) {
     it(`v1 ${strategy}: valid, with a deprecation warning at the key`, () => {
-      const result = map(`    fetchStrategy: ${strategy}`);
+      const result = map(D.fetchStrategy(strategy));
       expect(result.success).toBe(true);
       const warning = find(result.warnings, "sources.data.fetchStrategy", "has no effect");
       expect(warning).toBeDefined();
@@ -81,30 +35,13 @@ describe("fetchStrategy: build | hybrid has no effect (ml-j2p.1)", () => {
   }
 
   it("v2: at runtime.fetchStrategy", () => {
-    const result = YAMLParser.safeParseMapBlock(`version: 2
-type: map
-id: m
-style:
-  basemap: https://example.com/style.json
-  center: [0, 0]
-  zoom: 2
-  sources:
-    data:
-      type: geojson
-      url: https://example.com/d.geojson
-      runtime:
-        fetchStrategy: build
-  layers:
-    - id: dots
-      type: circle
-      source: data
-`);
+    const result = YAMLParser.safeParseMapBlock(D.v2FetchStrategy);
     expect(result.success).toBe(true);
     expect(find(result.warnings, "style.sources.data.runtime.fetchStrategy", "has no effect")).toBeDefined();
   });
 
   it("runtime (what actually happens) does not warn", () => {
-    const result = map(`    fetchStrategy: runtime`);
+    const result = map(D.fetchStrategy("runtime"));
     expect(result.warnings.some((w) => w.message.includes("fetchStrategy"))).toBe(false);
   });
 });
@@ -144,21 +81,9 @@ describe("multi-page root documents (ml-j2p.2, .3, .4)", () => {
   });
 
   it("a map block's config and a story's theme do not get these warnings", () => {
-    const block = map("");
+    const block = map(D.plainMap);
     expect(block.warnings.some((w) => w.message.includes("has no effect"))).toBe(false);
-    const story = YAMLParser.safeParseScrollytellingBlock(`type: scrollytelling
-id: s
-theme: dark
-config:
-  center: [0, 0]
-  zoom: 2
-  mapStyle: https://example.com/style.json
-chapters:
-  - id: one
-    title: One
-    center: [0, 0]
-    zoom: 3
-`);
+    const story = YAMLParser.safeParseScrollytellingBlock(D.storyTheme);
     expect(story.success).toBe(true);
     expect(story.warnings.some((w) => w.message.includes("has no effect") || w.message.includes("Multi-page"))).toBe(
       false

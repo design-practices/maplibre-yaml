@@ -74,12 +74,26 @@ const VALIDATE_ARGS = {
     default: false,
     description: 'Watch for changes and re-validate',
   },
+  verbose: {
+    type: 'boolean',
+    default: false,
+    description: 'List the JSON and TOML files a folder search skipped because they are not map or story documents',
+  },
 } satisfies ArgsDef;
+
+/**
+ * A path relative to where the command ran, as the docs show
+ * (`✓ my-map.yaml`), unless the file is outside that folder.
+ */
+function displayFile(file: string): string {
+  const rel = relative(process.cwd(), file);
+  return rel.startsWith('..') ? file : rel;
+}
 
 export const validateCommand = defineCommand({
   meta: {
     name: 'validate',
-    description: 'Validate YAML configuration files',
+    description: 'Validate map and story documents (YAML, JSON or TOML)',
   },
   args: VALIDATE_ARGS,
   async run({ args, rawArgs }) {
@@ -98,6 +112,7 @@ export const validateCommand = defineCommand({
       strict,
       'strict-deprecations': strictDeprecations,
       watch: watchMode,
+      verbose,
     } = mergedArgs;
 
     // Strict resolution (decision D9): an explicit `--strict`/`--no-strict`
@@ -120,8 +135,10 @@ export const validateCommand = defineCommand({
     let files: string[];
     let unmatched: string[];
     let ignored: string[];
+    let skipped: string[];
+    let emptyFolders: string[];
     try {
-      ({ files, unmatched, ignored } = await resolveTargets(positionals, {
+      ({ files, unmatched, ignored, skipped, emptyFolders } = await resolveTargets(positionals, {
         ignore: projectConfig?.validate?.ignorePatterns,
       }));
     } catch (error) {
@@ -144,6 +161,21 @@ export const validateCommand = defineCommand({
       }
       for (const i of ignored) {
         say(pc.dim(`- Skipped ${i}: excluded by validate.ignorePatterns in your maplibre-yaml config`));
+      }
+      for (const folder of emptyFolders) {
+        say(
+          pc.red(`✗ No map or story documents found in ${folder}`) +
+            pc.dim(
+              ' (looked for .yaml and .yml files, and .json and .toml files that declare a map or story' +
+                (skipped.length > 0 && !verbose ? '; --verbose lists the files skipped)' : ')')
+            )
+        );
+      }
+      if (verbose && skipped.length > 0) {
+        for (const s of skipped) {
+          say(pc.dim(`- Skipped ${displayFile(s)}: not a map or story document`));
+        }
+        say(pc.dim(`- Skipped ${skipped.length} JSON or TOML file(s) that are not map or story documents`));
       }
     }
 
@@ -221,14 +253,7 @@ export const validateCommand = defineCommand({
             output = formatVSCode(results);
             break;
           default:
-            // Paths relative to where the command ran, as the docs show
-            // (`✓ my-map.yaml`), unless the file is outside that folder.
-            output = formatHuman(
-              results.map((r) => {
-                const rel = relative(process.cwd(), r.file);
-                return { ...r, file: rel.startsWith('..') ? r.file : rel };
-              })
-            );
+            output = formatHuman(results.map((r) => ({ ...r, file: displayFile(r.file) })));
         }
         console.log(output);
         reportUnmatched();
@@ -239,7 +264,7 @@ export const validateCommand = defineCommand({
           process.exit(
             hasErrors
               ? EXIT_CODES.VALIDATION_ERROR
-              : unmatched.length > 0
+              : unmatched.length > 0 || emptyFolders.length > 0
                 ? EXIT_CODES.FILE_NOT_FOUND
                 : EXIT_CODES.SUCCESS
           );

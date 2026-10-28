@@ -1,5 +1,10 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterAll } from 'vitest';
+import { mkdtempSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'pathe';
 import { validateFile, validateFiles, validateFilesParallel } from '../../src/lib/validator.js';
+
+const FORMATS = './test/fixtures/formats';
 
 describe('validator', () => {
   describe('validateFile', () => {
@@ -153,6 +158,78 @@ describe('validator', () => {
       const results = await validateFilesParallel(files, 2);
       expect(results).toHaveLength(5);
       expect(results.every(r => r.valid)).toBe(true);
+    });
+  });
+
+  // R1, R6, R7: JSON and TOML documents through the front door.
+  describe('JSON and TOML documents', () => {
+    const dirs: string[] = [];
+    const tempFile = (name: string, text: string) => {
+      const d = mkdtempSync(join(tmpdir(), 'mlym-validator-'));
+      dirs.push(d);
+      writeFileSync(join(d, name), text);
+      return join(d, name);
+    };
+    afterAll(() => {
+      for (const d of dirs) rmSync(d, { recursive: true, force: true });
+    });
+
+    it('validates a JSON map and a TOML map', async () => {
+      for (const file of [`${FORMATS}/folder/map.json`, `${FORMATS}/folder/map.toml`, `${FORMATS}/quick-start.toml`]) {
+        const result = await validateFile(file);
+        expect(result.errors, file).toEqual([]);
+        expect(result.valid, file).toBe(true);
+      }
+    });
+
+    it('a JSON syntax error says "JSON syntax error", at its line and column', async () => {
+      const result = await validateFile(`${FORMATS}/bad.json`);
+      expect(result.valid).toBe(false);
+      expect(result.errors[0].message).toMatch(/^JSON syntax error:/);
+      expect(result.errors[0].message).not.toContain('YAML');
+      expect(result.errors[0]).toMatchObject({ line: 6, column: 5 });
+    });
+
+    it('a TOML syntax error says "TOML syntax error", at a TOML line and column', async () => {
+      const result = await validateFile(`${FORMATS}/bad.toml`);
+      expect(result.valid).toBe(false);
+      expect(result.errors[0].message).toMatch(/^TOML syntax error:/);
+      expect(result.errors[0]).toMatchObject({ line: 5, column: 1 });
+    });
+
+    it('TOML schema findings point at the TOML line and column', async () => {
+      const result = await validateFile(`${FORMATS}/quick-start-planted.toml`);
+      expect(result.errors).toEqual([
+        expect.objectContaining({ path: 'config.zoom', line: 7, column: 8 }),
+      ]);
+      expect(result.warnings).toContainEqual(
+        expect.objectContaining({ path: 'layers.0.interactive.click.popup.1.p.1.format.max-fraction-digit', line: 35, column: 34 })
+      );
+    });
+
+    it('a missing top-level key has no stand-in location in JSON or TOML (ml-aot.54)', async () => {
+      const json = await validateFile(tempFile('no-config.json', '{\n  "type": "map",\n  "id": "x",\n  "layers": []\n}\n'));
+      const toml = await validateFile(tempFile('no-config.toml', 'type = "map"\nid = "x"\nlayers = []\n'));
+      for (const result of [json, toml]) {
+        const missing = result.errors.find((e) => e.path === 'config');
+        expect(missing).toBeDefined();
+        expect(missing!.line).toBeUndefined();
+      }
+    });
+
+    it('a TOML table header at column 1 keeps its location', async () => {
+      const result = await validateFile(tempFile('no-center.toml', 'type = "map"\nid = "x"\n[config]\nzoom = 1\n'));
+      expect(result.errors.find((e) => e.path === 'config.center')).toMatchObject({ line: 3, column: 1 });
+    });
+
+    it('a file with a byte-order mark validates, in YAML and JSON', async () => {
+      const yaml = readFileSync('./test/fixtures/valid-basic.yaml', 'utf-8');
+      const json = readFileSync(`${FORMATS}/folder/map.json`, 'utf-8');
+      for (const file of [tempFile('bom.yaml', '\uFEFF' + yaml), tempFile('bom.json', '\uFEFF' + json)]) {
+        const result = await validateFile(file);
+        expect(result.errors, file).toEqual([]);
+        expect(result.valid, file).toBe(true);
+      }
     });
   });
 });

@@ -1,0 +1,6 @@
+type = "map"
+id = "broken"
+
+[config
+center = [-73.98, 40.75]
+zoom = 12
