@@ -20,13 +20,17 @@
  *
  * - `src` — URL of a YAML document.
  * - `base` — where site paths start on a subpath deployment (`"/my-repo/"`).
+ * - `camera` — who owns the camera across document updates: `"document"`
+ *   (the default) or `"host"` (updates never move it).
  * - `config` — on React 19 a `MapBlock` object or its JSON string (React 19
  *   sets it as a property); on React 18 a JSON string only, because React 18
  *   sets unknown props on custom elements as attributes and an object would
  *   arrive as `"[object Object]"`.
  * - `ref` — `useRef<MLMap>(null)`, so `ref.current.mapReady()` is typed.
  * - `onml-map:*` event props (React 19 only; React 18 ignores them), each
- *   typed with its `CustomEvent` detail from {@link MLMapEventMap}.
+ *   typed with its `CustomEvent` detail from {@link MLMapEventMap} — the
+ *   live-document ones included: `onml-map:update-applied`,
+ *   `onml-map:update-rejected` and `onml-map:state-change`.
  * - `children` — slot children (`<div slot="top-right">`) and an inline
  *   `<script type="text/yaml">` (or `application/yaml`, `application/json`),
  *   through the standard HTML attributes.
@@ -91,6 +95,13 @@ export type MLMapProps = DetailedHTMLProps<HTMLAttributes<MLMap>, MLMap> & {
    * as `import.meta.env.BASE_URL`.
    */
   base?: string;
+  /**
+   * Who owns the camera when the document changes (live documents, 0.10).
+   * `"document"` (the default): a changed `center`/`zoom`/`bearing`/`pitch`
+   * eases the map there and an added `fitTo` frames once. `"host"`: an
+   * update never moves the camera, for a viewport that is per-user.
+   */
+  camera?: "document" | "host";
 } &(IsReact19Types extends true ? MLMapEventProps : unknown);
 
 declare module "react" {

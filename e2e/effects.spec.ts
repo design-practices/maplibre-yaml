@@ -16,8 +16,11 @@
  *     style renders in plain maplibre-gl;
  *  5. KTD7's static clause: an idle map with a static effect schedules no
  *     repaint and no frame;
- *  6. teardown on re-render and removal restores the static layer and
- *     leaks no frames;
+ *  6. live documents (0.10): a changed document applies in place — same
+ *     map, the effect stays attached, a reorder keeps the `::fx-` layer
+ *     directly above its static layer — while a `mapStyle` change still
+ *     yields a new map with the effect re-attached; removal restores the
+ *     static layer and leaks no frames;
  *  7. the tile-seam fix: walls crossing a tile edge share one
  *     parametrisation in every tile that draws them.
  *
@@ -228,7 +231,9 @@ test.describe("effects (maplibre-gl 5+)", () => {
     expect(errors, errors.join("\n")).toEqual([]);
   });
 
-  test("6. teardown: re-render and removal restore the static layer and leak no frames", async ({ page }) => {
+  test("6. teardown: a changed document keeps the map and its effect, a basemap change re-attaches on the new map, removal restores the static layer and leaks no frames", async ({
+    page,
+  }) => {
     const errors = await guard(page);
     await open(page, "doc=crosshatch");
     // An IDENTICAL config is a no-op (ml-i10, #126): same map, effect still on.
@@ -242,22 +247,107 @@ test.describe("effects (maplibre-gl 5+)", () => {
     });
     expect(equal).toEqual({ sameMap: true, effects: 1 });
 
-    // Re-render (a genuinely new config): the old map's effect detaches, the
-    // new map's attaches.
-    const rerender = await page.evaluate(async () => {
+    /** Where the `::fx-` layer sits relative to its static layer, on the current map. */
+    const placement = () =>
+      page.evaluate(() => {
+        const s = (window as any).__fx;
+        const order: string[] = s.el.getMap().getLayersOrder();
+        const fx = order.filter((id) => id.includes("::fx-"));
+        return {
+          fx,
+          directlyAbove: fx.map((id) => order[order.indexOf(id) - 1]),
+          handles: s.effects().map((e: any) => e.handle?.customLayerId),
+        };
+      });
+    const before = await placement();
+    expect(before.fx).toHaveLength(1);
+    expect(before.directlyAbove).toEqual(["buildings"]);
+    expect(before.handles).toEqual(before.fx);
+
+    // A changed document (live documents, 0.10): a paint edit on another
+    // layer applies IN PLACE — same map, the effect still attached and
+    // drawing above its static layer.
+    const recoloured = await page.evaluate(async () => {
       const s = (window as any).__fx;
-      const old = s.map;
-      s.el.config = { ...s.doc, id: `${s.doc.id}-rerender` };
+      const old = s.el.getMap();
+      const next = JSON.parse(JSON.stringify(s.doc));
+      next.layers.find((l: any) => l.id === "roads").paint["line-color"] = "#8b0000";
+      const outcome = await new Promise<any>((resolve) => {
+        s.el.addEventListener("ml-map:update-applied", (e: CustomEvent) => resolve(e.detail), { once: true });
+        s.el.config = next;
+      });
+      await s.whenEffectsReady();
+      return {
+        sameMap: s.el.getMap() === old,
+        propertiesSet: outcome.summary.propertiesSet,
+        failures: outcome.summary.failures,
+        effects: s.effects().length,
+        active: s.effects()[0]?.active,
+        roads: s.el.getMap().getPaintProperty("roads", "line-color"),
+      };
+    });
+    expect(recoloured).toEqual({
+      sameMap: true,
+      propertiesSet: [{ layerId: "roads", property: "line-color" }],
+      failures: [],
+      effects: 1,
+      active: true,
+      roads: "#8b0000",
+    });
+    expect(await placement()).toEqual(before);
+
+    // A reorder that moves the effect-bearing layer below the roads: the
+    // `::fx-` layer follows its static layer and stays directly above it.
+    const reordered = await page.evaluate(async () => {
+      const s = (window as any).__fx;
+      const next = JSON.parse(JSON.stringify(s.el.getDocument()));
+      const ids = next.layers.map((l: any) => l.id);
+      const [roads, buildings] = [ids.indexOf("roads"), ids.indexOf("buildings")];
+      [next.layers[roads], next.layers[buildings]] = [next.layers[buildings], next.layers[roads]];
+      const outcome = await new Promise<any>((resolve) => {
+        s.el.addEventListener("ml-map:update-applied", (e: CustomEvent) => resolve(e.detail), { once: true });
+        s.el.config = next;
+      });
+      await s.whenEffectsReady();
+      const order: string[] = s.el.getMap().getLayersOrder();
+      return {
+        moved: outcome.summary.moved,
+        failures: outcome.summary.failures,
+        effects: s.effects().length,
+        buildingsBelowRoads: order.indexOf("buildings") < order.indexOf("roads"),
+      };
+    });
+    expect(reordered.failures).toEqual([]);
+    expect(reordered.moved.length).toBeGreaterThan(0);
+    expect(reordered.effects).toBe(1);
+    expect(reordered.buildingsBelowRoads).toBe(true);
+    const afterReorder = await placement();
+    expect(afterReorder.fx).toHaveLength(1);
+    expect(afterReorder.directlyAbove).toEqual(["buildings"]);
+    expect(afterReorder.handles).toEqual(afterReorder.fx);
+
+    // A mapStyle change still rebuilds: the old map's effect detaches, the
+    // new map's attaches (summary.rebuild, ml-map:load again).
+    const rebuilt = await page.evaluate(async () => {
+      const s = (window as any).__fx;
+      const old = s.el.getMap();
+      const next = JSON.parse(JSON.stringify(s.el.getDocument()));
+      next.config.mapStyle = `${location.origin}/examples/verification/live-update/alt-style.json`;
+      const outcome = await new Promise<any>((resolve) => {
+        s.el.addEventListener("ml-map:update-applied", (e: CustomEvent) => resolve(e.detail), { once: true });
+        s.el.config = next;
+      });
       const map = await s.el.mapReady();
       await s.whenEffectsReady();
       return {
+        rebuild: outcome.summary.rebuild,
         newMap: map !== old,
         oldEffects: (await import("/packages/effects/dist/index.browser.js")).getAttachedEffects(old).length,
         newEffects: s.effects().length,
         layerOnNewMap: map.getLayersOrder().some((id: string) => id.includes("::fx-")),
       };
     });
-    expect(rerender).toEqual({ newMap: true, oldEffects: 0, newEffects: 1, layerOnNewMap: true });
+    expect(rebuilt).toEqual({ rebuild: true, newMap: true, oldEffects: 0, newEffects: 1, layerOnNewMap: true });
 
     // Detach (what <ml-map> does on destroy) restores the static layer.
     const after = await page.evaluate(async () => {

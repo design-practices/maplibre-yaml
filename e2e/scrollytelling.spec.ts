@@ -1196,6 +1196,96 @@ test.describe("<ml-scrollytelling> with inline YAML", () => {
     await expectCameraNear(page, [-77.04, -12.05], 5);
     expect(errors).toEqual([]);
   });
+
+  /** The story's inner `<ml-map>`: the next `ml-map:update-applied` it dispatches. */
+  const storyUpdate = (page: Page) =>
+    page.evaluate(
+      () =>
+        new Promise<{ summary: { rebuild: boolean; failures: unknown[]; propertiesSet: unknown[] } }>((resolve) =>
+          (document.querySelector("ml-scrollytelling") as any).mapElement.addEventListener(
+            "ml-map:update-applied",
+            (e: CustomEvent) => resolve(e.detail),
+            { once: true }
+          )
+        )
+    );
+
+  test("a changed story keeps the same inner map and the active chapter's camera (live documents, 0.10)", async ({
+    page,
+    baseURL,
+  }) => {
+    const errors = await guard(page, baseURL!);
+    await page.goto(INLINE, { waitUntil: "domcontentloaded" });
+    await storyReady(page, "cities");
+    await scrollToChapter(page, "lima");
+    await settled(page);
+    await expectCameraNear(page, [-77.04, -12.05], 5);
+    await page.evaluate(() => ((window as any).__storyMap = (document.querySelector("ml-scrollytelling") as any).getMap()));
+
+    // The author recolours the cities: the story re-renders, the map updates in place.
+    const applied = storyUpdate(page);
+    await page.evaluate(() => {
+      const el = document.querySelector("ml-scrollytelling") as any;
+      const next = JSON.parse(JSON.stringify(el.story));
+      next.layers[0].paint["circle-color"] = "#d62828";
+      el.config = next;
+    });
+    const { summary } = await applied;
+    expect(summary.rebuild).toBe(false);
+    expect(summary.failures).toEqual([]);
+    expect(summary.propertiesSet).toEqual([{ layerId: "cities", property: "circle-color" }]);
+    expect(await onMap<boolean>(page, "map === window.__storyMap")).toBe(true);
+    expect(await onMap<string>(page, 'map.getPaintProperty("cities", "circle-color")')).toBe("#d62828");
+    await settled(page);
+    expect(await active(page)).toBe("lima");
+    await expectCameraNear(page, [-77.04, -12.05], 5);
+    await expect(page.locator(".scrolly-chapter")).toHaveCount(3);
+    // The chapters still drive the (same) map.
+    await scrollToChapter(page, "jakarta");
+    await settled(page);
+    await expectCameraNear(page, [106.85, -6.21], 5);
+    expect(await onMap<boolean>(page, "map === window.__storyMap")).toBe(true);
+    expect(errors).toEqual([]);
+  });
+
+  test("a story whose basemap changes rebinds the engine to the new map; chapters still drive it", async ({
+    page,
+    baseURL,
+  }) => {
+    const errors = await guard(page, baseURL!);
+    await page.goto(INLINE, { waitUntil: "domcontentloaded" });
+    await storyReady(page, "cities");
+    await scrollToChapter(page, "lima");
+    await settled(page);
+    await page.evaluate(() => ((window as any).__storyMap = (document.querySelector("ml-scrollytelling") as any).getMap()));
+
+    const applied = storyUpdate(page);
+    await page.evaluate((style) => {
+      const el = document.querySelector("ml-scrollytelling") as any;
+      const next = JSON.parse(JSON.stringify(el.story));
+      next.config.mapStyle = style;
+      el.config = next;
+    }, LOCAL_STYLE);
+    const { summary } = await applied;
+    expect(summary.rebuild).toBe(true);
+    expect(summary.failures).toEqual([]);
+    // A new map object, the reader's chapter kept at its camera, one canvas.
+    expect(await onMap<boolean>(page, "map !== window.__storyMap")).toBe(true);
+    await storyReady(page, "cities");
+    expect(await page.locator(".scrollytelling-container canvas.maplibregl-canvas").count()).toBe(1);
+    await settled(page);
+    expect(await active(page)).toBe("lima");
+    await expectCameraNear(page, [-77.04, -12.05], 5);
+    // The engine drives the NEW map: the next chapter flies it.
+    await scrollToChapter(page, "jakarta");
+    await settled(page);
+    await expectCameraNear(page, [106.85, -6.21], 5);
+    await scrollToChapter(page, "lagos");
+    await settled(page);
+    await expectCameraNear(page, [3.38, 6.52], 5);
+    expect(await onMap<boolean>(page, "map !== window.__storyMap")).toBe(true);
+    expect(errors).toEqual([]);
+  });
 });
 
 // ---------------------------------------------------------------------------

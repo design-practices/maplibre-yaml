@@ -243,3 +243,16 @@ map:
     });
   });
 });
+
+describe("FullPageMap live-document props (U10)", () => {
+  it("inherits id and camera from MapProps", () => {
+    const props: FullPageMapProps = {
+      src: "/configs/map.yaml",
+      id: "dashboard",
+      camera: "host",
+      showControls: true,
+    };
+    expect(props.id).toBe("dashboard");
+    expect(props.camera).toBe("host");
+  });
+});

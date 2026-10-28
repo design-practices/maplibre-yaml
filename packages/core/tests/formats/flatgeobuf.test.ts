@@ -28,6 +28,7 @@ import {
   WholeFileTooLarge,
   VIEWPORT_DEFAULT_MINZOOM,
   VIEWPORT_DEFAULT_MAX_FEATURES,
+  VIEWPORT_DEBOUNCE_MS,
   viewAround,
 } from "../../src/renderer/cloud-sources";
 import { loadSourceData } from "../../src/data/source-data";
@@ -391,6 +392,38 @@ describe("FlatGeobufLoader", () => {
       await vi.advanceTimersByTimeAsync(300);
       await vi.waitFor(() => expect(onData.mock.calls.at(-1)![0].features.length).toBeGreaterThan(0));
       expect(onTooDense).toHaveBeenLastCalledWith(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("suspended before start reads no view until resumed; a destroyed loader's in-flight read never lands (live documents, U3)", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      const view: [number, number, number, number] = [10.0, 42.0, 10.1, 42.08];
+      vi.stubGlobal("fetch", fixtureFetch());
+      const map = fakeMap(12, view);
+      const onData = vi.fn();
+      const loader = new FlatGeobufLoader(map as never, "/points.fgb", loadModeOf({ load: "viewport" }), { onData, onError: vi.fn() });
+      // Recreated while nothing draws its source: it learns the file (header, index) but reads no view.
+      loader.suspend();
+      await loader.start();
+      expect(loader.readsByView).toBe(true);
+      expect(loader.suspended).toBe(true);
+      expect(onData).not.toHaveBeenCalled();
+
+      // A layer draws it again: the view is read now.
+      loader.resume();
+      await vi.waitFor(() => expect(onData).toHaveBeenCalledTimes(1));
+      expect(loader.suspended).toBe(false);
+      expect(onData.mock.calls[0]![0].features.length).toBeGreaterThan(0);
+
+      // A read in flight when the loader is destroyed (replaced by a new one) never lands.
+      map.moveend();
+      vi.advanceTimersByTime(VIEWPORT_DEBOUNCE_MS + 10);
+      loader.destroy();
+      for (let i = 0; i < 5; i++) await new Promise((done) => setImmediate(done));
+      expect(onData).toHaveBeenCalledTimes(1);
     } finally {
       vi.useRealTimers();
     }

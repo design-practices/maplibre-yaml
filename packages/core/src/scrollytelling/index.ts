@@ -19,6 +19,7 @@ export {
   storyMapDocument,
   runChapterAction,
   createStoryController,
+  watchMapUpdates,
   prefersReducedMotion,
 } from "./engine";
 export type {

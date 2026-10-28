@@ -1,0 +1,95 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Alder",
+        "founded": 2000,
+        "edition": 2024
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          10.05,
+          42.1
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Birch",
+        "founded": 2005,
+        "edition": 2024
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          10.15,
+          42.22
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Cedar",
+        "founded": 2010,
+        "edition": 2024
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          10.25,
+          42.12
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Dogwood",
+        "founded": 2015,
+        "edition": 2024
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          10.35,
+          42.22
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Elm",
+        "founded": 2020,
+        "edition": 2024
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          10.2,
+          42.17
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Fir",
+        "founded": 2010,
+        "edition": 2024
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          10.3,
+          42.08
+        ]
+      }
+    }
+  ]
+}

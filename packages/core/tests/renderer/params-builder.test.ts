@@ -146,6 +146,61 @@ describe("ParamsBuilder", () => {
   });
 });
 
+describe("ParamsBuilder: current values and seeds (live documents, U5)", () => {
+  const meta = {
+    year: { type: "range", min: 2000, max: 2030, step: 1 },
+    mode: { type: "select", values: ["all", "some"] },
+    night: { type: "toggle" },
+  };
+  const state = { year: { default: 2010 }, mode: { default: "all" }, night: { default: false } };
+
+  it("a current value wins over the state default for every control kind", () => {
+    const container = build({
+      parameters: meta,
+      state,
+      values: { year: 2020, mode: "some", night: true },
+    });
+    expect((container.querySelector("input[type=range]") as HTMLInputElement).value).toBe("2020");
+    expect((container.querySelector("select") as HTMLSelectElement).selectedIndex).toBe(1);
+    expect((container.querySelector("input[type=checkbox]") as HTMLInputElement).checked).toBe(true);
+  });
+
+  it("a key absent from values falls back to its state default", () => {
+    const container = build({ parameters: meta, state, values: { mode: "some" } });
+    expect((container.querySelector("input[type=range]") as HTMLInputElement).value).toBe("2010");
+  });
+
+  it("the panel's own seed is marked; a reader's input is not", () => {
+    const writes: Array<[string, unknown, boolean | undefined]> = [];
+    const container = build(
+      { parameters: { year: meta.year, night: meta.night } },
+      { onStateChange: (k, v, seed) => writes.push([k, v, seed]) }
+    );
+    const slider = container.querySelector("input[type=range]") as HTMLInputElement;
+    expect(writes).toEqual([
+      ["year", Number(slider.value), true],
+      ["night", false, true],
+    ]);
+    slider.value = "2020";
+    slider.dispatchEvent(new Event("input"));
+    expect(writes[2]).toEqual(["year", 2020, undefined]);
+  });
+
+  it("a key with a current value is never seeded again — a rebuild shows the value and writes nothing", () => {
+    const writes: unknown[] = [];
+    const container = document.createElement("div");
+    const builder = new ParamsBuilder();
+    const callbacks = { onStateChange: (...write: unknown[]) => writes.push(write) };
+    builder.build(container, { stateSupported: true, parameters: { year: meta.year } }, callbacks);
+    expect(writes).toHaveLength(1);
+    // An external write (setState) reaches the panel by a rebuild from current values.
+    container.replaceChildren();
+    builder.build(container, { stateSupported: true, parameters: { year: meta.year }, values: { year: 2025 } }, callbacks);
+    expect((container.querySelector("input[type=range]") as HTMLInputElement).value).toBe("2025");
+    expect(writes).toHaveLength(1);
+  });
+});
+
 describe("ParamsBuilder edge semantics", () => {
   it("bare non-object state entries seed controls — the value the renderer applied", () => {
     const container = build({

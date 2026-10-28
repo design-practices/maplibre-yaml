@@ -66,7 +66,9 @@
  */
 
 export { MLMap, registerMLMap, ML_MAP_SLOTS } from "./ml-map.js";
-export type { MLMapEventMap, MLMapErrorDetail } from "./ml-map.js";
+export type { MLMapEventMap, MLMapErrorDetail, MLMapCameraOwner } from "./ml-map.js";
+// Live documents (0.10): what `update()` resolves and the update events carry.
+export type { UpdateResult, UpdateSummary, RejectionKind } from "../renderer/update/types.js";
 export { MLScrollytelling, registerMLScrollytelling } from "./ml-scrollytelling.js";
 export type { MLScrollytellingEventMap } from "./ml-scrollytelling.js";
 export { defaultStyles, injectStyles } from "./styles";

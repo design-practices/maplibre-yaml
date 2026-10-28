@@ -359,9 +359,39 @@ export interface StoryController {
    * (window resize, rotation): new padding, same chapter.
    */
   realign(): void;
+  /**
+   * Run the active chapter's `layers.show/hide` again — nothing else: no
+   * camera move, no actions, no chapter event. For a map update that added
+   * layers (live documents, 0.10): the story is a host under R10, and a layer
+   * the chapter hides came back visible.
+   */
+  reapplyLayers(): void;
   /** Stop ambient animation and ignore later calls. */
   destroy(): void;
   readonly activeChapterId: string | null;
+}
+
+/**
+ * Re-apply the active chapter's layer visibility whenever the story's map
+ * applied an update that added or replaced layers (`ml-map:update-applied`
+ * with a non-empty `summary.added` or `summary.replaced`): a replaced layer
+ * is a new layer object under the same id, so it comes back visible just
+ * like an added one. A paint-only edit leaves the chapter alone.
+ *
+ * @param mapElement - The story's `<ml-map>` (any event target that dispatches its events).
+ * @returns Stop listening.
+ */
+export function watchMapUpdates(
+  mapElement: EventTarget,
+  controller: Pick<StoryController, "reapplyLayers">
+): () => void {
+  const listener = (event: Event) => {
+    const summary = (event as CustomEvent<{ summary?: { added?: string[]; replaced?: string[] } }>)
+      .detail?.summary;
+    if (summary?.added?.length || summary?.replaced?.length) controller.reapplyLayers();
+  };
+  mapElement.addEventListener("ml-map:update-applied", listener);
+  return () => mapElement.removeEventListener("ml-map:update-applied", listener);
 }
 
 /**
@@ -462,6 +492,29 @@ export function createStoryController(
     });
   }
 
+  /** The chapter's `layers.show/hide` on the map. */
+  function applyLayers(chapter: Chapter): void {
+    if (!map) return;
+    for (const [verb, visibility] of [
+      ["show", "visible"],
+      ["hide", "none"],
+    ] as const) {
+      for (const id of chapter.layers?.[verb] ?? []) {
+        if (map.getLayer(id)) {
+          map.setLayoutProperty(id, "visibility", visibility);
+          continue;
+        }
+        // Silently skipped before (ml-aot.51): the route never appeared and
+        // nothing said why.
+        const near = suggest(id, layerCandidates(map, layerIds), 3);
+        problem(
+          `Chapter \`${chapter.id}\` ${verb === "show" ? "shows" : "hides"} layer \`${id}\`, but the map has no layer by that name.` +
+            (near ? ` Did you mean \`${near}\`?` : "")
+        );
+      }
+    }
+  }
+
   /** The map half: exit actions, camera, layers, enter actions, event. */
   function applyChapter(chapter: Chapter, index: number, instant: boolean): void {
     const previousId = appliedId;
@@ -501,24 +554,7 @@ export function createStoryController(
       else if (animation === "easeTo") map.easeTo(camera);
       else map.flyTo({ ...camera, speed: chapter.speed ?? 0.6, curve: chapter.curve ?? 1 });
 
-      for (const [verb, visibility] of [
-        ["show", "visible"],
-        ["hide", "none"],
-      ] as const) {
-        for (const id of chapter.layers?.[verb] ?? []) {
-          if (map.getLayer(id)) {
-            map.setLayoutProperty(id, "visibility", visibility);
-            continue;
-          }
-          // Silently skipped before (ml-aot.51): the route never appeared and
-          // nothing said why.
-          const near = suggest(id, layerCandidates(map, layerIds), 3);
-          problem(
-            `Chapter \`${chapter.id}\` ${verb === "show" ? "shows" : "hides"} layer \`${id}\`, but the map has no layer by that name.` +
-              (near ? ` Did you mean \`${near}\`?` : "")
-          );
-        }
-      }
+      applyLayers(chapter);
     }
 
     for (const action of chapter.onChapterEnter ?? []) {
@@ -626,10 +662,17 @@ export function createStoryController(
     startAmbient(chapter, true);
   }
 
+  function reapplyLayers(): void {
+    if (destroyed || !map || activeId === null || appliedId !== activeId) return;
+    const chapter = chapters.find((c) => c.id === activeId);
+    if (chapter) applyLayers(chapter);
+  }
+
   return {
     activate,
     setMap,
     realign,
+    reapplyLayers,
     destroy() {
       destroyed = true;
       stopAmbient();

@@ -635,9 +635,12 @@ page's frontmatter as `Astro.props.frontmatter`.)
 
 ### React to the map from a script
 
-Each component renders an `<ml-map>` element. A page script can reach the
-MapLibre map with the element's `mapReady()` and listen to its events
-(`ml-map:load`, `ml-map:error`, `ml-map:layer-click`, …):
+Each component renders an `<ml-map>` element on the server, with no client
+directive; the element upgrades in the browser once the register module
+loads, and from then on every method and event works as on a plain HTML
+page. A page script can reach the MapLibre map with the element's
+`mapReady()` and listen to its events (`ml-map:load`, `ml-map:error`,
+`ml-map:layer-click`, …):
 
 ```astro
 ---
@@ -661,8 +664,44 @@ import { Map } from '@maplibre-yaml/astro';
 </script>
 ```
 
-Every event, method and property is in the
-[`<ml-map>` reference](/reference/elements/#ml-map).
+To change the map after it has loaded, give the component an `id` (it lands
+on the `<ml-map>` in place of the generated one) and pass the element a new
+document with `update()`: the running map changes in place, keeping its
+camera, and `ml-map:update-applied` reports what changed. An invalid
+document is refused with `ml-map:update-rejected` and the map kept:
+
+```astro
+---
+import { Map } from '@maplibre-yaml/astro';
+---
+<Map id="quakes" src="/configs/hero-map.yaml" height="400px" />
+<button id="recolour" type="button">Recolour the first layer</button>
+
+<script>
+  import type { MLMap } from '@maplibre-yaml/core/components';
+
+  customElements.whenDefined('ml-map').then(() => {
+    const mapEl = document.getElementById('quakes') as MLMap;
+    mapEl.addEventListener('ml-map:update-applied', ({ detail }) =>
+      console.log('changed', detail.summary.propertiesSet)
+    );
+    document.getElementById('recolour')!.addEventListener('click', async () => {
+      const doc = structuredClone(mapEl.getDocument()!); // the document the map shows
+      doc.layers![0].paint = { ...doc.layers![0].paint, 'circle-color': '#2563eb' };
+      const { outcome } = await mapEl.update(doc); // "applied"; the camera stays
+      console.log(outcome);
+    });
+  });
+</script>
+```
+
+`getState()` and `setState()` read and write the document's `state:` values
+the same way ([State and parameters](/schema/map-config/#runtime-state-and-parameters)).
+For a page whose readers pan the map themselves while its document changes,
+`<Map camera="host">` keeps an update from ever moving the camera. Every
+event, method and property is in the
+[`<ml-map>` reference](/reference/elements/#ml-map); the update rules are
+under [Updating the document](/reference/elements/#updating-the-document).
 
 ### Upgrading an existing project
 
@@ -689,7 +728,7 @@ yarn add @maplibre-yaml/core@latest @maplibre-yaml/astro@latest
 </TabItem>
 </Tabs>
 
-What changed in each release is in [Upgrading to 0.9](/getting-started/upgrading/)
+What changed in each release is in [Upgrading to 0.10](/getting-started/upgrading/)
 (and its [older releases](/getting-started/upgrading/#older-releases) notes)
 and in the packages' changelogs on npm.
 
@@ -701,6 +740,8 @@ and in the packages' changelogs on npm.
 interface MapProps {
   src?: string;           // The YAML file's address on the site (a file in public/)
   config?: MapBlock;      // Or a document loaded at build time. One of the two is required
+  id?: string;            // The <ml-map>'s id, for a page script to reach it (default: generated)
+  camera?: 'document' | 'host'; // Whether a changed document may move the camera (default 'document')
   height?: string;        // Default "400px"
   class?: string;
   style?: string;
@@ -710,6 +751,13 @@ interface MapProps {
   debug?: boolean;        // Show author hints wherever the page is served (default false)
 }
 ```
+
+**`id`** and **`camera`** are for pages that change the map after it loads
+([React to the map from a script](#react-to-the-map-from-a-script)): `id`
+lands on the rendered `<ml-map>` so `document.getElementById(id)` reaches
+its methods and events; `camera="host"` passes through as the element's
+`camera` attribute, so an update never moves the camera. Both need
+`@maplibre-yaml/astro` 0.8 and `@maplibre-yaml/core` 0.10 or later.
 
 **`quiet`** hides the "Part of this map couldn't load" notice (a data file
 that 404'd, a layer that failed) and the zero-height hint, for a finished site
@@ -727,7 +775,7 @@ while you check it; `quiet` still wins. The full rules are in
 [Reading what the map tells you](/troubleshooting/#reading-what-the-map-tells-you).
 
 `FullPageMap` and `Scrollytelling` take the same `src`, `config`, `base`,
-`quiet` and `debug`.
+`quiet` and `debug`; `FullPageMap` takes `id` and `camera` too.
 
 ### FullPageMap component API
 
@@ -735,6 +783,8 @@ while you check it; `quiet` still wins. The full rules are in
 interface FullPageMapProps {
   src?: string;
   config?: MapBlock;
+  id?: string;
+  camera?: 'document' | 'host';
   showControls?: boolean;   // Zoom and reset buttons (default true)
   showLegend?: boolean;     // A legend at legendPosition, when the document has no
                             // legend: block (default false; needs config)

@@ -49,6 +49,16 @@
  *   style="border: 2px solid #ccc; border-radius: 8px;"
  * />
  * ```
+ *
+ * @example Reaching the element from a page script (live documents, core 0.10)
+ * ```astro
+ * <Map id="quakes" config={config} />
+ * <script>
+ *   const el = document.getElementById("quakes");
+ *   el.addEventListener("ml-map:update-applied", (e) => console.log(e.detail.summary));
+ *   el.update(nextDocument); // applied in place: the camera stays, getMap() is the same map
+ * </script>
+ * ```
  */
 
 import type { MapProps } from "../types";
@@ -62,7 +72,18 @@ import "maplibre-gl/dist/maplibre-gl.css";
 
 interface Props extends MapProps {}
 
-const { src, config, height = "400px", class: className, style, base, quiet = false, debug = false } = Astro.props;
+const {
+  id,
+  camera,
+  src,
+  config,
+  height = "400px",
+  class: className,
+  style,
+  base,
+  quiet = false,
+  debug = false,
+} = Astro.props;
 
 // Validate that either src or config is provided
 if (!src && !config) {
@@ -76,8 +97,9 @@ if (src && config) {
   );
 }
 
-// Generate unique ID for this map instance
-const mapId = `map-${Math.random().toString(36).substring(2, 11)}`;
+// The element's id: the author's, so page scripts can reach it
+// (`document.getElementById(id).update(doc)`), or a generated one.
+const mapId = id ?? `map-${Math.random().toString(36).substring(2, 11)}`;
 
 // Serialize config for client-side if provided
 const serializedConfig = config ? JSON.stringify(config) : null;
@@ -111,6 +133,7 @@ const documentBase = base === false ? undefined : (base ?? import.meta.env.BASE_
     config={serializedConfig ?? undefined}
     src={serializedConfig ? undefined : resolvedSrc}
     base={documentBase}
+    camera={camera}
     quiet={quiet ? "" : undefined}
     debug={debug ? "" : undefined}
   >

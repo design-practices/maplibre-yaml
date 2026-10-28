@@ -187,10 +187,20 @@ describe("view transitions (ml-aot.22)", () => {
 
   it("FullPageMap wires its controls by delegation on document, not per element", () => {
     const { script } = parts("FullPageMap.astro");
-    // The module runs once per full load; soft navigations swap in new
+    // The script runs once per full load; soft navigations swap in new
     // elements without re-running it, so per-element listeners went dead.
-    expect(script).toMatch(/document\.addEventListener\("click"/);
-    expect(script).toMatch(/document\.addEventListener\("ml-map:load"/);
-    expect(script).not.toMatch(/controls\.addEventListener/);
+    // Since U10 the wiring lives in src/client/fullpage-controls.ts (so it
+    // can be driven in a DOM); the script installs it, the module delegates.
+    expect(script).toMatch(/import \{ installFullPageControls \} from "\.\.\/client\/fullpage-controls";/);
+    expect(script).toMatch(/^\s*installFullPageControls\(\);$/m);
+    const module = readFileSync(
+      fileURLToPath(new URL("../../src/client/fullpage-controls.ts", import.meta.url)),
+      "utf8"
+    );
+    expect(module).toMatch(/document\.addEventListener\("click"/);
+    expect(module).toMatch(/document\.addEventListener\("ml-map:load"/);
+    expect(module).toMatch(/document\.addEventListener\("ml-map:update-applied"/);
+    expect(module).not.toMatch(/controls\.addEventListener/);
+    expect(script).not.toMatch(/addEventListener\(/);
   });
 });

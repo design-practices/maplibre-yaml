@@ -1,6 +1,6 @@
 ---
-title: Upgrading to 0.9
-description: How to move a map, an Astro site or a CLI install to maplibre-yaml 0.9, what changed in 0.9, and the upgrade notes for each older release line.
+title: Upgrading to 0.10
+description: How to move a map, an Astro site or a CLI install to maplibre-yaml 0.10, what changed in 0.10 and 0.9, and the upgrade notes for each older release line.
 ---
 
 import { Tabs, TabItem } from "@astrojs/starlight/components";
@@ -8,20 +8,20 @@ import { Tabs, TabItem } from "@astrojs/starlight/components";
 {/*
   The CDN addresses on this page carry a release-line pin
   (`@maplibre-yaml/core@<major>.<minor>`) that scripts/sync-cdn-pins.mjs keeps
-  on the current release, like every other page. The prose stays about 0.9.
+  on the current release, like every other page. The prose stays about 0.10.
 */}
 
 This page is the release history of maplibre-yaml for anyone with a map that
 already works: how to move it to the current release, and what changed in
-each release line, newest first. The current line is 0.9:
-`@maplibre-yaml/core` 0.9, `@maplibre-yaml/astro` 0.7 and
+each release line, newest first. The current line is 0.10:
+`@maplibre-yaml/core` 0.10, `@maplibre-yaml/astro` 0.8 and
 `@maplibre-yaml/cli` 0.6. Most maps upgrade with no change to their YAML.
 
 Each package's changelog on npm has the complete list of changes.
 
 ## How to upgrade
 
-A project keeps the version it was set up with: nothing moves to 0.9 until
+A project keeps the version it was set up with: nothing moves to 0.10 until
 you change it.
 
 <Tabs syncKey="upgrade-kind">
@@ -50,27 +50,27 @@ the same way:
 </TabItem>
 <TabItem label="npm / Vite">
 
-Before 1.0, a range such as `^0.8.1` in `package.json` stays within 0.8.x,
-so `npm install` never moves it to 0.9 by itself. Ask for the latest release:
+Before 1.0, a range such as `^0.9.1` in `package.json` stays within 0.9.x,
+so `npm install` never moves it to 0.10 by itself. Ask for the latest release:
 
 ```bash
 npm install @maplibre-yaml/core@latest
 ```
 
-`package.json` then reads `"@maplibre-yaml/core": "^0.9.0"` (or later).
+`package.json` then reads `"@maplibre-yaml/core": "^0.10.0"` (or later).
 
 </TabItem>
 <TabItem label="Astro">
 
-Upgrade core and the Astro package together (`@maplibre-yaml/astro` 0.7
-requires `@maplibre-yaml/core` 0.9 or later):
+Upgrade core and the Astro package together (`@maplibre-yaml/astro` 0.8
+requires `@maplibre-yaml/core` 0.10 or later):
 
 ```bash
 npm install @maplibre-yaml/core@latest @maplibre-yaml/astro@latest
 ```
 
-`package.json` then reads `"@maplibre-yaml/core": "^0.9.0"` and
-`"@maplibre-yaml/astro": "^0.7.0"` (or later). Restart `astro dev`
+`package.json` then reads `"@maplibre-yaml/core": "^0.10.0"` and
+`"@maplibre-yaml/astro": "^0.8.0"` (or later). Restart `astro dev`
 afterwards.
 
 </TabItem>
@@ -90,6 +90,125 @@ below use: `mlym validate` is `npx maplibre-yaml@latest validate`.
 
 </TabItem>
 </Tabs>
+
+## 0.10
+
+0.10 makes a map follow its document: a changed document updates the running
+map in place instead of rebuilding it, a page script reads and writes the
+document's `state:` values, and the camera no longer resets when the
+document changes.
+
+### What behaves differently
+
+Your YAML keeps working, and a page that renders one document once sees no
+change. These are the differences on a page that changes a map's document
+after it has loaded (a `config` assigned again, a changed `src`, `reload()`),
+and what to do about each, if anything.
+
+- **A changed document updates the map in place.** Before, any new document
+  tore the map down and built a new one. Now the element validates the new
+  document, then changes only what differs from the one the map shows:
+  layers and sources by id, properties through MapLibre's setters, the
+  legend, panel, markers and popups after them. The map, your listeners and
+  your own layers stay. `ml-map:update-applied` fires with a summary of what
+  changed; an invalid document is refused with `ml-map:update-rejected` and
+  the map kept, where before the error card replaced it. Only a changed
+  `mapStyle` still rebuilds the map, at the current camera. `reload()` works
+  the same way, and retries sources whose last load failed.
+  ([Updating the document](/reference/elements/#updating-the-document))
+- **The camera no longer resets to the document's.** Before, a new document
+  opened at its `center` and `zoom` because the map was rebuilt. Now the
+  camera moves only when the document's `center`, `zoom`, `bearing`, `pitch`
+  or `fitTo` changed; a reader who panned the map keeps their view across an
+  update that recolours a layer. A page that relied on the reset (a "start
+  over" button that assigned the document again) re-applies the document
+  camera itself on `ml-map:update-applied`:
+
+  ```js
+  el.addEventListener("ml-map:update-applied", () => {
+    const { center, zoom, bearing, pitch } = el.getDocument().config;
+    el.getMap().jumpTo({ center, zoom, bearing, pitch });
+  });
+  ```
+
+  The opposite case is a page whose readers pan the map themselves while its
+  document keeps changing (a dashboard that refreshes its data): add
+  `camera="host"` to the element (the `camera` prop in React and on the
+  Astro components) and an update never moves the camera, a basemap rebuild
+  included.
+- **`getMap()` returns the same map through document changes.** Before, each
+  new document made a new map, so a page read `getMap()` again after every
+  `ml-map:load`. Now only a basemap change (`mapStyle`) builds a new map, and
+  `ml-map:load` fires again when it does, so a page that refreshed its
+  reference on `ml-map:load` keeps working. `mapReady()` resolves the
+  current map, and waits for the new one during a rebuild.
+- **`ml-map:load` fires once per map, not once per document.** A page that
+  listened for `ml-map:load` to re-read the document or re-sync its own
+  controls after a document change now hears `ml-map:update-applied` for an
+  in-place update; listen for both. (`<FullPageMap>`'s zoom and reset buttons
+  do this.)
+- **`ml-map:state-change` joins `ml-map:parameter-change`.** The panel's
+  `ml-map:parameter-change` keeps firing per key, as before. The new
+  `ml-map:state-change` fires once per write, from the panel or from
+  `setState()`, with every current value and the keys that changed; a panel
+  write fires one of each. New defaults in a changed document fire it too,
+  except for keys a reader has written, which keep the reader's value.
+  ([State and parameters](/schema/map-config/#runtime-state-and-parameters))
+- **Your own layers stay where they are.** A layer you added through
+  `addLayer()` or `getMap().addLayer()` is never moved or removed by an
+  update, and keeps its absolute position in the stack. A paint or layout
+  value you set on a document layer is overwritten only when the document's
+  own value for that property changed. A document source your layer still
+  uses is left in place when the document drops it (and listed in
+  `summary.failures`). To re-apply your own changes after an update, do it
+  on `ml-map:update-applied`.
+- **`state:` values survive a style change.** Before, `getMap().setStyle()`
+  (and the library's own style loads) dropped the document's `state:`
+  values, so layers reading `global-state` fell back to the style's own
+  defaults. Now the values are reapplied after any style load. MapLibre's
+  `setStyle()` without `transformStyle` still removes the document's layers,
+  as it removes any runtime-added layer: change `mapStyle` in the document
+  to change the basemap.
+- **Astro: `Map` and `FullPageMap` take `id` and `camera`.** `id` lands on
+  the rendered `<ml-map>` so a page script can reach it
+  (`document.getElementById(id).update(doc)`); `camera="host"` passes
+  through. `@maplibre-yaml/astro` 0.8 needs `@maplibre-yaml/core` 0.10;
+  upgrade both together, as in the Astro tab above.
+  ([Astro](/integrations/astro/#react-to-the-map-from-a-script))
+- **Hosting maplibre-yaml's files yourself? There is one more chunk.** The
+  update engine is `dist/chunks/update.js`, downloaded on the first document
+  change. A page that copied only the script keeps rendering, but its first
+  update is refused (`ml-map:update-rejected` with `kind: "chunk"`, and the
+  notice names the file while you develop); copy the whole `dist/` folder,
+  as for the format readers in 0.9.
+  ([Hosting the files yourself](/getting-started/installation/#hosting-the-files-yourself))
+
+### What's new in 0.10
+
+- **`update(doc)` on `<ml-map>`** applies a document and resolves with the
+  outcome (`applied`, `rejected`, `fallback` or `superseded`) and the
+  summary; **`getDocument()`** returns the document the map shows.
+  ([`<ml-map>` methods](/reference/elements/#ml-map-methods))
+- **`setState(values)` and `getState()`** read and write the document's
+  `state:` values; the params panel and `setState` are one state, each
+  reflecting the other.
+- **The `camera` attribute** (`document` or `host`) names who owns the
+  camera across document changes.
+- **In React**, the `onml-map:update-applied`, `onml-map:update-rejected`
+  and `onml-map:state-change` props on React 19, and a `useMlMap` hook
+  recipe that returns the map, the document and the state as React state
+  ([React](/integrations/react/#read-and-change-the-map-with-a-usemlmap-hook)).
+- **On `MapRenderer`**, `update(next)`, `getDocument()`, `setState`,
+  `getState`, the `camera` option and the `update:applied`,
+  `update:rejected` and `state:change` events
+  ([JavaScript API](/integrations/vanilla-js/)).
+
+### Something broke?
+
+See [Troubleshooting](/troubleshooting/). If a page that worked on 0.9 stops
+working on 0.10 and the notes above don't explain it, please
+[open an issue](https://github.com/design-practices/maplibre-yaml/issues)
+with the YAML, the page script and what you see.
 
 ## 0.9
 
@@ -269,7 +388,7 @@ with the YAML and what you see.
 
 ## Older releases
 
-Moving a project from an older line, such as 0.5, straight to 0.9? Read the
+Moving a project from an older line, such as 0.5, straight to 0.10? Read the
 notes for each line you skip, oldest first.
 
 ### Upgrading to 0.8

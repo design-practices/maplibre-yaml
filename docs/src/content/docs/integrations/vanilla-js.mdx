@@ -179,11 +179,54 @@ The renderer manages the sources and layers in your document. Layers you add
 with MapLibre's own `map.addLayer()` are yours; keep their ids different from
 the document's.
 
+### Update the document \{#update-the-document}
+
+Call `renderer.update(next, hints?)` with a new parsed and modeled document
+(the same shape `fromModel` takes) and the running map changes in place:
+layers and sources that differ are added, removed or updated by id, the
+legend and panel follow, and the camera moves only if the document's camera
+changed. The map object, your listeners and your own layers (added with
+`map.addLayer()`) stay. It returns a `Promise<UpdateResult>` that resolves
+with what happened:
+
+```javascript
+renderer.on("update:applied", ({ summary }) => {
+  console.log("changed", summary); // added, removed, propertiesSet, ...
+});
+renderer.on("update:rejected", ({ kind, errors }) => {
+  console.warn(kind, errors); // the map is as it was
+});
+
+const doc = structuredClone(renderer.getDocument()); // the document the map shows
+doc.layers[0].paint["circle-color"] = "#2563eb";
+const result = await renderer.update(toModel(doc));
+console.log(result.outcome); // "applied"
+```
+
+An invalid document is refused: `update:rejected` fires with the
+diagnostics and the map stays as it was. A changed `mapStyle` rebuilds the
+map at the current camera; everything else applies in place.
+
+For a page whose readers pan the map themselves (a dashboard whose data
+refreshes), pass `camera: "host"` to `fromModel`'s options so a document
+change never moves the view:
+
+```javascript
+MapRenderer.fromModel(container, model, { camera: "host" });
+```
+
+A document's `state:` values are read with `renderer.getState()` and written
+with `renderer.setState({ scenario: "flat" })`; each write fires
+`state:change`.
+
 ### Replace or remove a map
 
-`renderer.destroy()` removes the map and stops its live-data timers. To show a
-different document in the same container, destroy the old renderer and create
-a new one:
+`renderer.destroy()` removes the map and stops its live-data timers, for
+tearing down the container entirely (the page is leaving, or the map is
+being swapped for something else). To show a different document in the same
+container, prefer `renderer.update()` above — it keeps the map object, your
+listeners and your own layers. Call `destroy()` and create a fresh renderer
+only when nothing of the old one should remain:
 
 ```javascript
 renderer.destroy();

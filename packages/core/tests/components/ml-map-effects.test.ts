@@ -4,22 +4,44 @@
  * @description
  * Core never imports @maplibre-yaml/effects; the element reads the effects
  * host hook. These pin the lifecycle: attach after the document loads,
- * detach on reload and on removal, late host registration still attaches,
- * and a document without `effect:` never touches the hook.
+ * re-attach from the next document when an update touches an effect layer
+ * (live documents, KTD6b), detach and attach to the new map across a basemap
+ * rebuild (KTD8), detach on the error card and on removal, late host
+ * registration still attaches, and a document without `effect:` never
+ * touches the hook.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
 vi.mock("maplibre-gl", () => ({ default: {}, Map: vi.fn(), Popup: vi.fn() }));
 
 /** Renderers the mock created, with their captured `on()` handlers. */
-const renderers: Array<{ handlers: Record<string, Array<() => void>>; map: object; destroyed: boolean }> = [];
+const renderers: Array<{
+  handlers: Record<string, Array<() => void>>;
+  map: object;
+  destroyed: boolean;
+  options: any;
+  update: ReturnType<typeof vi.fn>;
+}> = [];
+
+const SUMMARY = { added: [], removed: [], moved: [], replaced: [], propertiesSet: [], sourcesReplaced: [], cameraMoved: false, rebuild: false, failures: [] };
 
 vi.mock("../../src/renderer/map-renderer", () => ({
-  MapRenderer: vi.fn().mockImplementation(() => {
+  MapRenderer: vi.fn().mockImplementation((_container, config, layers, options, sources) => {
     const r = {
       handlers: {} as Record<string, Array<() => void>>,
-      map: { id: renderers.length },
+      map: {
+        id: renderers.length,
+        getCenter: () => ({ lng: 0, lat: 0 }),
+        getZoom: () => 15,
+        getBearing: () => 0,
+        getPitch: () => 0,
+        jumpTo: vi.fn(),
+        resize: vi.fn(),
+      },
       destroyed: false,
+      config,
+      layers,
+      options,
       getMap() {
         return r.destroyed ? null : r.map;
       },
@@ -30,6 +52,18 @@ vi.mock("../../src/renderer/map-renderer", () => ({
         r.destroyed = true;
       },
       isMapLoaded: () => true,
+      getDocument: () => ({ config: r.config, layers: r.layers, sources: sources ?? {}, options: r.options }),
+      // An update that changed an effect block asks the host to re-attach (KTD6b), as the engine does.
+      update: vi.fn(async (next: any) => {
+        r.config = next.config;
+        r.layers = next.layers;
+        options.onReattachEffects?.();
+        return { outcome: "applied", summary: SUMMARY };
+      }),
+      pause: vi.fn(),
+      rebuildSeed: () => ({ initialState: {}, initialVisibility: {} }),
+      mountHostChrome: vi.fn(),
+      failedSources: () => new Set<string>(),
     };
     renderers.push(r);
     return r;
@@ -111,20 +145,48 @@ describe("<ml-map> effects auto-attach", () => {
     expect(calls.detach).toBe(1);
   });
 
-  it("detaches before re-rendering on reload, then attaches to the new map", async () => {
+  it("an update that changes an effect block re-attaches on the same map, from the next document (KTD6b)", async () => {
     const { host, calls } = spyHost();
     registerEffectsHost(host);
     const el = await mount(true);
     fireLoad(0);
     el.setAttribute("config", DOC(true).replace('"gain":0.5', '"gain":0.6'));
-    (el as unknown as { applyValidatedConfig(c: unknown): void }).applyValidatedConfig(
-      JSON.parse(DOC(true).replace('"gain":0.5', '"gain":0.6'))
-    );
+    await new Promise((r) => setTimeout(r, 10));
+    expect(renderers).toHaveLength(1);
+    expect(renderers[0]!.update).toHaveBeenCalledTimes(1);
     expect(calls.detach).toBe(1);
-    const second = renderers.length - 1;
-    fireLoad(second);
     expect(calls.attach).toHaveLength(2);
-    expect(calls.attach[1]![0]).toBe(renderers[second]!.map);
+    expect(calls.attach[1]![0]).toBe(renderers[0]!.map);
+    // The re-attach reads the NEXT document's effect refs, not the first one's.
+    expect(calls.attach[1]![1]).toEqual([{ layerId: "buildings", effect: { type: "tonal-hatch", gain: 0.6 } }]);
+  });
+
+  it("a basemap change rebuilds: detaches from the old map once it is replaced, then attaches to the new one (KTD8)", async () => {
+    const { host, calls } = spyHost();
+    registerEffectsHost(host);
+    const el = await mount(true);
+    fireLoad(0);
+    el.setAttribute("config", DOC(true).replace("style.json", "other.json"));
+    expect(renderers).toHaveLength(2);
+    // The old map still shows (and keeps its effects) until the new one loads.
+    expect(calls.detach).toBe(0);
+    fireLoad(1);
+    expect(calls.detach).toBe(1);
+    expect(renderers[0]!.destroyed).toBe(true);
+    expect(calls.attach).toHaveLength(2);
+    expect(calls.attach[1]![0]).toBe(renderers[1]!.map);
+  });
+
+  it("an invalid document keeps the map and its effects (live documents, R2)", async () => {
+    const { host, calls } = spyHost();
+    registerEffectsHost(host);
+    const el = await mount(true);
+    fireLoad(0);
+    expect(calls.attach).toHaveLength(1);
+    (el as unknown as { applyValidatedConfig(c: unknown): void }).applyValidatedConfig({ type: "map" });
+    expect(el.querySelector(".ml-map-error")).toBeNull();
+    expect(calls.detach).toBe(0);
+    expect(renderers[0]!.destroyed).toBe(false);
   });
 
   it("an error card detaches effects too (every teardown path goes through teardownRenderer)", async () => {
@@ -133,9 +195,10 @@ describe("<ml-map> effects auto-attach", () => {
     const el = await mount(true);
     fireLoad(0);
     expect(calls.attach).toHaveLength(1);
-    // A document that fails validation swaps the map for the error card.
+    // A map whose worker cannot start is replaced by the error card (ml-aot.2).
     const err = vi.spyOn(console, "error").mockImplementation(() => {});
-    (el as unknown as { applyValidatedConfig(c: unknown): void }).applyValidatedConfig({ type: "map" });
+    renderers[0]!.options.onError(new Error("Worker failed to load maplibre-gl 6"), false);
+    await new Promise((r) => setTimeout(r, 10));
     err.mockRestore();
     expect(el.querySelector(".ml-map-error")).not.toBeNull();
     expect(calls.detach).toBe(1);

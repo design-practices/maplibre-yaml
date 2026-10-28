@@ -59,7 +59,8 @@ import {
 
 // Export for manual use if needed
 export { MLMap, registerMLMap, MLScrollytelling, registerMLScrollytelling };
-export type { MLMapEventMap, MLMapErrorDetail } from "./components/ml-map.js";
+export type { MLMapEventMap, MLMapErrorDetail, MLMapCameraOwner } from "./components/ml-map.js";
+export type { UpdateResult, UpdateSummary, RejectionKind } from "./renderer/update/types.js";
 export type { MLScrollytellingEventMap } from "./components/ml-scrollytelling.js";
 
 // Auto-register when imported in browser context

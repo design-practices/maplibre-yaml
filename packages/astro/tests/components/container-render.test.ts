@@ -466,3 +466,42 @@ describe("quiet reaches the element (ml-aot.64)", () => {
     expect(openTag(off, "ml-map")).not.toHaveProperty("quiet");
   });
 });
+
+describe("id and camera reach the element (live documents, U10)", () => {
+  it("Map: id replaces the generated id and camera renders as the attribute", async () => {
+    const html = await container.renderToString(Map as any, {
+      props: { config: MAP_CONFIG, id: "x", camera: "host" },
+    });
+    const tag = openTag(html, "ml-map");
+    expect(tag.id).toBe("x");
+    expect(tag.camera).toBe("host");
+    // The container's data-map-id follows the element's id.
+    expect(html).toContain('data-map-id="x"');
+  });
+
+  it("Map: without them, a generated id and no camera attribute (document ownership)", async () => {
+    const html = await container.renderToString(Map as any, { props: { config: MAP_CONFIG } });
+    const tag = openTag(html, "ml-map");
+    expect(tag.id).toMatch(/^map-[a-z0-9]+$/);
+    expect(tag).not.toHaveProperty("camera");
+  });
+
+  it("FullPageMap: renders id and camera", async () => {
+    const html = await container.renderToString(FullPageMap as any, {
+      props: { src: "/configs/x.yaml", id: "dashboard", camera: "host" },
+    });
+    const tag = openTag(html, "ml-map");
+    expect(tag.id).toBe("dashboard");
+    expect(tag.camera).toBe("host");
+    const off = openTag(await container.renderToString(FullPageMap as any, { props: { src: "/configs/x.yaml" } }), "ml-map");
+    expect(off.id).toMatch(/^fullmap-[a-z0-9]+$/);
+    expect(off).not.toHaveProperty("camera");
+  });
+
+  it("camera=\"document\" is passed through as written", async () => {
+    const html = await container.renderToString(Map as any, {
+      props: { config: MAP_CONFIG, camera: "document" },
+    });
+    expect(openTag(html, "ml-map").camera).toBe("document");
+  });
+});

@@ -68,6 +68,7 @@ import {
   createStoryController,
   prefersReducedMotion,
   storyMapDocument,
+  watchMapUpdates,
   type CameraPadding,
   type StoryController,
   type StoryMap,
@@ -166,6 +167,8 @@ export class MLScrollytelling extends BaseElement {
   /** Whether a story has rendered into this element (hydration only once). */
   private hasRendered = false;
   private controller: StoryController | null = null;
+  /** Stops the controller's listener on the inner map's updates (live documents, 0.10). */
+  private stopUpdateWatch: (() => void) | null = null;
   private observer: IntersectionObserver | null = null;
   /** Sections within a screen of the viewport (review N1). */
   private near = new Set<Element>();
@@ -1076,6 +1079,9 @@ export class MLScrollytelling extends BaseElement {
 
     const mapEl = this.mapElement;
     if (!mapEl) return;
+    // A story edit updates the inner map in place (0.10): when that added
+    // layers, the active chapter's visibility is applied again (R10).
+    this.stopUpdateWatch = watchMapUpdates(mapEl, controller);
     const waiters = this.waiters;
     this.waiters = [];
     const ready = customElements.whenDefined("ml-map").then(() => mapEl.mapReady());
@@ -1155,6 +1161,8 @@ export class MLScrollytelling extends BaseElement {
     this.sections = null;
     this.observer?.disconnect();
     this.observer = null;
+    this.stopUpdateWatch?.();
+    this.stopUpdateWatch = null;
     this.controller?.destroy();
     this.controller = null;
     this.clearNav?.();

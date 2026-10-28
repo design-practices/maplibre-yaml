@@ -85,7 +85,7 @@ test("slot children stack with the legend and params panel, and drive the map", 
   expect(errors, `page errors:\n${errors.join("\n")}`).toEqual([]);
 });
 
-test("reload() of an inline-YAML document keeps its script and its slot children", async ({ page }) => {
+test("reload() of an inline-YAML document keeps its map, its script and its slot children", async ({ page }) => {
   const errors = await guard(page);
   await page.goto(PAGE, { waitUntil: "domcontentloaded" });
   await waitForChrome(page);
@@ -95,24 +95,47 @@ test("reload() of an inline-YAML document keeps its script and its slot children
     return Boolean(map);
   });
   expect(firstMap).toBe(true);
+  const slotNodes = await page.evaluate(() => {
+    (window as any).__slotNodes = [document.getElementById("controls"), document.getElementById("caption")];
+    return (window as any).__slotNodes.every(Boolean);
+  });
+  expect(slotNodes).toBe(true);
 
-  await page.getByRole("button", { name: "Reload" }).click();
-
-  // A NEW map (the reload really re-rendered from the inline script) ...
-  await page.waitForFunction(
-    () => {
-      const map = (document.getElementById("map") as any).getMap();
-      return map && map !== (window as any).__firstMap && map.loaded();
-    },
-    undefined,
-    { timeout: 60_000 }
+  // reload() re-reads the inline script and applies it as an update (live
+  // documents, 0.10): the element answers with ml-map:update-applied.
+  const applied = page.evaluate(
+    () =>
+      new Promise<{ summary: { rebuild: boolean; failures: unknown[] } }>((resolve) => {
+        document
+          .getElementById("map")!
+          .addEventListener("ml-map:update-applied", (e) => resolve((e as CustomEvent).detail), { once: true });
+      })
   );
-  // ... with the same author elements re-mounted in their corners.
+  await page.getByRole("button", { name: "Reload" }).click();
+  const { summary } = await applied;
+  expect(summary.rebuild).toBe(false);
+  expect(summary.failures).toEqual([]);
+
+  // The SAME map (nothing was torn down) ...
+  expect(
+    await page.evaluate(() => {
+      const map = (document.getElementById("map") as any).getMap();
+      return map === (window as any).__firstMap && map.loaded();
+    })
+  ).toBe(true);
+  // ... the inline script still there, and the same author elements still in their corners.
   await waitForChrome(page);
   expect(await page.locator("ml-map script[type='text/yaml']").count()).toBe(1);
   expect(await page.locator("#controls").count()).toBe(1);
+  expect(
+    await page.evaluate(() => {
+      const [controls, caption] = (window as any).__slotNodes;
+      return controls === document.getElementById("controls") && caption === document.getElementById("caption");
+    })
+  ).toBe(true);
+  expect(await page.locator("canvas.maplibregl-canvas").count()).toBe(1);
 
-  // The same button elements (listeners intact) drive the new map.
+  // The same button elements (listeners intact) still drive the map.
   const start = await zoom(page);
   await page.getByRole("button", { name: "Zoom out" }).click();
   await expect.poll(() => zoom(page)).toBeCloseTo(start - 1, 5);

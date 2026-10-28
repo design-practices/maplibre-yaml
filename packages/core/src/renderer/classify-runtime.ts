@@ -152,7 +152,7 @@ export class ClassifyRuntime {
   constructor(
     private readonly map: MapLibreMap,
     layers: readonly RuntimeLayer[],
-    private readonly sources: Record<string, unknown> | undefined,
+    private sources: Record<string, unknown> | undefined,
     private readonly getSourceData: (sourceId: string) => unknown,
     private readonly onChange: (layerId: string, record: ClassifyRecord) => void,
     private readonly byView?: ClassifyByView
@@ -163,6 +163,37 @@ export class ClassifyRuntime {
       this.templates.set(layer.id, record);
       this.layers.set(layer.id, layer);
     }
+  }
+
+  /**
+   * Re-seed from the next document (live documents, U4): `layerIds` get
+   * their template and layer object from `layers` afresh — a changed
+   * `classify:` block, or a layer rebuilt by an update — and are checked
+   * and computed again; layers the document no longer classifies are
+   * forgotten. Other layers keep their objects, so computed breaks stand.
+   */
+  reseed(layers: readonly RuntimeLayer[], sources: Record<string, unknown> | undefined, layerIds: readonly string[]): void {
+    this.sources = sources;
+    const next = new Map(layers.map((layer) => [layer.id, layer]));
+    for (const id of [...this.layers.keys()]) {
+      if (!next.has(id) || !classifyRecordOf(next.get(id)!)) this.forget(id);
+    }
+    for (const id of layerIds) {
+      const layer = next.get(id);
+      const record = layer ? classifyRecordOf(layer) : undefined;
+      if (!layer || !record) continue;
+      this.forget(id);
+      this.templates.set(id, record);
+      this.layers.set(id, layer);
+    }
+  }
+
+  private forget(id: string): void {
+    this.templates.delete(id);
+    this.layers.delete(id);
+    this.refused.delete(id);
+    this.diagnosed.delete(id);
+    this.classified.delete(id);
   }
 
   /** Whether any layer is classified. */

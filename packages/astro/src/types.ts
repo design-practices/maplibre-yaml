@@ -46,6 +46,22 @@ import type { MapBlock, ScrollytellingBlock } from "@maplibre-yaml/core";
  * ```
  */
 export interface MapProps {
+  /**
+   * The `<ml-map>` element's `id`, so a page script can reach it
+   * (`document.getElementById(id)`) to call `update(doc)`, `getMap()`,
+   * `getState()`, or to listen for `ml-map:update-applied`. Without it the
+   * element gets a generated id.
+   */
+  id?: string;
+  /**
+   * Who owns the camera when the document changes (`<ml-map camera>`, core
+   * 0.10). `document` (the default): a changed `center`/`zoom`/`bearing`/
+   * `pitch` eases the map there and a `fitTo` frames its source once. `host`:
+   * an update never moves the camera and a basemap rebuild keeps the current
+   * view -- for a page whose viewport is per-user (a dashboard the visitor
+   * pans while its data refreshes).
+   */
+  camera?: "document" | "host";
   /** Path to YAML config file (in public directory) */
   src?: string;
   /** Pre-parsed configuration object */

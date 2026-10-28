@@ -47,6 +47,14 @@ import {
 } from "../parser/yaml-parser.js";
 import { BaseElement } from "./base-element.js";
 import { MapRenderer } from "../renderer/map-renderer.js";
+import type {
+  AppliedDocument,
+  DiffHints,
+  RejectionKind,
+  UpdateResult,
+  UpdateSummary,
+} from "../renderer/update/types.js";
+import { NO_HINTS, cameraChanged, emptySummary, needsRebuild } from "../renderer/update/rebuild.js";
 import {
   toModel,
   denormalizeConfig,
@@ -70,8 +78,12 @@ import {
 } from "../i18n/strings.js";
 import {
   describeDataProblem,
+  describeFetchRejection,
+  describeHostLayerCollision,
   describeImageProblem,
   describeLayerProblem,
+  describeRejectedUpdate,
+  describeStyleRejection,
   describeMarkerIconProblem,
   describeSourceProblem,
   describeFitToProblem,
@@ -95,6 +107,7 @@ import {
 } from "../effects-host.js";
 import type {
   ChromeMount,
+  MapErrorContext,
   MapRendererEvents,
   MapRendererOptions,
 } from "../renderer/map-renderer.js";
@@ -135,6 +148,9 @@ export type MLMapErrorDetail =
   | { errors: ParseError[]; error?: undefined; fatal?: undefined }
   | { error: Error; fatal: boolean; errors?: undefined };
 
+/** Who owns the camera across document updates (KTD13): the `camera` attribute's values. */
+export type MLMapCameraOwner = "document" | "host";
+
 /**
  * Every event `<ml-map>` dispatches, by name, typed with its `detail`. All of
  * them bubble.
@@ -164,6 +180,9 @@ export interface MLMapEventMap {
   "ml-map:layer-visibility": CustomEvent<MapRendererEvents["layer:visibility"]>;
   "ml-map:camera-fit": CustomEvent<MapRendererEvents["camera:fit"]>;
   "ml-map:layer-classified": CustomEvent<MapRendererEvents["layer:classified"]>;
+  "ml-map:update-applied": CustomEvent<MapRendererEvents["update:applied"]>;
+  "ml-map:update-rejected": CustomEvent<MapRendererEvents["update:rejected"]>;
+  "ml-map:state-change": CustomEvent<MapRendererEvents["state:change"]>;
 }
 
 /**
@@ -182,6 +201,81 @@ function configKey(value: unknown): string | null {
   } catch {
     return null;
   }
+}
+
+/** One line of the non-fatal notice and how it was reported (see `reportProblem`). */
+interface NoticeEntry {
+  message: string;
+  kind: NoticeKind;
+  /**
+   * What the line is about, so a successful retry or replacement withdraws
+   * it: `layer:<id>` (a layer that didn't draw), `data:<id>` (a layer whose
+   * data didn't load), `source:<id>` (a named source), `document` (the
+   * parser's on-page warnings for the document shown). Absent for the rest.
+   */
+  about?: string;
+}
+
+/** How a line is reported: `console.error` it too (`log`), the kind, what it is about. */
+type NoticeOptions = Omit<NoticeEntry, "message" | "kind"> & { log?: boolean; kind?: NoticeKind };
+
+/** A line to put on the notice, held until its map is the one showing (a swap's next map, KTD8). */
+type NoticeLine = [message: string, options: NoticeOptions];
+
+/** The author hints the renderer reports through `onError` — never map errors: the line for the notice, if the context is one. */
+function hintLine(error: Error, context: MapErrorContext | undefined): NoticeLine | undefined {
+  if (!context) return undefined;
+  // A fitTo.source typo (ml-aot.51): the renderer already warned on the console.
+  if (context.kind === "fit" && context.sourceId) return [describeFitToProblem(context.sourceId, context.suggestion), { kind: "hint" }];
+  // A classified field the data has no value for (ml-aot.95), a source's or a layer's hint: the message is the whole line.
+  if (context.kind === "classify-field" || context.kind === "source-hint" || context.kind === "layer-hint") return [error.message, { kind: "hint" }];
+  // `center: [lat, lng]` (ml-aot.65).
+  if (context.kind === "center" && context.center && context.swapped) return [describeSwappedCenter(context.center, context.swapped), { kind: "hint" }];
+  return undefined;
+}
+
+/** The normalized document as the renderer keeps it (KTD15): what `update()` takes. */
+function toApplied(model: MapModel): AppliedDocument {
+  return {
+    config: denormalizeConfig(model),
+    layers: denormalizeLayers(model),
+    sources: denormalizeSources(model),
+    options: denormalizeOptions(model),
+  };
+}
+
+/** `errors` of an `ml-map:update-rejected`, from the parser's diagnostics. */
+function toUpdateErrors(kind: RejectionKind, errors: ParseError[]): NonNullable<UpdateResult["errors"]> {
+  return errors.map((e) => ({ kind, message: e.message, ...(e.path ? { path: e.path } : {}) }));
+}
+
+/** A map's camera as it is now: what a fallback rebuild carries across (KTD8). */
+function currentCamera(map: MapLibreMap): NonNullable<MapRendererOptions["initialCamera"]> {
+  const c = map.getCenter();
+  return { center: [c.lng, c.lat], zoom: map.getZoom(), bearing: map.getBearing(), pitch: map.getPitch() };
+}
+
+/** A fallback rebuild in flight (KTD8): the next map, built off the page, until it loads or fails. */
+interface PendingSwap {
+  renderer: MapRenderer;
+  container: HTMLDivElement;
+  mapBlock: MapBlock;
+  model: MapModel;
+  /** Carry the old map's camera over (the document's camera didn't change, or the host owns it). */
+  keepCamera: boolean;
+  /** `documentLoaded` before the swap: restored when the new map never loads. */
+  wasLoaded: boolean;
+  failed: boolean;
+  /** What the next map reported while it loaded: put on the notice when it takes the old map's place, dropped when it never does. */
+  notices: NoticeLine[];
+  resolve: (result: UpdateResult) => void;
+}
+
+/** A document that arrived during a swap: applied once the swap settles (last wins, KTD5). */
+interface QueuedDocument {
+  mapBlock: MapBlock;
+  hints: DiffHints;
+  resolve: (result: UpdateResult | PromiseLike<UpdateResult>) => void;
 }
 
 /**
@@ -321,6 +415,9 @@ function startCogFitPrefetch(sourceId: string, source: { url: string }): FitPref
  * @fires ml-map:layer-visibility - A params-panel checkbox toggled a layer
  * @fires ml-map:camera-fit - The `fitTo` camera framed its source's data (detail: source, bounds)
  * @fires ml-map:layer-classified - A `classify:` layer's classes as drawn (detail: layerId, classify), on load and when fetched data (re)computes them
+ * @fires ml-map:update-applied - A changed document was applied to the running map (detail: summary; `summary.rebuild` when a basemap change rebuilt it)
+ * @fires ml-map:update-rejected - A changed document was refused and the running map kept (detail: kind, errors)
+ * @fires ml-map:state-change - The document's `state:` values changed (detail: values, changed)
  */
 export class MLMap extends BaseElement {
   /** Internal MapRenderer instance */
@@ -396,6 +493,23 @@ export class MLMap extends BaseElement {
    */
   private effectsAttachment: EffectsAttachment | null = null;
   private effectsWait: (() => void) | null = null;
+  /** The model the effects were last set up from: what an update's re-attach rebuilds (set per update). */
+  private effectsModel: MapModel | null = null;
+
+  /** A fallback rebuild in flight (KTD8), or `null`. At most one: a second waits for it. */
+  private swap: PendingSwap | null = null;
+  /** The document that arrived during a swap; applied once the swap settles. */
+  private queuedDocument: QueuedDocument | null = null;
+  /** The outcome of the latest document routed through `config`, `src`, `base` or `reload()`: what {@link update} resolves with. */
+  private lastUpdate: Promise<UpdateResult> | null = null;
+  /**
+   * The document to go back to if an in-place update is refused (KTD5): the
+   * one the map shows, recorded by the first update in flight and moved by
+   * each that applies, so a refusal never clobbers a later update's write.
+   */
+  private rollback: { config: MapBlock | null; effects: MapModel | null } | null = null;
+  /** The rejected-update hint on the notice, taken down when a later document applies. */
+  private rejectionHint: string | null = null;
 
   /**
    * Whether the one-time dev diagnostics have already run for this element.
@@ -433,8 +547,11 @@ export class MLMap extends BaseElement {
   /**
    * Every line reported for the current render, shown or not — so turning
    * `debug` on (or `quiet` off) later can rebuild the notice (ml-aot.57).
+   * `about` names the layer, its data, or the source a line describes
+   * (`layer:<id>`, `data:<layerId>`, `source:<id>`), so an update that
+   * retries or replaces it withdraws the line once it succeeds (KTD11).
    */
-  private noticeEntries: Array<{ message: string; kind: NoticeKind }> = [];
+  private noticeEntries: NoticeEntry[] = [];
   /** The current document's `onPage` warnings, shown once its map renders. */
   private documentNotices: string[] = [];
   /**
@@ -467,7 +584,7 @@ export class MLMap extends BaseElement {
    * Observed attributes that trigger attributeChangedCallback
    */
   static get observedAttributes(): string[] {
-    return ["src", "config", "quiet", "base", "debug"];
+    return ["src", "config", "quiet", "base", "debug", "camera"];
   }
 
   /**
@@ -542,6 +659,28 @@ export class MLMap extends BaseElement {
   }
 
   /**
+   * Who owns the camera when the document changes (live documents, KTD13).
+   * Reflects the `camera` attribute: `document` (the default) or `host`.
+   *
+   * @remarks
+   * `document`: a changed `center`, `zoom`, `bearing` or `pitch` eases the
+   * map there, an added or re-targeted `fitTo` frames its source once, and a
+   * basemap change rebuilds at the current camera unless the document's
+   * camera changed. `host`: an update never moves the camera and a rebuild
+   * always keeps the current one — for a page whose viewport is per-user.
+   * Hosts that want the document camera re-applied on every update do it
+   * themselves on `ml-map:update-applied`.
+   */
+  get camera(): MLMapCameraOwner {
+    return this.getAttribute("camera") === "host" ? "host" : "document";
+  }
+
+  set camera(value: MLMapCameraOwner) {
+    if (value === "host") this.setAttribute("camera", "host");
+    else this.removeAttribute("camera");
+  }
+
+  /**
    * Get the current map configuration
    */
   get config(): MapBlock | null {
@@ -556,8 +695,13 @@ export class MLMap extends BaseElement {
    * every other config path, whether assigned before or after the element
    * connects. Assigning a value that is JSON-equal to the config currently
    * applied is a no-op, so a framework re-binding an equal object does not
-   * rebuild the map. Assigning `null` clears the stored config without
-   * touching a rendered map.
+   * touch the map. A different document is applied to the running map in
+   * place (live documents, 0.10): the camera stays unless the document's
+   * camera changed, `getMap()` keeps its identity, and `ml-map:update-applied`
+   * reports what changed; a document that fails validation is refused with
+   * `ml-map:update-rejected` and the map untouched; a `mapStyle` change
+   * rebuilds the map at the current camera. Assigning `null` clears the
+   * stored config without touching a rendered map.
    */
   set config(value: MapBlock | string | null) {
     if (value === null) {
@@ -574,9 +718,7 @@ export class MLMap extends BaseElement {
       } catch (e) {
         this.cancelEmptyConfigCheck();
         this.appliedConfigKey = null;
-        this.handleError([
-          { path: "", message: "Invalid JSON in config property" },
-        ]);
+        this.documentFailed([{ path: "", message: "Invalid JSON in config property" }]);
         return;
       }
     } else {
@@ -593,7 +735,6 @@ export class MLMap extends BaseElement {
     const key = configKey(parsed);
     if (key !== null && key === this.appliedConfigKey) return;
 
-    this._config = parsed as MapBlock;
     this.applyValidatedConfig(parsed, key);
   }
 
@@ -617,10 +758,9 @@ export class MLMap extends BaseElement {
     this.logWarnings(result.warnings);
 
     if (result.success && result.data) {
-      this._config = result.data;
-      this.renderMap(result.data);
+      this.renderDocument(result.data);
     } else {
-      this.handleError(result.errors);
+      this.documentFailed(result.errors);
     }
   }
 
@@ -633,6 +773,7 @@ export class MLMap extends BaseElement {
     // accessor and would be silently ignored. Re-route it through the setter
     // (the standard custom-element `_upgradeProperty` pattern).
     this.upgradeProperty("base");
+    this.upgradeProperty("camera");
     this.upgradeProperty("config");
 
     // Create internal map container
@@ -654,7 +795,7 @@ export class MLMap extends BaseElement {
    * Re-apply an own property set on the element before it was upgraded, so
    * it reaches the class accessor instead of shadowing it.
    */
-  private upgradeProperty(name: "config" | "base"): void {
+  private upgradeProperty(name: "config" | "base" | "camera"): void {
     if (Object.prototype.hasOwnProperty.call(this, name)) {
       const self = this as unknown as Record<string, unknown>;
       const value = self[name];
@@ -697,16 +838,27 @@ export class MLMap extends BaseElement {
       return;
     }
 
+    if (name === "camera") {
+      // From the next update on (KTD13); the next map is built with it.
+      this.renderer?.setCameraOwner(this.camera);
+      this.swap?.renderer.setCameraOwner(this.camera);
+      return;
+    }
+
     // Only process changes after initialization
     if (!this.initialized) return;
 
     if (name === "base") {
       // Every URL in the document may move: re-fetch `src` (its own path
-      // depends on the base) or re-render the document already loaded.
+      // depends on the base) or apply the document already loaded again,
+      // with every URL-bearing source counted as changed (KTD11).
       if (normalizeDocumentBase(oldValue) === normalizeDocumentBase(newValue)) return;
+      const hints: DiffHints = { failedSources: new Set(), urlsRebased: true, reload: true };
       const src = this.getAttribute("src");
-      if (src) void this.loadFromURL(src);
-      else if (this._config && this.renderer) this.renderMap(this._config);
+      // During a swap, the document the swap is building (not the one it replaces): applied again once the new map is up.
+      const current = this.swap?.mapBlock ?? this._config;
+      if (src) void this.loadFromURL(src, hints);
+      else if (current && (this.renderer || this.swap)) this.renderDocument(current, hints);
       return;
     }
 
@@ -817,7 +969,7 @@ export class MLMap extends BaseElement {
    * Load and parse a document from an inline script's text content. JSON is
    * YAML 1.2, so one parser reads both; `json` only words syntax errors.
    */
-  private loadFromScriptTag(yamlContent: string, json = false): void {
+  private loadFromScriptTag(yamlContent: string, json = false, hints: DiffHints = NO_HINTS): void {
     this.cancelEmptyConfigCheck();
     this.appliedConfigKey = null;
     this.documentUrl = null;
@@ -828,10 +980,9 @@ export class MLMap extends BaseElement {
     this.logWarnings(result.warnings);
 
     if (result.success && result.data) {
-      this._config = result.data;
-      this.renderMap(result.data);
+      this.renderDocument(result.data, hints);
     } else {
-      this.handleError(json ? wordForJson(result.errors) : result.errors);
+      this.documentFailed(json ? wordForJson(result.errors) : result.errors);
     }
   }
 
@@ -844,9 +995,11 @@ export class MLMap extends BaseElement {
    * serve the folder; an HTTP error and an HTML page (what an SPA-fallback
    * server returns for a wrong path, with status 200) both show the URL the
    * browser actually requested, since a path resolved against the wrong
-   * folder is the usual cause.
+   * folder is the usual cause. On a running map none of those replace it
+   * (KTD12): the document is refused with `ml-map:update-rejected`
+   * (`kind: "fetch"`) and a dev-only hint, and the map stays.
    */
-  private async loadFromURL(url: string): Promise<void> {
+  private async loadFromURL(url: string, hints: DiffHints = NO_HINTS): Promise<void> {
     this.cancelEmptyConfigCheck();
     this.appliedConfigKey = null;
 
@@ -869,7 +1022,10 @@ export class MLMap extends BaseElement {
     try {
       response = await fetch(target);
       if (!response.ok) {
-        this.showFailure(
+        this.fetchFailed(
+          url,
+          resolved,
+          `${response.status}${response.statusText ? ` ${response.statusText}` : ""}`,
           srcHttpErrorCard(url, resolved, response.status, response.statusText, {
             pageUrl: doc.baseURI,
             base: this.base,
@@ -879,12 +1035,18 @@ export class MLMap extends BaseElement {
       }
       yamlContent = await response.text();
     } catch (error) {
-      this.showFailure(srcFetchFailedCard(url, resolved, error, filePage));
+      const reason = error instanceof Error ? error.message : String(error);
+      this.fetchFailed(url, resolved, reason, srcFetchFailedCard(url, resolved, error, filePage));
       return;
     }
 
     if (looksLikeHtml(yamlContent, response.headers?.get?.("content-type") ?? null)) {
-      this.showFailure(srcHtmlCard(url, resolved, { pageUrl: doc.baseURI, base: this.base }));
+      this.fetchFailed(
+        url,
+        resolved,
+        "it is a web page, not a YAML file",
+        srcHtmlCard(url, resolved, { pageUrl: doc.baseURI, base: this.base })
+      );
       return;
     }
 
@@ -892,12 +1054,23 @@ export class MLMap extends BaseElement {
     this.logWarnings(result.warnings);
 
     if (result.success && result.data) {
-      this._config = result.data;
       this.documentUrl = resolved;
-      this.renderMap(result.data);
+      this.renderDocument(result.data, hints);
     } else {
-      this.handleError(result.errors);
+      this.documentFailed(result.errors);
     }
+  }
+
+  /** A `src` that didn't load: the card with no map to keep, a rejection otherwise (KTD12). */
+  private fetchFailed(src: string, resolved: string, reason: string, card: ErrorCardContent): void {
+    if (!this.renderer && !this.swap) {
+      this.showFailure(card);
+      return;
+    }
+    const message = card.errors[0]?.message ?? reason;
+    this.lastUpdate = Promise.resolve(
+      this.rejectUpdate("fetch", [{ kind: "fetch", message }], describeFetchRejection(src, resolved, reason))
+    );
   }
 
   /**
@@ -913,7 +1086,7 @@ export class MLMap extends BaseElement {
       // is closing, on the entry path least likely to be noticed.
       this.applyValidatedConfig(parsed);
     } catch (error) {
-      this.handleError([
+      this.documentFailed([
         {
           path: "",
           message: `Invalid JSON in config attribute: ${
@@ -925,16 +1098,25 @@ export class MLMap extends BaseElement {
   }
 
   /**
-   * Render the map with the given configuration
+   * A document that failed to parse or validate: on a running map it is
+   * refused and the map kept (R2, KTD9); with no map, the error card as
+   * before.
    */
-  private renderMap(mapBlock: MapBlock): void {
-    // The document's own words for the library's UI (its `locale:`), for
-    // everything this render puts on the page: notices, error cards, hints.
-    this.strings = createStrings(documentLocale(mapBlock));
+  private documentFailed(errors: ParseError[]): void {
+    const rejection = toUpdateErrors("validation", errors);
+    if (this.renderer || this.swap) {
+      this.lastUpdate = Promise.resolve(this.rejectUpdate("validation", rejection, describeRejectedUpdate(errors)));
+      return;
+    }
+    this.lastUpdate = Promise.resolve({ outcome: "rejected", errors: rejection });
+    this.handleError(errors);
+  }
 
+  /** The standalone element's one hard requirement beyond the schema: a basemap. */
+  private basemapMissing(mapBlock: MapBlock): ParseError[] | null {
     // Standalone <ml-map> has no global config to inherit defaultMapStyle from,
     // so a missing basemap would die inside MapLibre with an opaque error.
-    // Surface a friendly error card instead. (Schema keeps it optional because
+    // Surface a friendly error instead. (Schema keeps it optional because
     // the Astro builders legitimately resolve it from globalConfig.) The base
     // style is `config.mapStyle` in v1 and `style.basemap` in v2, so the guard
     // reads whichever the document's version puts it under.
@@ -942,19 +1124,311 @@ export class MLMap extends BaseElement {
     const basemap = isV2
       ? (mapBlock as unknown as { style?: { basemap?: unknown } }).style?.basemap
       : mapBlock.config?.mapStyle;
-    if (!basemap) {
-      const path = isV2 ? "style.basemap" : "config.mapStyle";
-      const key = isV2 ? "basemap" : "mapStyle";
-      const where = isV2 ? "your style:" : "your config";
-      this.handleError([
-        {
-          path,
-          message:
-            `${key} is required for standalone maps. Add it to ${where}, for example: ` +
-            `${key}: "https://demotiles.maplibre.org/style.json" ` +
-            "(inheriting a defaultMapStyle is a feature of the Astro builders, not the standalone <ml-map> element).",
-        },
-      ]);
+    if (basemap) return null;
+    const path = isV2 ? "style.basemap" : "config.mapStyle";
+    const key = isV2 ? "basemap" : "mapStyle";
+    const where = isV2 ? "your style:" : "your config";
+    return [
+      {
+        path,
+        message:
+          `${key} is required for standalone maps. Add it to ${where}, for example: ` +
+          `${key}: "https://demotiles.maplibre.org/style.json" ` +
+          "(inheriting a defaultMapStyle is a feature of the Astro builders, not the standalone <ml-map> element).",
+      },
+    ];
+  }
+
+  /**
+   * Route a validated document (live documents, 0.10): to the running map
+   * as an update, after a swap in flight (last wins), or — with no running
+   * map: the first render, an error card, a construction still waiting for
+   * DOM-ready — rendered fresh, as before.
+   */
+  private renderDocument(mapBlock: MapBlock, hints: DiffHints = NO_HINTS): void {
+    if (this.swap) {
+      // At most two maps alive (KTD8): the document waits for the swap.
+      this.queuedDocument?.resolve({ outcome: "superseded" });
+      this.lastUpdate = new Promise((resolve) => {
+        this.queuedDocument = { mapBlock, hints, resolve };
+      });
+      return;
+    }
+    const renderer = this.renderer;
+    if (renderer) {
+      this.lastUpdate = this.updateDocument(renderer, mapBlock, hints);
+      return;
+    }
+    this._config = mapBlock;
+    this.lastUpdate = this.whenRendered();
+    this.renderMap(mapBlock);
+  }
+
+  /** {@link update}'s outcome for a document rendered fresh: a map was built (a rebuild), or the error card. */
+  private whenRendered(): Promise<UpdateResult> {
+    return new Promise((resolve) => {
+      const onLoad = () => {
+        cleanup();
+        resolve({ outcome: "fallback", summary: emptySummary(true) });
+      };
+      const onError = (event: Event) => {
+        const detail = (event as CustomEvent<MLMapErrorDetail>).detail;
+        if (detail?.fatal === false) return;
+        cleanup();
+        const errors = detail?.errors ?? [{ path: "", message: detail?.error?.message ?? "failed to load" }];
+        resolve({ outcome: "rejected", errors: toUpdateErrors("validation", errors) });
+      };
+      const cleanup = () => {
+        this.removeEventListener("ml-map:load", onLoad);
+        this.removeEventListener("ml-map:error", onError);
+      };
+      this.addEventListener("ml-map:load", onLoad);
+      this.addEventListener("ml-map:error", onError);
+    });
+  }
+
+  /**
+   * Apply a document to the running map (R1): normalized the way the map was
+   * built, classified for a rebuild before anything is awaited (KTD7), and
+   * otherwise handed to `renderer.update()`, whose outcome becomes
+   * `ml-map:update-applied` or `ml-map:update-rejected`.
+   */
+  private async updateDocument(renderer: MapRenderer, mapBlock: MapBlock, hints: DiffHints): Promise<UpdateResult> {
+    const missing = this.basemapMissing(mapBlock);
+    if (missing) return this.rejectUpdate("validation", toUpdateErrors("validation", missing), describeRejectedUpdate(missing));
+    let model: MapModel;
+    try {
+      model = applyDocumentBase(toModel(mapBlock as never), this.base);
+    } catch (error) {
+      const errors = [{ path: "", message: `Failed to read the document: ${error instanceof Error ? error.message : String(error)}` }];
+      return this.rejectUpdate("validation", toUpdateErrors("validation", errors), describeRejectedUpdate(errors));
+    }
+    const next = toApplied(model);
+    this.clearRejectionHint();
+    // A basemap change or a constructor-only option: the two-map rebuild (KTD8).
+    if (needsRebuild(renderer.getDocument().config, next.config)) return this.startRebuild(renderer, mapBlock, model, next);
+
+    this.rollback ??= { config: this._config, effects: this.effectsModel };
+    this._config = mapBlock;
+    this.strings = createStrings(documentLocale(mapBlock));
+    // An update's effects re-attach reads the next document's effect refs.
+    this.effectsModel = model;
+    // The notice as it is now: what the update itself reports is newer (see settleNotices).
+    const before = new Set(this.noticeEntries);
+    const result = await renderer.update(next, hints);
+    if (this.renderer !== renderer) return result;
+    // Whether this call's write is still the current one: a later update may have taken over (KTD5).
+    const current = this._config === mapBlock;
+    if (result.outcome === "applied") {
+      // `ml-map:update-applied` was forwarded from the renderer's own event,
+      // which fires only when something changed (R8: an equal document is
+      // a no-op on every path, whether or not the element held its key).
+      this.rollback = current ? null : { config: mapBlock, effects: model };
+      if (result.summary) this.settleNotices(result.summary, before);
+      this.withdrawNotices("document");
+      for (const message of this.documentNotices) this.reportProblem(message, { kind: "hint", about: "document" });
+    } else if (result.outcome === "rejected") {
+      if (current && this.rollback) {
+        this._config = this.rollback.config;
+        this.effectsModel = this.rollback.effects;
+        this.rollback = null;
+      }
+      const errors = result.errors ?? [];
+      this.rejectUpdate(errors[0]?.kind ?? "chunk", errors, describeRejectedUpdate(errors));
+    }
+    return result;
+  }
+
+  /**
+   * Refuse a document and keep the map (R2): the dev-only hint on the map,
+   * `ml-map:update-rejected` for the host. The refused document does not
+   * count as applied, so assigning it again tries again.
+   */
+  private rejectUpdate(kind: RejectionKind, errors: NonNullable<UpdateResult["errors"]>, hint: string): UpdateResult {
+    this.appliedConfigKey = null;
+    this.clearRejectionHint();
+    this.rejectionHint = hint;
+    this.reportProblem(hint, { kind: "hint" });
+    this.dispatchEvent(
+      new CustomEvent("ml-map:update-rejected", {
+        bubbles: true,
+        detail: { kind, errors },
+      })
+    );
+    return { outcome: "rejected", errors };
+  }
+
+  /** Take the last rejection's hint off the notice: a later document is being applied. */
+  private clearRejectionHint(): void {
+    const hint = this.rejectionHint;
+    if (!hint) return;
+    this.rejectionHint = null;
+    this.noticeEntries = this.noticeEntries.filter((entry) => entry.message !== hint);
+    this.rebuildNotice();
+  }
+
+  /** Take every line about `about` off the notice: what it described was retried or replaced and succeeded. */
+  private withdrawNotices(...about: string[]): void {
+    this.keepNotices((entry) => !entry.about || !about.includes(entry.about));
+  }
+
+  /**
+   * An update applied: the lines reported before it began about the layers
+   * it added, replaced or removed, and the sources it replaced, go — what
+   * the update itself reported about them (a layer that failed again) is
+   * newer and stays, and a retried load's line goes when its data lands.
+   */
+  private settleNotices(summary: UpdateSummary, before: ReadonlySet<NoticeEntry>): void {
+    const about = new Set<string>();
+    for (const id of [...summary.added, ...summary.replaced, ...summary.removed]) about.add(`layer:${id}`).add(`data:${id}`);
+    for (const id of summary.sourcesReplaced) about.add(`source:${id}`);
+    this.keepNotices((entry) => !(entry.about && about.has(entry.about) && before.has(entry)));
+  }
+
+  private keepNotices(keep: (entry: NoticeEntry) => boolean): void {
+    const kept = this.noticeEntries.filter(keep);
+    if (kept.length === this.noticeEntries.length) return;
+    this.noticeEntries = kept;
+    this.rebuildNotice();
+  }
+
+  /**
+   * The fallback rebuild (KTD8): the next map is built off the page while
+   * the old one keeps showing, seeded with the old map's camera (unless the
+   * document's camera changed and the document owns it) and the reader's
+   * state and visibility; it takes the old map's place when it loads
+   * ({@link commitSwap}) and is dropped when it never does
+   * ({@link failSwap}). Everything here runs in the same turn as the
+   * assignment: a `mapReady()` called right after waits for the new map.
+   */
+  private startRebuild(old: MapRenderer, mapBlock: MapBlock, model: MapModel, next: AppliedDocument): Promise<UpdateResult> {
+    return new Promise<UpdateResult>((resolve) => {
+      const wasLoaded = this.documentLoaded;
+      this.documentLoaded = false;
+      this.lastError = null;
+      // No second set of fetches while the next map loads its own. Slot
+      // children stay in the old map's chrome: the next renderer collects
+      // them from there and moves them only when it loads (commit time).
+      old.pause();
+      const keepCamera = this.camera === "host" || !cameraChanged(old.getDocument().config, next.config);
+      const block = mapBlock as { config?: { mapStyle?: unknown }; style?: { basemap?: unknown } };
+      prefetchProtomapsBasemap(block.config?.mapStyle ?? block.style?.basemap);
+      const container = this.createMapContainer();
+      let renderer: MapRenderer;
+      try {
+        renderer = this.buildRenderer(mapBlock, container, null, {
+          camera: this.camera,
+          ...old.rebuildSeed(),
+          ...(keepCamera ? { initialCamera: currentCamera(old.getMap()) } : {}),
+        }, true).renderer;
+      } catch (error) {
+        this.documentLoaded = wasLoaded;
+        old.resume();
+        const errors = [{ path: "", message: `Failed to create map: ${error instanceof Error ? error.message : String(error)}` }];
+        resolve(this.rejectUpdate("validation", toUpdateErrors("validation", errors), describeRejectedUpdate(errors)));
+        return;
+      }
+      this.swap = { renderer, container, mapBlock, model, keepCamera, wasLoaded, failed: false, notices: [], resolve };
+    });
+  }
+
+  /** The next map loaded: the old one is torn down and the new one takes its place, at the old map's current camera. */
+  private commitSwap(swap: PendingSwap): void {
+    this.swap = null;
+    const { renderer, container, mapBlock, model } = swap;
+    const oldMap = this.renderer?.getMap();
+    // The camera as it is NOW: the reader may have moved it while the new map loaded.
+    if (swap.keepCamera && oldMap) renderer.getMap().jumpTo(currentCamera(oldMap));
+    this.teardownRenderer();
+    this.removeErrorCards();
+    this.mapContainer?.remove();
+    this.mapContainer = container;
+    this.appendChild(container);
+    this.renderer = renderer;
+    this._config = mapBlock;
+    this.effectsModel = model;
+    this.rollback = null;
+    this.strings = createStrings(documentLocale(mapBlock));
+    for (const message of this.documentNotices) this.reportProblem(message, { kind: "hint", about: "document" });
+    // What the new map reported while it loaded, now that it is the one showing.
+    for (const line of swap.notices) this.reportProblem(...line);
+    // The slot children, parked by the teardown, go into the new map's corners now (KTD8).
+    renderer.mountHostChrome();
+    // Built off the page, at no size: measure now.
+    renderer.getMap().resize();
+  }
+
+  /** The next map never loads (its basemap, its worker): it is dropped, the old map stays, the queue releases. */
+  private failSwap(swap: PendingSwap, error: Error, context: MapErrorContext | undefined): void {
+    if (swap.failed) return;
+    swap.failed = true;
+    this.swap = null;
+    // What a reader wrote on the map that never loaded lands on the one that stays (KTD8).
+    const written = this.pendingStateWrites(swap);
+    if (Object.keys(written).length) {
+      try {
+        this.renderer?.setState(written);
+      } catch {
+        // Below the state floor (maplibre-gl < 5.6): nothing to carry.
+      }
+    }
+    // Out of MapLibre's event dispatch before tearing its map down.
+    setTimeout(() => swap.renderer.destroy(), 0);
+    this.documentLoaded = swap.wasLoaded;
+    // The old map stays: its pipelines run again.
+    this.renderer?.resume();
+    const isV2 = (swap.mapBlock as { version?: number }).version === 2;
+    const key = isV2 ? "style.basemap" : "config.mapStyle";
+    const url = context?.kind === "style" ? context.url : undefined;
+    swap.resolve(
+      this.rejectUpdate("style", [{ kind: "style", message: error.message }], describeStyleRejection(key, url, error.message))
+    );
+    this.drainQueued();
+  }
+
+  /** The `state:` values a reader wrote on a swap's next map (`setState` routes there), as far as the old document declares them. */
+  private pendingStateWrites(swap: PendingSwap): Record<string, unknown> {
+    const declared = this.renderer?.getDocument().options.state ?? {};
+    return Object.fromEntries(Object.entries(swap.renderer.rebuildSeed().initialState).filter(([key]) => key in declared));
+  }
+
+  /**
+   * A swap that will not complete: drop the next map. Both callers (the
+   * element leaving the page, the error card) tear the old renderer down
+   * right after, so its paused pipelines are not resumed here.
+   */
+  private abandonSwap(): void {
+    const swap = this.swap;
+    this.swap = null;
+    if (swap) {
+      swap.failed = true;
+      swap.renderer.destroy();
+      swap.resolve({ outcome: "superseded" });
+    }
+    this.queuedDocument?.resolve({ outcome: "superseded" });
+    this.queuedDocument = null;
+  }
+
+  /** The document that waited for the swap, if any, goes next. */
+  private drainQueued(): void {
+    const queued = this.queuedDocument;
+    if (!queued) return;
+    this.queuedDocument = null;
+    this.renderDocument(queued.mapBlock, queued.hints);
+    queued.resolve(this.lastUpdate ?? { outcome: "superseded" });
+  }
+
+  /**
+   * Render the map with the given configuration
+   */
+  private renderMap(mapBlock: MapBlock): void {
+    // The document's own words for the library's UI (its `locale:`), for
+    // everything this render puts on the page: notices, error cards, hints.
+    this.strings = createStrings(documentLocale(mapBlock));
+
+    const missing = this.basemapMissing(mapBlock);
+    if (missing) {
+      this.handleError(missing);
       return;
     }
 
@@ -963,7 +1437,7 @@ export class MLMap extends BaseElement {
     this.teardownRenderer();
     // The teardown cleared the notice; this document's on-page warnings
     // (logged as it was parsed, just before) go back on it.
-    for (const message of this.documentNotices) this.reportProblem(message, { kind: "hint" });
+    for (const message of this.documentNotices) this.reportProblem(message, { kind: "hint", about: "document" });
 
     // A fresh render resets the readiness state a pending or future
     // mapReady() reads.
@@ -1068,162 +1542,15 @@ export class MLMap extends BaseElement {
 
   /**
    * Build the MapRenderer for a validated document into the (already
-   * attached) map container. Split from {@link renderMap} so the DOM-ready
-   * deferral can run it later.
+   * attached) map container and make it the element's. Split from
+   * {@link renderMap} so the DOM-ready deferral can run it later.
    */
   private constructRenderer(mapBlock: MapBlock, prefetch: FitPrefetch | null = null): void {
     if (!this.mapContainer) return;
-    const slots = this.collectSlots();
-    const isV2 = (mapBlock as { version?: number }).version === 2;
-
     try {
-      // Normalize the v1 document into the v2 internal model, then render from
-      // it. The model is what the emitter is written against (R30); routing the
-      // production path through it here is what proves the normalization loses
-      // nothing — every component and renderer test now exercises the round
-      // trip, so a dropped or invented key fails the suite rather than shipping.
-      // `base` (GitHub Pages project sites) resolves every URL in the
-      // document in one pass, before anything fetches (ml-aot.30).
-      const model = applyDocumentBase(toModel(mapBlock as never), this.base);
-
-      // The fitTo prefetch (ml-aot.75). Data that arrived in time rides in as
-      // the source's `prefetchedData`, so the renderer builds the map framed
-      // on it; data still on its way is handed over as the pending load, so
-      // the source awaits it (one request) and the map fits when it lands.
-      let sources = denormalizeSources(model);
-      let sourceData: MapRendererOptions["sourceData"];
-      // A COG's extent read ahead (ml-aot.120): no data to hand over.
-      const prefetchedExtents = prefetch?.extent ? { [prefetch.sourceId]: prefetch.extent } : undefined;
-      if (prefetch && !isCogFitSource(sources?.[prefetch.sourceId]) && sources?.[prefetch.sourceId]) {
-        sourceData = {
-          fetcher: prefetch.fetcher,
-          pending: { [prefetch.sourceId]: prefetch.data },
-        };
-        if (prefetch.result && "data" in prefetch.result) {
-          sources = {
-            ...sources,
-            [prefetch.sourceId]: {
-              ...sources[prefetch.sourceId],
-              prefetchedData: prefetch.result.data,
-            } as (typeof sources)[string],
-          };
-        }
-      }
-
-      const renderer: MapRenderer = new MapRenderer(
-        this.mapContainer,
-        denormalizeConfig(model),
-        denormalizeLayers(model),
-        {
-          ...denormalizeOptions(model),
-          chrome: slots.chrome,
-          legendElement: slots.legendElement,
-          ...(sourceData ? { sourceData } : {}),
-          ...(prefetchedExtents ? { prefetchedExtents } : {}),
-        onLoad: () => {
-          // Load event is also emitted via the event system
-        },
-        onError: (error, fatal, context) => {
-          // A fitTo.source typo (ml-aot.51): the renderer already warned on
-          // the console; put it on the map too. Not a map error.
-          if (context?.kind === "fit" && context.sourceId) {
-            this.reportProblem(describeFitToProblem(context.sourceId, context.suggestion), {
-              kind: "hint",
-            });
-            return;
-          }
-          // A classified field the data has no value for (ml-aot.95): the
-          // renderer warned; an author hint on the page too.
-          if (
-            context?.kind === "classify-field" ||
-            context?.kind === "source-hint" ||
-            context?.kind === "layer-hint"
-          ) {
-            this.reportProblem(error.message, { kind: "hint" });
-            return;
-          }
-          // `center: [lat, lng]` (ml-aot.65): the renderer warned; show it.
-          if (context?.kind === "center" && context.center && context.swapped) {
-            this.reportProblem(describeSwappedCenter(context.center, context.swapped), {
-              kind: "hint",
-            });
-            return;
-          }
-          // Loud by default: with no `ml-map:error` listener attached, a
-          // dispatched event is invisible and the document fails silently
-          // (ml-tfd.8 contract audit). Hosts still get the event.
-          // A basemap notice was already logged by the renderer, as a warning
-          // in plain words: once is enough (ml-aot.125).
-          if (context?.kind !== "basemap") console.error("[maplibre-yaml] map error:", error);
-          // MapLibre reports a worker that could not start as a runtime
-          // error, but the map can never load without one: treat it as
-          // terminal and put it on the page, not only on the console — a
-          // student otherwise sees an empty box (ml-aot.2).
-          const workerFailure = /worker failed to load/i.test(error.message);
-          const terminal = fatal !== false || workerFailure;
-          // Only load-aborting failures are terminal for mapReady();
-          // runtime maplibre errors (a 404'd tile) precede a successful
-          // load all the time and must not poison readiness.
-          if (terminal) this.lastError = error;
-          this.dispatchEvent(
-            new CustomEvent("ml-map:error", {
-              bubbles: true,
-              detail: { error, fatal: terminal },
-            })
-          );
-          if (workerFailure) {
-            // Out of MapLibre's event dispatch before tearing its map down;
-            // once only, however many workers in the pool report it. A page
-            // opened from disk is the classroom cause, and the bundler
-            // advice in the message would send a student the wrong way
-            // (ml-aot.13).
-            queueMicrotask(() => {
-              if (this.renderer !== renderer) return;
-              if (isFilePage(this.ownerDocument)) {
-                this.showContentCard(filePageWorkerCard(this.strings));
-              } else {
-                this.showErrorCard([{ path: "", message: error.message }], {
-                  title: this.strings("maplibre-yaml.ErrorCard.MapError"),
-                });
-              }
-            });
-            return;
-          }
-          if (context?.kind === "style") {
-            this.queueStyleFailure(renderer, error, context.url, isV2);
-            return;
-          }
-          // Part of the document failed but the map keeps working: say so
-          // on the map, not only on the console (ml-aot.15).
-          if (!terminal && context?.kind === "layer" && context.layerId) {
-            this.reportProblem(describeLayerProblem(context.layerId, error.message));
-          } else if (!terminal && context?.kind === "classify") {
-            // The message is the whole notice (renderer/classify-runtime).
-            this.reportProblem(error.message);
-          } else if (!terminal && context?.kind === "basemap") {
-            // The message is the whole notice (a pmtiles: file that is not
-            // a Protomaps basemap, ml-cnv.7).
-            this.reportProblem(error.message);
-          } else if (!terminal && context?.kind === "source" && context.sourceId) {
-            this.reportProblem(
-              describeSourceProblem(context.sourceId, error.message, error, {
-                pageUrl: this.ownerDocument.baseURI,
-                base: this.base,
-                ...(context.basemap ? { basemap: true } : {}),
-              })
-            );
-          }
-        },
-        },
-        sources
-      );
+      const { renderer, model } = this.buildRenderer(mapBlock, this.mapContainer, prefetch, {}, false);
       this.renderer = renderer;
-
-      // Set up event forwarding
-      this.setupEventForwarding();
-
-      // Experimental effects (`effect:` layers) attach once the map loads.
-      this.setupEffects(model);
+      this.effectsModel = model;
 
       // Surface the classic silent-blank-map failure modes on the console.
       this.checkEnvironment();
@@ -1237,6 +1564,202 @@ export class MLMap extends BaseElement {
         },
       ]);
     }
+  }
+
+  /**
+   * Construct a MapRenderer for a validated document into `container`, with
+   * its events forwarded and its effects set up — without tearing anything
+   * down or touching the element's own renderer (KTD8): the first render
+   * attaches the result at once; a fallback rebuild keeps it off the page
+   * until it loads.
+   *
+   * @param extra - Renderer options beyond the document's: the camera owner
+   *   and, for a rebuild, the previous map's camera, state and visibility.
+   * @param swapping - Built for a swap: no loading indicator over the old map.
+   * @throws When the document cannot be modelled or MapLibre refuses to construct.
+   */
+  private buildRenderer(
+    mapBlock: MapBlock,
+    container: HTMLDivElement,
+    prefetch: FitPrefetch | null,
+    extra: Partial<MapRendererOptions>,
+    swapping: boolean
+  ): { renderer: MapRenderer; model: MapModel } {
+    const slots = this.collectSlots();
+    const isV2 = (mapBlock as { version?: number }).version === 2;
+
+    // Normalize the v1 document into the v2 internal model, then render from
+    // it. The model is what the emitter is written against (R30); routing the
+    // production path through it here is what proves the normalization loses
+    // nothing — every component and renderer test now exercises the round
+    // trip, so a dropped or invented key fails the suite rather than shipping.
+    // `base` (GitHub Pages project sites) resolves every URL in the
+    // document in one pass, before anything fetches (ml-aot.30).
+    const model = applyDocumentBase(toModel(mapBlock as never), this.base);
+
+    // The fitTo prefetch (ml-aot.75). Data that arrived in time rides in as
+    // the source's `prefetchedData`, so the renderer builds the map framed
+    // on it; data still on its way is handed over as the pending load, so
+    // the source awaits it (one request) and the map fits when it lands.
+    let sources = denormalizeSources(model);
+    let sourceData: MapRendererOptions["sourceData"];
+    // A COG's extent read ahead (ml-aot.120): no data to hand over.
+    const prefetchedExtents = prefetch?.extent ? { [prefetch.sourceId]: prefetch.extent } : undefined;
+    if (prefetch && !isCogFitSource(sources?.[prefetch.sourceId]) && sources?.[prefetch.sourceId]) {
+      sourceData = {
+        fetcher: prefetch.fetcher,
+        pending: { [prefetch.sourceId]: prefetch.data },
+      };
+      if (prefetch.result && "data" in prefetch.result) {
+        sources = {
+          ...sources,
+          [prefetch.sourceId]: {
+            ...sources[prefetch.sourceId],
+            prefetchedData: prefetch.result.data,
+          } as (typeof sources)[string],
+        };
+      }
+    }
+
+    const renderer: MapRenderer = new MapRenderer(
+      container,
+      denormalizeConfig(model),
+      denormalizeLayers(model),
+      {
+        ...denormalizeOptions(model),
+        chrome: slots.chrome,
+        legendElement: slots.legendElement,
+        ...(sourceData ? { sourceData } : {}),
+        ...(prefetchedExtents ? { prefetchedExtents } : {}),
+        camera: this.camera,
+        // A swap's map mounts the slot children when it is shown (KTD8).
+        ...(swapping ? { deferChrome: true } : {}),
+        ...extra,
+        // An update that adds, removes, rebuilds or moves an `effect:`
+        // layer (live documents, KTD6b): detach, then attach again from
+        // the document the effects were last set up from.
+        onReattachEffects: () => this.reattachEffects(),
+      onLoad: () => {
+        // Load event is also emitted via the event system
+      },
+      onError: (error, fatal, context) => {
+        // The next map of a fallback rebuild (KTD8), or a map already
+        // replaced or abandoned, which has nothing more to say. What the
+        // next map reports goes on the notice once it is the one showing.
+        const pending = this.swap?.renderer === renderer ? this.swap : null;
+        if (!pending && this.renderer !== renderer) return;
+        const report = (line: NoticeLine | undefined) => {
+          if (!line) return;
+          if (pending) pending.notices.push(line);
+          else this.reportProblem(...line);
+        };
+        // An author hint, not a map error: the renderer warned on the console; on the map too.
+        const hint = hintLine(error, context);
+        if (hint) {
+          report(hint);
+          return;
+        }
+        // Loud by default: with no `ml-map:error` listener attached, a
+        // dispatched event is invisible and the document fails silently
+        // (ml-tfd.8 contract audit). Hosts still get the event.
+        // A basemap notice was already logged by the renderer, as a warning
+        // in plain words: once is enough (ml-aot.125).
+        if (context?.kind !== "basemap") console.error("[maplibre-yaml] map error:", error);
+        // MapLibre reports a worker that could not start as a runtime
+        // error, but the map can never load without one: treat it as
+        // terminal and put it on the page, not only on the console — a
+        // student otherwise sees an empty box (ml-aot.2).
+        const workerFailure = /worker failed to load/i.test(error.message);
+        const terminal = fatal !== false || workerFailure;
+        if (pending) {
+          // Never fatal to the element and never the card: the old map
+          // is still there. A failure that aborts the new map's load
+          // fails the swap (`kind: "style"`) and keeps the old map.
+          this.dispatchEvent(
+            new CustomEvent("ml-map:error", {
+              bubbles: true,
+              detail: { error, fatal: false },
+            })
+          );
+          if (terminal) this.failSwap(pending, error, context);
+          else report(this.problemLine(error, context));
+          return;
+        }
+        // Only load-aborting failures are terminal for mapReady();
+        // runtime maplibre errors (a 404'd tile) precede a successful
+        // load all the time and must not poison readiness.
+        if (terminal) this.lastError = error;
+        this.dispatchEvent(
+          new CustomEvent("ml-map:error", {
+            bubbles: true,
+            detail: { error, fatal: terminal },
+          })
+        );
+        if (workerFailure) {
+          // Out of MapLibre's event dispatch before tearing its map down;
+          // once only, however many workers in the pool report it. A page
+          // opened from disk is the classroom cause, and the bundler
+          // advice in the message would send a student the wrong way
+          // (ml-aot.13).
+          queueMicrotask(() => {
+            if (this.renderer !== renderer) return;
+            if (isFilePage(this.ownerDocument)) {
+              this.showContentCard(filePageWorkerCard(this.strings));
+            } else {
+              this.showErrorCard([{ path: "", message: error.message }], {
+                title: this.strings("maplibre-yaml.ErrorCard.MapError"),
+              });
+            }
+          });
+          return;
+        }
+        if (context?.kind === "style") {
+          this.queueStyleFailure(renderer, error, context.url, isV2);
+          return;
+        }
+        // Part of the document failed but the map keeps working: say so
+        // on the map, not only on the console (ml-aot.15).
+        if (!terminal) report(this.problemLine(error, context));
+      },
+      },
+      sources
+    );
+
+    // Set up event forwarding
+    this.setupEventForwarding(renderer, swapping);
+
+    // Experimental effects (`effect:` layers) attach once the map loads.
+    this.setupEffects(model, renderer);
+
+    return { renderer, model };
+  }
+
+  /**
+   * The line for a part of the document that failed while the map keeps
+   * working (ml-aot.15): a layer that didn't draw, a classified layer whose
+   * classes can't be computed, the basemap's own file, a named source.
+   */
+  private problemLine(error: Error, context: MapErrorContext | undefined): NoticeLine | undefined {
+    if (context?.kind === "layer" && context.layerId) {
+      const about = `layer:${context.layerId}`;
+      // A document layer whose id the page already used (KTD1): an author hint, not a draw failure.
+      return context.reason === "host-layer-collision"
+        ? [describeHostLayerCollision(context.layerId), { kind: "hint", about }]
+        : [describeLayerProblem(context.layerId, error.message), { about }];
+    }
+    // The message is the whole notice (renderer/classify-runtime; a pmtiles: file that is not a Protomaps basemap, ml-cnv.7).
+    if (context?.kind === "classify" || context?.kind === "basemap") return [error.message, {}];
+    if (context?.kind === "source" && context.sourceId) {
+      return [
+        describeSourceProblem(context.sourceId, error.message, error, {
+          pageUrl: this.ownerDocument.baseURI,
+          base: this.base,
+          ...(context.basemap ? { basemap: true } : {}),
+        }),
+        { about: `source:${context.sourceId}` },
+      ];
+    }
+    return undefined;
   }
 
   /**
@@ -1372,16 +1895,18 @@ export class MLMap extends BaseElement {
    * @param options.kind - `"failure"` (default: something didn't load) always
    *   shows; `"hint"` (a did-you-mean, a misplaced key) shows only while the
    *   author is developing, per {@link showAuthorHints} (ml-aot.57).
+   * @param options.about - what the line describes (see `noticeEntries`),
+   *   so a successful retry or replacement withdraws it.
    */
-  private reportProblem(
-    message: string,
-    options: { log?: boolean; kind?: NoticeKind } = {}
-  ): void {
+  private reportProblem(message: string, options: NoticeOptions = {}): void {
     if (options.log) console.error(`[maplibre-yaml] ${consoleText(message)}`);
     const kind = options.kind ?? "failure";
-    if (!this.noticeEntries.some((e) => e.message === message)) {
-      this.noticeEntries.push({ message, kind });
-    }
+    const entry: NoticeEntry = { message, kind, ...(options.about ? { about: options.about } : {}) };
+    // Reported again (an update's layer failing as before): a fresh entry,
+    // newer than the lines the update settles (`settleNotices`).
+    const at = this.noticeEntries.findIndex((e) => e.message === message);
+    if (at >= 0) this.noticeEntries[at] = entry;
+    else this.noticeEntries.push(entry);
     this.showNoticeLine(message, kind);
   }
 
@@ -1506,21 +2031,29 @@ export class MLMap extends BaseElement {
 
   /**
    * Forward MapRenderer events to custom element events
+   *
+   * @param swapping - The renderer is a fallback rebuild's next map (KTD8):
+   *   no loading indicator over the old map; its `load` commits the swap
+   *   before `ml-map:load` fires, so listeners see the new map.
    */
-  private setupEventForwarding(): void {
-    if (!this.renderer) return;
-
-    // The basemap's first full draw ends the loading state (ml-aot.121).
-    this.loading.start();
-    const map = (this.renderer as { getMap?: () => unknown }).getMap?.() as
-      | { once?: (type: string, listener: () => void) => unknown }
-      | undefined;
-    map?.once?.("load", () => this.loading.stop());
+  private setupEventForwarding(renderer: MapRenderer, swapping: boolean): void {
+    if (!swapping) {
+      // The basemap's first full draw ends the loading state (ml-aot.121).
+      this.loading.start();
+      const map = (renderer as { getMap?: () => unknown }).getMap?.() as
+        | { once?: (type: string, listener: () => void) => unknown }
+        | undefined;
+      map?.once?.("load", () => this.loading.stop());
+    }
 
     // Map load event — the renderer emits this after the basemap is ready
     // AND every document layer was added, so it is the document-level
     // readiness signal mapReady()'s fast path keys on.
-    this.renderer.on("load", () => {
+    renderer.on("load", () => {
+      const swap = this.swap?.renderer === renderer ? this.swap : null;
+      if (swap) this.commitSwap(swap);
+      // A map that was replaced or abandoned meanwhile has nothing to announce.
+      if (this.renderer !== renderer) return;
       this.documentLoaded = true;
       this.loading.stop();
       if (this.cssCheckPending) {
@@ -1537,10 +2070,45 @@ export class MLMap extends BaseElement {
           detail: {},
         })
       );
+      if (swap) {
+        // The update that rebuilt: every document layer was (re)added.
+        const summary = emptySummary(true, denormalizeLayers(swap.model).map((layer) => layer.id));
+        this.dispatchEvent(
+          new CustomEvent("ml-map:update-applied", {
+            bubbles: true,
+            detail: { summary },
+          })
+        );
+        swap.resolve({ outcome: "fallback", summary });
+        this.drainQueued();
+      }
+    });
+
+    // An update applied in place (live documents, KTD9): the renderer emits
+    // this only when something changed (or on a reload), so an equal
+    // document fires nothing. The notice is settled by `updateDocument`.
+    renderer.on("update:applied", ({ summary }) => {
+      if (this.renderer !== renderer) return;
+      this.dispatchEvent(
+        new CustomEvent("ml-map:update-applied", {
+          bubbles: true,
+          detail: { summary },
+        })
+      );
+    });
+
+    // The document's `state:` values (live documents, KTD9)
+    renderer.on("state:change", ({ values, changed }) => {
+      this.dispatchEvent(
+        new CustomEvent("ml-map:state-change", {
+          bubbles: true,
+          detail: { values, changed },
+        })
+      );
     });
 
     // Layer added
-    this.renderer.on("layer:added", ({ layerId }) => {
+    renderer.on("layer:added", ({ layerId }) => {
       this.dispatchEvent(
         new CustomEvent("ml-map:layer-added", {
           bubbles: true,
@@ -1550,7 +2118,7 @@ export class MLMap extends BaseElement {
     });
 
     // Layer removed
-    this.renderer.on("layer:removed", ({ layerId }) => {
+    renderer.on("layer:removed", ({ layerId }) => {
       this.dispatchEvent(
         new CustomEvent("ml-map:layer-removed", {
           bubbles: true,
@@ -1560,7 +2128,7 @@ export class MLMap extends BaseElement {
     });
 
     // Layer data loading
-    this.renderer.on("layer:data-loading", ({ layerId }) => {
+    renderer.on("layer:data-loading", ({ layerId }) => {
       this.dispatchEvent(
         new CustomEvent("ml-map:layer-data-loading", {
           bubbles: true,
@@ -1569,8 +2137,10 @@ export class MLMap extends BaseElement {
       );
     });
 
-    // Layer data loaded
-    this.renderer.on("layer:data-loaded", ({ layerId, featureCount }) => {
+    // Layer data loaded — a retried load that succeeded takes its line off
+    // the notice (a `reload()` after a reader failed, KTD11).
+    renderer.on("layer:data-loaded", ({ layerId, featureCount }) => {
+      this.withdrawNotices(`data:${layerId}`);
       this.dispatchEvent(
         new CustomEvent("ml-map:layer-data-loaded", {
           bubbles: true,
@@ -1581,7 +2151,7 @@ export class MLMap extends BaseElement {
 
     // Layer data error — also on the page: the layer is silently empty
     // otherwise, and nothing reached the console either (ml-aot.15).
-    this.renderer.on("layer:data-error", ({ layerId, error }) => {
+    renderer.on("layer:data-error", ({ layerId, error }) => {
       this.reportProblem(
         describeDataProblem(layerId, error, {
           pageUrl: this.ownerDocument.baseURI,
@@ -1589,7 +2159,7 @@ export class MLMap extends BaseElement {
           filePage: isFilePage(this.ownerDocument),
           base: this.base,
         }),
-        { log: true }
+        { log: true, about: `data:${layerId}` }
       );
       this.dispatchEvent(
         new CustomEvent("ml-map:layer-data-error", {
@@ -1600,7 +2170,7 @@ export class MLMap extends BaseElement {
     });
 
     // Layer click
-    this.renderer.on("layer:click", ({ layerId, feature, lngLat }) => {
+    renderer.on("layer:click", ({ layerId, feature, lngLat }) => {
       this.dispatchEvent(
         new CustomEvent("ml-map:layer-click", {
           bubbles: true,
@@ -1610,7 +2180,7 @@ export class MLMap extends BaseElement {
     });
 
     // Layer hover
-    this.renderer.on("layer:hover", ({ layerId, feature, lngLat }) => {
+    renderer.on("layer:hover", ({ layerId, feature, lngLat }) => {
       this.dispatchEvent(
         new CustomEvent("ml-map:layer-hover", {
           bubbles: true,
@@ -1620,7 +2190,7 @@ export class MLMap extends BaseElement {
     });
 
     // Standalone markers (U5): added / clicked / icon fell back to the pin
-    this.renderer.on("markers:added", ({ count }) => {
+    renderer.on("markers:added", ({ count }) => {
       this.dispatchEvent(
         new CustomEvent("ml-map:markers-added", {
           bubbles: true,
@@ -1628,7 +2198,7 @@ export class MLMap extends BaseElement {
         })
       );
     });
-    this.renderer.on("marker:click", ({ index, at }) => {
+    renderer.on("marker:click", ({ index, at }) => {
       this.dispatchEvent(
         new CustomEvent("ml-map:marker-click", {
           bubbles: true,
@@ -1636,7 +2206,7 @@ export class MLMap extends BaseElement {
         })
       );
     });
-    this.renderer.on("marker:icon-error", ({ index, icon }) => {
+    renderer.on("marker:icon-error", ({ index, icon }) => {
       this.reportProblem(describeMarkerIconProblem(index, icon));
       this.dispatchEvent(
         new CustomEvent("ml-map:marker-icon-error", {
@@ -1647,7 +2217,7 @@ export class MLMap extends BaseElement {
     });
 
     // fitTo (U14): the initial camera framed its source's data
-    this.renderer.on("camera:fit", ({ source, bounds }) => {
+    renderer.on("camera:fit", ({ source, bounds }) => {
       this.dispatchEvent(
         new CustomEvent("ml-map:camera-fit", {
           bubbles: true,
@@ -1657,7 +2227,7 @@ export class MLMap extends BaseElement {
     });
 
     // Declared images (U6): a failed entry — the document keeps rendering
-    this.renderer.on("image:error", ({ name, url }) => {
+    renderer.on("image:error", ({ name, url }) => {
       this.reportProblem(describeImageProblem(name, url));
       this.dispatchEvent(
         new CustomEvent("ml-map:image-error", {
@@ -1669,7 +2239,7 @@ export class MLMap extends BaseElement {
 
     // classify: (0.9) — the classes as drawn, once the layers settle and
     // whenever fetched data (re)computes them (a story's legend listens).
-    this.renderer.on("layer:classified", ({ layerId, classify }) => {
+    renderer.on("layer:classified", ({ layerId, classify }) => {
       this.dispatchEvent(
         new CustomEvent("ml-map:layer-classified", {
           bubbles: true,
@@ -1679,7 +2249,7 @@ export class MLMap extends BaseElement {
     });
 
     // Params panel (U8): control writes, observable like every other action
-    this.renderer.on("parameter:change", ({ key, value }) => {
+    renderer.on("parameter:change", ({ key, value }) => {
       this.dispatchEvent(
         new CustomEvent("ml-map:parameter-change", {
           bubbles: true,
@@ -1687,7 +2257,7 @@ export class MLMap extends BaseElement {
         })
       );
     });
-    this.renderer.on("layer:visibility", ({ layerId, visible }) => {
+    renderer.on("layer:visibility", ({ layerId, visible }) => {
       this.dispatchEvent(
         new CustomEvent("ml-map:layer-visibility", {
           bubbles: true,
@@ -1710,15 +2280,16 @@ export class MLMap extends BaseElement {
   }
 
   /**
-   * The direct children carrying a v1 slot name, split into corner mounts
-   * and the legend override. Parked slot children are direct children again,
-   * so every render (including `reload()`) re-collects them — and picks up
-   * slot children added since the last render.
+   * The children carrying a v1 slot name, split into corner mounts and the
+   * legend override: direct children (parked, or added since the last
+   * render) and the ones mounted in the running map's chrome, which a
+   * fallback rebuild's next renderer takes over when it loads (KTD8).
    */
   private collectSlots(): { chrome: ChromeMount[]; legendElement?: HTMLElement } {
     const chrome: ChromeMount[] = [];
     let legendElement: HTMLElement | undefined;
-    for (const child of Array.from(this.children)) {
+    const mounted = this.querySelectorAll<HTMLElement>(`.${MAP_CONTAINER_CLASS} [slot]`);
+    for (const child of [...Array.from(this.children), ...Array.from(mounted)]) {
       if (!(child instanceof HTMLElement)) continue;
       const name = child.getAttribute("slot");
       if (name === null) continue;
@@ -1771,6 +2342,7 @@ export class MLMap extends BaseElement {
     this.notice = null;
     this.noticeEntries = [];
     this.pendingStyleErrors = null;
+    this.rollback = null;
     this.removeHeightHint();
     this.parkSlots();
     if (this.renderer) {
@@ -1839,6 +2411,7 @@ export class MLMap extends BaseElement {
     // Targeted replacement (KTD9): the error card takes the map container's
     // place; author children (inline YAML, parked slot children) survive so
     // a fixed document can reload() into the same element.
+    this.abandonSwap();
     this.teardownRenderer();
     this.removeErrorCards();
     this.mapContainer?.remove();
@@ -1859,7 +2432,7 @@ export class MLMap extends BaseElement {
    * import), the effects attach then; without a host at all the layers
    * stay static and say so once.
    */
-  private setupEffects(model: MapModel): void {
+  private setupEffects(model: MapModel, renderer: MapRenderer): void {
     const refs: EffectLayerRef[] = [];
     for (const layer of model.style.layers) {
       const effect = layer.runtime["effect"];
@@ -1868,9 +2441,8 @@ export class MLMap extends BaseElement {
         refs.push({ layerId: id, effect: effect as EffectBlock });
       }
     }
-    if (refs.length === 0 || !this.renderer) return;
+    if (refs.length === 0) return;
 
-    const renderer = this.renderer;
     const attach = () => {
       if (this.renderer !== renderer || this.effectsAttachment) return;
       const map = renderer.getMap();
@@ -1886,7 +2458,7 @@ export class MLMap extends BaseElement {
       }
     };
 
-    renderer.on("load", () => {
+    const whenLoaded = () => {
       if (getEffectsHost()) {
         attach();
         return;
@@ -1901,7 +2473,16 @@ export class MLMap extends BaseElement {
         this.effectsWait = null;
         attach();
       });
-    });
+    };
+    // Once the document loads — or now, when it already has (an update's re-attach).
+    if (this.documentLoaded) whenLoaded();
+    else renderer.on("load", whenLoaded);
+  }
+
+  /** Detach the effects and attach them again from the last document (an update moved or rebuilt an effect layer). */
+  private reattachEffects(): void {
+    this.teardownEffects();
+    if (this.effectsModel && this.renderer) this.setupEffects(this.effectsModel, this.renderer);
   }
 
   /** Detach effects and drop any pending host subscription. */
@@ -1925,6 +2506,7 @@ export class MLMap extends BaseElement {
   private destroy(): void {
     this.loading.stop();
     this.cancelEmptyConfigCheck();
+    this.abandonSwap();
     this.teardownRenderer();
     this.appliedConfigKey = null;
     this._config = null;
@@ -2041,12 +2623,20 @@ export class MLMap extends BaseElement {
           reject(new Error(`[ml-map] failed to load: ${JSON.stringify(detail ?? {})}`));
         }
       };
+      const onRejected = (event: Event) => {
+        // A basemap change whose new map never loaded (KTD8): the map that
+        // was loaded before it is still the map, and still loaded.
+        if ((event as CustomEvent<{ kind: RejectionKind }>).detail?.kind !== "style" || !this.documentLoaded) return;
+        onLoad();
+      };
       const cleanup = () => {
         this.removeEventListener("ml-map:load", onLoad);
         this.removeEventListener("ml-map:error", onError);
+        this.removeEventListener("ml-map:update-rejected", onRejected);
       };
       this.addEventListener("ml-map:load", onLoad);
       this.addEventListener("ml-map:error", onError);
+      this.addEventListener("ml-map:update-rejected", onRejected);
     });
   }
 
@@ -2121,19 +2711,90 @@ export class MLMap extends BaseElement {
   }
 
   /**
+   * Apply a new document to the running map (live documents, 0.10): the
+   * method form of assigning `config`.
+   *
+   * @remarks
+   * Takes a `MapBlock` or its JSON string, validates it like every other
+   * path, and resolves when the outcome is final: `applied` with the summary
+   * of what changed (`ml-map:update-applied` fired), `rejected` with the
+   * diagnostics (`ml-map:update-rejected` fired, map untouched), `fallback`
+   * when a basemap change rebuilt the map or there was no running map yet,
+   * or `superseded` when a later document replaced this one before it
+   * applied. A document equal to the applied one resolves `applied` with
+   * nothing in the summary.
+   *
+   * @example
+   * ```javascript
+   * const { outcome, summary } = await el.update({ ...el.getDocument(), layers });
+   * ```
+   */
+  update(doc: MapBlock | string): Promise<UpdateResult> {
+    this.lastUpdate = null;
+    this.config = doc;
+    const started = this.lastUpdate as Promise<UpdateResult> | null;
+    if (started) return started;
+    // Before the element connects, the document renders when it does: the
+    // outcome is that first render's (`fallback`, or `rejected` on the error
+    // card). Connected, nothing started means nothing to do (an equal document).
+    return this.initialized ? Promise.resolve({ outcome: "applied", summary: emptySummary() }) : this.whenRendered();
+  }
+
+  /**
+   * The document the running map shows: the parsed `MapBlock`, the same
+   * shape `config` returns and {@link update} takes (KTD15). `null` with no
+   * running map. The renderer's `getDocument()` returns its normalized
+   * model instead; neither is the other's input.
+   */
+  getDocument(): MapBlock | null {
+    return this.renderer ? this._config : null;
+  }
+
+  /**
+   * Write `state:` values (live documents, R12): each goes through the
+   * map's global state, the params panel follows, and one
+   * `ml-map:state-change` fires. Declared keys only: an undeclared key
+   * refuses the whole call. During a basemap rebuild the values land on the
+   * new map once it loads.
+   *
+   * @throws With no running map, for an undeclared key, or on a maplibre-gl
+   *   without `setGlobalStateProperty` (below 5.6).
+   */
+  setState(values: Record<string, unknown>): void {
+    const target = this.swap?.renderer ?? this.renderer;
+    if (!target) throw new Error("[ml-map] setState: no map is running yet");
+    target.setState(values);
+  }
+
+  /** The document's current `state:` values: its defaults, the panel's seeds and every write since. `{}` with no running map. */
+  getState(): Record<string, unknown> {
+    const values = this.renderer?.getState() ?? {};
+    // During a swap `setState` writes to the next map: read back as written.
+    return this.swap ? { ...values, ...this.pendingStateWrites(this.swap) } : values;
+  }
+
+  /**
    * Reload configuration from the current source
+   *
+   * @remarks
+   * Re-fetches `src` (or re-reads the inline script) and applies the result
+   * to the running map as an update (KTD11): sources whose last load failed
+   * are retried even when the document is unchanged. From an error card, a
+   * valid document renders fresh.
    *
    * @returns Promise that resolves when reload is complete
    */
   async reload(): Promise<void> {
+    const running = this.renderer;
+    const hints: DiffHints = running ? { failedSources: running.failedSources(), urlsRebased: false, reload: true } : NO_HINTS;
     const src = this.getAttribute("src");
 
     if (src) {
-      await this.loadFromURL(src);
+      await this.loadFromURL(src, hints);
     } else {
       const script = findDocumentScript(this);
       if (script?.textContent) {
-        this.loadFromScriptTag(script.textContent, isJsonScript(script));
+        this.loadFromScriptTag(script.textContent, isJsonScript(script), hints);
       }
     }
   }

@@ -161,6 +161,20 @@ export class EventHandler {
   }
 
   /**
+   * Bind a layer's current interactions, dropping whatever was bound before.
+   *
+   * @remarks
+   * For a layer replaced or re-targeted by a live document update (U2):
+   * `attachEvents` on an already-attached layer would bind a second set of
+   * listeners and forget the first, so this detaches first. A layer whose
+   * `interactive:` block went away ends up with no listeners at all.
+   */
+  reattachEvents(layer: Layer): void {
+    this.detachEvents(layer.id);
+    this.attachEvents(layer);
+  }
+
+  /**
    * Drop highlight state for a layer whose data was replaced.
    *
    * @remarks

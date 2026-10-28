@@ -147,6 +147,12 @@ and the [TypeScript API reference](https://docs.maplibre-yaml.org/reference/api/
 - **`<ml-map>`** takes its document as `src="map.yaml"`, an inline
   `<script type="text/yaml">`, or a `config` attribute/property. `mapReady()`
   resolves with the MapLibre map.
+- **A changed document updates the map in place.** Assign a new `config`
+  (or call `update(doc)`) and only what differs changes; the map, its camera
+  and your own layers stay. `setState()` / `getState()` read and write the
+  document's `state:` values, and `ml-map:update-applied`,
+  `ml-map:update-rejected` and `ml-map:state-change` report what happened
+  ([`<ml-map>` reference](https://docs.maplibre-yaml.org/reference/elements/)).
 - **Slots** put your own markup in a corner of the map (`top-left`,
   `top-right`, `bottom-left`, `bottom-right`, or `legend` to replace the
   built-in legend).

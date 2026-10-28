@@ -703,4 +703,48 @@ describe("EventHandler", () => {
       expect(mockMap.off).toHaveBeenCalled();
     });
   });
+  describe("reattachEvents (live documents, U2)", () => {
+    const interactive = (extra: Record<string, unknown> = {}) => ({
+      id: "pts",
+      type: "circle" as const,
+      source: { type: "geojson" as const, data: { type: "FeatureCollection" as const, features: [] } },
+      interactive: { hover: { cursor: "pointer" }, click: { popup: [{ p: [{ str: "Test" }] }] } },
+      ...extra,
+    });
+
+    it("detaches the old listeners and binds the layer's current interactions", () => {
+      handler.attachEvents(interactive() as any);
+      mockMap.on.mockClear();
+      mockMap.off.mockClear();
+
+      handler.reattachEvents(interactive() as any);
+
+      expect(mockMap.off.mock.calls.map(([event]: [string]) => event)).toEqual(
+        expect.arrayContaining(["click", "mouseenter", "mouseleave"])
+      );
+      expect(mockMap.on.mock.calls.map(([event]: [string]) => event)).toEqual(
+        expect.arrayContaining(["click", "mouseenter", "mouseleave"])
+      );
+      expect(mockMap.on).toHaveBeenCalledTimes(3);
+    });
+
+    it("a layer that lost its interactive: block ends up with no listeners", () => {
+      handler.attachEvents(interactive() as any);
+      mockMap.on.mockClear();
+
+      handler.reattachEvents(interactive({ interactive: undefined }) as any);
+
+      expect(mockMap.off).toHaveBeenCalled();
+      expect(mockMap.on).not.toHaveBeenCalled();
+      // A second detach finds nothing bound.
+      mockMap.off.mockClear();
+      handler.detachEvents("pts");
+      expect(mockMap.off).not.toHaveBeenCalled();
+    });
+
+    it("is safe on a layer that was never attached", () => {
+      expect(() => handler.reattachEvents(interactive() as any)).not.toThrow();
+      expect(mockMap.on).toHaveBeenCalledTimes(3);
+    });
+  });
 });

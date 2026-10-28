@@ -56,6 +56,14 @@ vi.mock("../../src/renderer/map-renderer", () => ({
           this.destroyed = true;
         }),
         on: vi.fn(),
+        // Live documents (0.10): a changed document reaches the running map.
+        getDocument: () => ({ config: mockRenderer.config, layers: mockRenderer.layers, sources: {}, options: mockRenderer.options }),
+        update: vi.fn(async (next: any) => {
+          mockRenderer.config = next.config;
+          mockRenderer.layers = next.layers;
+          return { outcome: "applied", summary: { added: [], removed: [], moved: [], replaced: [], propertiesSet: [], sourcesReplaced: [], cameraMoved: false, rebuild: false, failures: [] } };
+        }),
+        failedSources: () => new Set<string>(),
       };
 
       // Simulate load callback
@@ -154,7 +162,7 @@ describe("MLMap", () => {
   });
 
   describe("attributeChangedCallback", () => {
-    it("re-renders when config attribute changes", async () => {
+    it("updates the running map in place when the config attribute changes (live documents, 0.10)", async () => {
       const element = document.createElement('ml-map') as MLMap;
       element.setAttribute(
         "config",
@@ -191,7 +199,10 @@ describe("MLMap", () => {
 
       await new Promise((resolve) => setTimeout(resolve, 10));
 
-      expect(firstRenderer?.destroy).toHaveBeenCalled();
+      expect(firstRenderer?.destroy).not.toHaveBeenCalled();
+      expect(element.getRenderer()).toBe(firstRenderer);
+      expect((firstRenderer as any).update).toHaveBeenCalledTimes(1);
+      expect((firstRenderer as any).update.mock.calls[0][0].config.center).toEqual([10, 10]);
     });
   });
 
@@ -833,7 +844,7 @@ layers: []
       warn.mockRestore();
     });
 
-    it("keeps the inline YAML script, so reload() re-renders from it", async () => {
+    it("keeps the inline YAML script, so reload() re-reads it and updates the map in place", async () => {
       const element = build("");
       document.body.appendChild(element);
       await tick();
@@ -843,13 +854,13 @@ layers: []
       await element.reload();
       await tick();
 
-      const second = element.getRenderer();
-      expect(second).toBeTruthy();
-      expect(second).not.toBe(first);
-      expect((first as any).destroyed).toBe(true);
+      // Live documents (0.10): the same map, asked to apply the re-read document.
+      expect(element.getRenderer()).toBe(first);
+      expect((first as any).destroyed).toBe(false);
+      expect((first as any).update).toHaveBeenCalledTimes(1);
     });
 
-    it("a mounted slot child survives reload and is handed to the new renderer", async () => {
+    it("a mounted slot child survives reload: the map is updated in place and keeps it", async () => {
       const element = build('<div slot="top-right" id="tr">tr</div>');
       document.body.appendChild(element);
       await tick();
@@ -860,11 +871,12 @@ layers: []
       await tick();
 
       expect(child.isConnected).toBe(true);
+      expect(child.closest(".ml-map-container")).not.toBeNull();
       const options = (element.getRenderer() as any).options;
       expect(options.chrome[0].element).toBe(child);
     });
 
-    it("slot children survive an error-then-reload cycle", async () => {
+    it("a broken document on a running map keeps the map and its slots; the error card only replaces a map that never rendered", async () => {
       const element = build('<div slot="top-right" id="tr">tr</div>');
       document.body.appendChild(element);
       await tick();
@@ -872,16 +884,29 @@ layers: []
       simulateMount(element, child);
       const script = element.querySelector('script[type="text/yaml"]')!;
 
-      // Break the document: the error card replaces the map, not the host.
+      // Break the document: the running map is kept (live documents, R2).
       script.textContent = "type: map\nid: broken\n";
       await element.reload();
       await tick();
+      expect(element.querySelector(".ml-map-error")).toBeNull();
+      expect(element.querySelector(".ml-map-container")).not.toBeNull();
+      expect(child.closest(".ml-map-container")).not.toBeNull();
+      expect(script.isConnected).toBe(true);
+    });
+
+    it("slot children survive an error-card-then-reload cycle", async () => {
+      const element = build('<div slot="top-right" id="tr">tr</div>');
+      const script = element.querySelector('script[type="text/yaml"]')!;
+      script.textContent = "type: map\nid: broken\n";
+      const child = element.querySelector("#tr")!;
+      document.body.appendChild(element);
+      await tick();
+      // The card replaces the map container, not the host: the slot child stays.
       expect(element.querySelector(".ml-map-error")).not.toBeNull();
       expect(element.querySelector(".ml-map-container")).toBeNull();
       expect(child.parentElement).toBe(element);
-      expect(script.isConnected).toBe(true);
 
-      // Fix it and reload: the card goes, the map and the slot come back.
+      // Fix it and reload: the card goes, the map renders and takes the slot.
       script.textContent = YAML;
       await element.reload();
       await tick();

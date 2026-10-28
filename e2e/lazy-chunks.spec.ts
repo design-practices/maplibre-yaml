@@ -21,7 +21,15 @@
  *
  * The synchronous `pmtiles://` registration that lets a basemap style's first
  * requests wait for the lazily loaded reader is covered by the basemap tests
- * in cloud-native.spec.ts. Requires `pnpm build` (core's dist/).
+ * in cloud-native.spec.ts.
+ *
+ * The live-documents update engine (ml-4ug, 0.10) rides the same seam as
+ * `dist/chunks/update.js`, so the second describe asserts the same contract
+ * for it: a plain page never requests it; the first `el.config = …` change
+ * downloads it exactly once and a second change downloads nothing; a first
+ * update whose chunk fetch fails is refused (`ml-map:update-rejected`, kind
+ * `chunk`) with the map untouched and no error card, and `reload()` asks for
+ * the file again under a `?retry=` URL. Requires `pnpm build` (core's dist/).
  */
 import { test, expect, type Page } from "@playwright/test";
 import { cpSync, existsSync, mkdtempSync, rmSync } from "node:fs";
@@ -266,6 +274,140 @@ layers:
     expect(asked.length).toBe(failedAsks + 1);
     expect(asked.at(-1)).toBe(`?retry=${failedAsks}`);
     await expect(page.locator("#map .ml-map-notice")).toHaveCount(0);
+    expect(errors).toEqual([]);
+  });
+});
+
+/** What the element answered a document with: the next `ml-map:update-*` event, as the page saw it. */
+interface UpdateOutcome {
+  type: "ml-map:update-applied" | "ml-map:update-rejected";
+  detail: { kind?: string; errors?: { kind: string; message: string }[]; summary?: Record<string, unknown> };
+}
+
+/**
+ * Hand the running map a document — a paint-only edit of one layer's
+ * `circle-color` (`{ recolour }`), or a `reload()` — and resolve with the
+ * real DOM event the element dispatched for it, listened for before the
+ * assignment so nothing is missed.
+ */
+function outcomeOf(page: Page, action: { recolour: string } | "reload"): Promise<UpdateOutcome> {
+  return page.evaluate(
+    (action) =>
+      new Promise<UpdateOutcome>((resolve) => {
+        const el = document.getElementById("map") as any;
+        const done = (event: Event) => {
+          el.removeEventListener("ml-map:update-applied", done);
+          el.removeEventListener("ml-map:update-rejected", done);
+          resolve({ type: event.type as UpdateOutcome["type"], detail: (event as CustomEvent).detail });
+        };
+        el.addEventListener("ml-map:update-applied", done);
+        el.addEventListener("ml-map:update-rejected", done);
+        if (action === "reload") {
+          el.reload();
+          return;
+        }
+        const next = JSON.parse(JSON.stringify(el.getDocument()));
+        next.layers.find((layer: { id: string }) => layer.id === "dot").paint["circle-color"] = action.recolour;
+        el.config = next;
+      }),
+    action
+  );
+}
+
+/** The dots' colour as the live map paints it, and as the element's document says. */
+function dotColour(page: Page): Promise<{ painted: unknown; document: unknown }> {
+  return page.evaluate(() => {
+    const el = document.getElementById("map") as any;
+    return {
+      painted: el.getMap().getPaintProperty("dot", "circle-color"),
+      document: el.getDocument().layers.find((layer: { id: string }) => layer.id === "dot").paint["circle-color"],
+    };
+  });
+}
+
+const UPDATE_CHUNK = "/cdn/@maplibre-yaml/core@0.10.0/dist/chunks/update.js";
+
+test.describe("the update engine loads on the first update only (ml-4ug, live documents)", () => {
+  test("a plain page never requests chunks/update.js; the first config change does, once; a second change does not", async ({
+    page,
+  }) => {
+    const errors = await guard(page);
+    const scripts = scriptsOf(page);
+    const chunkRequests = () => scripts.filter((s) => s.includes("/chunks/"));
+    await page.goto("/examples/verification/update-chunk.html", { waitUntil: "domcontentloaded" });
+    await page.evaluate(() => (document.getElementById("map") as any).mapReady());
+    await waitForLayer(page, "map", "dot");
+    // The page as served: the bundle and nothing from chunks/.
+    expect([...new Set(scripts.filter((s) => s.includes("/cdn/")))].sort()).toEqual([
+      "/cdn/@maplibre-yaml/core@0.10.0/dist/register.browser.js",
+      "/cdn/@maplibre-yaml/core@0.10.0/register.js",
+    ]);
+    expect(chunkRequests()).toEqual([]);
+
+    // First change: the engine is downloaded, once, and the edit lands.
+    const first = await outcomeOf(page, { recolour: "#e9c46a" });
+    expect(first.type).toBe("ml-map:update-applied");
+    expect(first.detail.summary?.propertiesSet).toEqual([{ layerId: "dot", property: "circle-color" }]);
+    expect(chunkRequests()).toEqual([UPDATE_CHUNK]);
+    expect(await dotColour(page)).toEqual({ painted: "#e9c46a", document: "#e9c46a" });
+
+    // Second change: nothing more is requested.
+    const second = await outcomeOf(page, { recolour: "#2a9d8f" });
+    expect(second.type).toBe("ml-map:update-applied");
+    expect(chunkRequests()).toEqual([UPDATE_CHUNK]);
+    expect(await dotColour(page)).toEqual({ painted: "#2a9d8f", document: "#2a9d8f" });
+
+    // The page's own log saw the same two events, in order, and no error.
+    const logged = await page.evaluate(() => (window as any).__events.map((e: { type: string }) => e.type));
+    expect(logged.filter((t: string) => t !== "ml-map:state-change")).toEqual([
+      "ml-map:load",
+      "ml-map:update-applied",
+      "ml-map:update-applied",
+    ]);
+    await expect(page.locator("#map .ml-map-error")).toHaveCount(0);
+    await page.screenshot({ path: "e2e/results/lazy_update_chunk.png" });
+    expect(errors).toEqual([]);
+  });
+
+  test("a first update whose chunk fetch fails is refused (kind chunk), the map stays, and reload() fetches the chunk again", async ({
+    page,
+  }) => {
+    const errors = await guard(page);
+    const asked: string[] = [];
+    let offline = true;
+    await page.route("**/chunks/update.js*", (route) => {
+      asked.push(new URL(route.request().url()).search || "(no query)");
+      return offline ? route.abort("internetdisconnected") : route.fallback();
+    });
+    await page.goto("/examples/verification/update-chunk.html", { waitUntil: "domcontentloaded" });
+    await page.evaluate(() => (document.getElementById("map") as any).mapReady());
+    await waitForLayer(page, "map", "dot");
+    expect(asked).toEqual([]);
+
+    // The change is refused: the event says why, the map and its document are untouched, no error card.
+    const refused = await outcomeOf(page, { recolour: "#e9c46a" });
+    expect(refused.type).toBe("ml-map:update-rejected");
+    expect(refused.detail.kind).toBe("chunk");
+    expect(refused.detail.errors?.[0]?.kind).toBe("chunk");
+    expect(refused.detail.errors?.[0]?.message).toMatch(/chunks\/update\.js/);
+    expect(asked).toEqual(["(no query)"]);
+    expect(await dotColour(page)).toEqual({ painted: "#d62828", document: "#d62828" });
+    await expect(page.locator("#map .ml-map-error")).toHaveCount(0);
+    expect(await page.evaluate(() => Boolean((document.getElementById("map") as any).getMap()?.getLayer("route")))).toBe(true);
+
+    // Back online: reload() asks for the file again — under a URL of its own,
+    // since the browser would repeat the failed import without a request.
+    offline = false;
+    const reloaded = await outcomeOf(page, "reload");
+    expect(reloaded.type).toBe("ml-map:update-applied");
+    expect(asked).toEqual(["(no query)", "?retry=1"]);
+
+    // The engine is now loaded: the same edit applies, with no further request.
+    const applied = await outcomeOf(page, { recolour: "#e9c46a" });
+    expect(applied.type).toBe("ml-map:update-applied");
+    expect(asked).toEqual(["(no query)", "?retry=1"]);
+    expect(await dotColour(page)).toEqual({ painted: "#e9c46a", document: "#e9c46a" });
+    await expect(page.locator("#map .ml-map-error")).toHaveCount(0);
     expect(errors).toEqual([]);
   });
 });
