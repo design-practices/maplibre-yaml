@@ -99,6 +99,10 @@ const LOADERS = {
   // that builds the value, its positions and the TOML hints, awaited by
   // `parseDocumentText` for the first TOML document a page reads.
   toml: () => import("../parser/toml/index"),
+  // The converter's printers and loss rules (convert/, 0.10), awaited by
+  // `convertDocument` (`mlym convert`, the playground's language toggle).
+  // No element imports `convertDocument`, so a page never asks for it.
+  convert: () => import("../convert/chunk"),
 } satisfies Record<string, () => Promise<unknown>>;
 
 /** The library module behind each on-demand name. */

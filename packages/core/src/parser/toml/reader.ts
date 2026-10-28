@@ -15,6 +15,7 @@
  *   `categories` order rule reads (R9).
  * - **key origins** (a dotted key, a header and what was written under it),
  *   which the hints read.
+ * - **the comments' ranges**, which `convertDocument` reports as losses.
  *
  * Every table is built by defining own properties, never by assignment, so a
  * `__proto__` key is data like any other (KTD4). Nothing here throws: a
@@ -45,6 +46,8 @@ export type TomlRead =
       positions: TomlPositions;
       /** Tables whose integer-like keys JavaScript would reorder, as written (R9). */
       authoredOrder: AuthoredOrder;
+      /** Each comment's source range, `#` included (the converter reports them). */
+      comments: Array<readonly [number, number]>;
     }
   | { ok: false; error: ParseError };
 
@@ -266,5 +269,6 @@ function build(text: string, program: AST.TOMLProgram): TomlRead {
           return [k, v !== null && typeof v === "object" ? undefined : v];
         });
       });
-  return { ok: true, value, positions, authoredOrder };
+  const comments = program.comments.map((c) => [c.range[0], c.range[1]] as const);
+  return { ok: true, value, positions, authoredOrder, comments };
 }
