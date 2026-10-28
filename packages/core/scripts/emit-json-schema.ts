@@ -297,7 +297,41 @@ export function buildSchemas(): Record<SchemaName, JsonSchema> {
     rewriteRefs(any, "#/$defs/any/anyOf/", "#/$defs/any/oneOf/");
   }
 
+  for (const doc of [map, scrollytelling, root, any]) acceptNormalized(doc);
   return { map, scrollytelling, root, any };
+}
+
+/**
+ * Accept what the parser normalizes before validation (KTD6,
+ * `src/parser/normalize.ts`), so an editor does not flag it:
+ *
+ * - a root `$schema` string, declared on each document shape's `$defs` entry
+ *   (each `oneOf` branch for `any`), because draft-07 ignores keys beside the
+ *   top-level `$ref` (ml-ohh.15);
+ * - nested string tables under a document's `locale:` (flattened to dotted
+ *   keys), any depth. Not under a root document's `pages:` blocks, which the
+ *   parser does not flatten.
+ */
+export function acceptNormalized(doc: JsonSchema): void {
+  for (const def of Object.values<any>(doc.$defs ?? {})) {
+    for (const shape of def.oneOf ?? [def]) {
+      shape.properties = {
+        $schema: { type: "string", description: "The JSON Schema this document follows, for editors. Ignored by maplibre-yaml." },
+        ...shape.properties,
+      };
+    }
+  }
+  const walk = (node: unknown, pointer: string): void => {
+    if (!node || typeof node !== "object" || pointer.includes("/pages/")) return;
+    const locale = (node as any).properties?.locale;
+    if (locale?.type === "object" && locale.additionalProperties?.type === "string") {
+      locale.additionalProperties = { anyOf: [{ type: "string" }, { $ref: `${pointer}/properties/locale` }] };
+    }
+    for (const [key, child] of Object.entries(node)) {
+      walk(child, `${pointer}/${key.replace(/~/g, "~0").replace(/\//g, "~1")}`);
+    }
+  };
+  walk(doc, "#");
 }
 
 /**

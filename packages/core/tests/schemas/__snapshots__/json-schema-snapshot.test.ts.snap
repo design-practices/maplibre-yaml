@@ -13,6 +13,10 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
         {
           "type": "object",
           "properties": {
+            "$schema": {
+              "type": "string",
+              "description": "The JSON Schema this document follows, for editors. Ignored by maplibre-yaml."
+            },
             "type": {
               "type": "string",
               "const": "map",
@@ -377,7 +381,14 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                 "locale": {
                   "type": "object",
                   "additionalProperties": {
-                    "type": "string"
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "$ref": "#/$defs/any/oneOf/0/properties/config/properties/locale"
+                      }
+                    ]
                   },
                   "description": "Localization strings"
                 },
@@ -3702,6 +3713,10 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
         {
           "type": "object",
           "properties": {
+            "$schema": {
+              "type": "string",
+              "description": "The JSON Schema this document follows, for editors. Ignored by maplibre-yaml."
+            },
             "type": {
               "type": "string",
               "const": "scrollytelling",
@@ -4129,6 +4144,10 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
         {
           "type": "object",
           "properties": {
+            "$schema": {
+              "type": "string",
+              "description": "The JSON Schema this document follows, for editors. Ignored by maplibre-yaml."
+            },
             "config": {
               "type": "object",
               "properties": {
@@ -4585,6 +4604,10 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
     "map": {
       "type": "object",
       "properties": {
+        "$schema": {
+          "type": "string",
+          "description": "The JSON Schema this document follows, for editors. Ignored by maplibre-yaml."
+        },
         "type": {
           "type": "string",
           "const": "map",
@@ -4949,7 +4972,14 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
             "locale": {
               "type": "object",
               "additionalProperties": {
-                "type": "string"
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "$ref": "#/$defs/map/properties/config/properties/locale"
+                  }
+                ]
               },
               "description": "Localization strings"
             },
@@ -8287,6 +8317,10 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
     "root": {
       "type": "object",
       "properties": {
+        "$schema": {
+          "type": "string",
+          "description": "The JSON Schema this document follows, for editors. Ignored by maplibre-yaml."
+        },
         "config": {
           "type": "object",
           "properties": {
@@ -12850,6 +12884,10 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
     "scrollytelling": {
       "type": "object",
       "properties": {
+        "$schema": {
+          "type": "string",
+          "description": "The JSON Schema this document follows, for editors. Ignored by maplibre-yaml."
+        },
         "type": {
           "type": "string",
           "const": "scrollytelling",
@@ -13201,7 +13239,14 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
             "locale": {
               "type": "object",
               "additionalProperties": {
-                "type": "string"
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "$ref": "#/$defs/scrollytelling/properties/config/properties/locale"
+                  }
+                ]
               },
               "description": "Localization strings"
             },

@@ -304,6 +304,7 @@ import { applyCogDefaults, checkCogSources } from "./cog-checks";
 import { reservedPrefixWarnings } from "./reserved-prefix";
 import { boundsProblem } from "../utils/bounds";
 import { explainIndentationError, explainQuoteError } from "./yaml-errors";
+import { normalizeDates, normalizeDocument, normalizeOrThrow, withNormalized, type Normalized } from "./normalize";
 
 const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
@@ -480,6 +481,7 @@ export class YAMLParser {
       );
     }
 
+    normalizeOrThrow(parsed);
     // Expand geo-sugar before the schema sees the block, so the expanded
     // `data:` is what validates (mirrors the safeParse seam). A sugar error
     // becomes a thrown Error here — acceptable on the throwing path.
@@ -596,11 +598,15 @@ export class YAMLParser {
    * `doc`/`lineCounter` needed to position schema issues, so a caller that must
    * inspect the value *before* choosing a schema (version detection) can do so
    * on this one materialization rather than parsing twice.
+   *
+   * The value is normalized here ({@link normalizeDocument}: root `$schema`,
+   * nested `locale` tables), the earliest point every text and value entry
+   * sees it; callers fold `normalized` into their result.
    */
   private static materialize(
     yaml: string
   ):
-    | { value: unknown; doc: Document; lineCounter: LineCounter }
+    | { value: unknown; doc: Document; lineCounter: LineCounter; normalized: Normalized }
     | { error: ParseError } {
     const { doc, lineCounter, syntaxError } = this.parseToDocument(yaml);
     if (syntaxError) {
@@ -612,7 +618,8 @@ export class YAMLParser {
       return { error: materialized.error };
     }
 
-    return { value: materialized.value, doc, lineCounter };
+    const normalized = normalizeDocument(materialized.value, { doc, lineCounter });
+    return { value: materialized.value, doc, lineCounter, normalized };
   }
 
   /**
@@ -787,17 +794,20 @@ export class YAMLParser {
     if (expand) {
       const expansion = expand(materialized.value);
       if ("error" in expansion) {
-        return { success: false, errors: [expansion.error], warnings: [] };
+        return withNormalized({ success: false, errors: [expansion.error], warnings: [] }, materialized.normalized);
       }
       remaps = expansion.remaps;
     }
-    return this.validateAgainst(
-      materialized.value,
-      materialized.doc,
-      materialized.lineCounter,
-      schema,
-      resolveRefs,
-      remaps
+    return withNormalized(
+      this.validateAgainst(
+        materialized.value,
+        materialized.doc,
+        materialized.lineCounter,
+        schema,
+        resolveRefs,
+        remaps
+      ),
+      materialized.normalized
     );
   }
 
@@ -879,7 +889,9 @@ export class YAMLParser {
     // disposable value; `validate` receives the *caller's* object, so clone
     // first — a consumer that reuses its input must not find a sugar key
     // silently rewritten under it.
-    const cloned = structuredClone(config);
+    // Dates become text first: structuredClone keeps them as Date objects.
+    const cloned = structuredClone(normalizeDates(config));
+    normalizeOrThrow(cloned);
     const expansion = expandSugarInRoot(cloned);
     if ("error" in expansion) {
       throw new Error(expansion.error.message);
@@ -935,6 +947,7 @@ export class YAMLParser {
       );
     }
 
+    normalizeOrThrow(parsed);
     // Expand geo-sugar (v1 positions) before validation, mirroring the
     // safeParseMapBlock seam. A sugar error throws on this convenience path.
     const expansion = expandSugarInMapBlock(parsed, 1);
@@ -995,7 +1008,14 @@ export class YAMLParser {
     if ("error" in m) {
       return { success: false, errors: [m.error], warnings: [] };
     }
+    return withNormalized(this.validateMapBlock(m, positioned), m.normalized);
+  }
 
+  /** {@link parseMapBlockText} past materialization: version, sugar, validation. */
+  private static validateMapBlock(
+    m: { value: unknown; doc: Document; lineCounter: LineCounter },
+    positioned: boolean
+  ): ParseResult<MapBlock | MapBlockV2> {
     const detected = this.detectMapVersion(m.value);
     if ("error" in detected) {
       return { success: false, errors: [detected.error], warnings: [] };
@@ -1112,7 +1132,7 @@ export class YAMLParser {
   ): ParseResult<MapBlock | MapBlockV2> {
     let asYaml: string;
     try {
-      asYaml = stringifyYAML(value);
+      asYaml = stringifyYAML(normalizeDates(value));
     } catch (error) {
       return {
         success: false,
@@ -1194,6 +1214,7 @@ export class YAMLParser {
       );
     }
 
+    normalizeOrThrow(parsed);
     // Geo-sugar on the story's layer sources (ml-ddg), as parseMapBlock does.
     const expansion = expandSugarInScrollytellingBlock(parsed);
     if ("error" in expansion) {
@@ -1250,9 +1271,9 @@ export class YAMLParser {
     // ml-ddg: `location:`/`region:`/`route:` sugar on a story's sources.
     const expansion = expandSugarInScrollytellingBlock(m.value);
     if ("error" in expansion) {
-      return { success: false, errors: [expansion.error], warnings: [] };
+      return withNormalized({ success: false, errors: [expansion.error], warnings: [] }, m.normalized);
     }
-    return withFormatChecks(
+    return withNormalized(withFormatChecks(
       withDocumentChecks(
         this.validateAgainst(
           m.value,
@@ -1269,7 +1290,7 @@ export class YAMLParser {
       m.value,
       1,
       positioned ? { doc: m.doc, lineCounter: m.lineCounter } : undefined
-    );
+    ), m.normalized);
   }
 
   /**
@@ -1288,7 +1309,7 @@ export class YAMLParser {
   ): ParseResult<ScrollytellingBlock> {
     let asYaml: string;
     try {
-      asYaml = stringifyYAML(value);
+      asYaml = stringifyYAML(normalizeDates(value));
     } catch (error) {
       return {
         success: false,

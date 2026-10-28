@@ -27,6 +27,7 @@ import { MapBlockSchema, MapConfigSchema } from "../schemas/map.schema";
 import { isPmtilesBasemapString } from "../schemas/basemap.schema";
 import { ScrollytellingBlockSchema } from "../schemas/scrollytelling.schema";
 import { DEFAULT_STRINGS, STRINGS_PREFIX } from "../i18n/strings";
+import { localeOrigin } from "./normalize";
 
 /** An error a check found (same shape as the parser's ParseError). */
 export interface DocumentCheckError {
@@ -134,12 +135,14 @@ export function checkLocaleKeys(
   for (const key of Object.keys(locale)) {
     if (!key.startsWith(STRINGS_PREFIX) || known.includes(key)) continue;
     const hint = suggest(key, known);
+    // Positioned at the authored spelling, nested or dotted (normalize.ts).
+    const authored = localeOrigin(locale, key);
     warnings.push({
       path: [...path, key].join("."),
       message:
         `"${key}" is not a maplibre-yaml string, so this translation is never shown.` +
         (hint ? ` Did you mean "${hint}"?` : " The docs list every key (Accessibility & languages)."),
-      ...atKey(positions, path, key),
+      ...atKey(positions, [...path, ...authored.slice(0, -1)], authored[authored.length - 1]!),
       ...(hint ? { suggestion: hint } : {}),
       // The page shows the untranslated text with no reason otherwise: an
       // author hint on the map too (dev-only), not only the console.
