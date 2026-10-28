@@ -28,22 +28,31 @@ import {
 } from "./highlight-paint";
 import { DataFetcher } from "../data/data-fetcher";
 import { loadSourceData } from "../data/source-data";
-import { PollingManager } from "../data/polling-manager";
-import { StreamManager } from "../data/streaming/stream-manager";
-import { DataMerger } from "../data/merge/data-merger";
-import { LoadingManager } from "../ui/loading-manager";
+// Live data (polling, streaming, merging) is the `live` chunk (bundle
+// headroom, U4): types only here, the code through `getDecoder("live")`.
+import type { PollingManager } from "../data/polling-manager";
+import type { StreamManager } from "../data/streaming/stream-manager";
+import type { DataMerger, MergeStrategy } from "../data/merge/data-merger";
+import { foreignChunk, getDecoder, prefetchDecoder, type Decoders } from "../formats/decoders";
 import { sanitizeAttribution } from "../utils/attribution";
-import { mergeKeyOf, type MergeStrategy } from "../data/merge/data-merger";
 import { declaredColumns, formatOfSource, typeReadsFormat } from "../formats/detect";
+// FlatGeobuf and GeoParquet are read by their reader chunks (bundle
+// headroom, U5): the data providers come from `cloudReaders`, types only here.
 import {
-  FlatGeobufLoader,
-  GeoParquetLoader,
+  abandonStarted,
+  cloudReaders,
+  loadedCloudReaders,
   loadModeOf,
+  sizeLimits,
+  startFlatGeobufOpen,
+  startGeoParquetTail,
   toMapLibreTileSpec,
   withoutFormatKeys,
   type FlatGeobufCallbacks,
   type FormatLoader,
+  type ReaderFormat,
 } from "./cloud-sources";
+import type { StartedOpen, StartedTail } from "./cloud-host";
 
 type Layer = z.infer<typeof LayerSchema>;
 type GeoJSONSourceConfig = z.infer<typeof GeoJSONSourceSchema>;
@@ -91,6 +100,33 @@ function pollingShape(config: GeoJSONSourceConfig | undefined): string {
   if (!config) return "";
   const { refreshInterval: _interval, ...refresh } = (config.refresh ?? {}) as Record<string, unknown>;
   return JSON.stringify({ url: config.url, cache: config.cache, refresh, updateStrategy: config.updateStrategy, updateKey: config.updateKey });
+}
+
+/**
+ * Whether a source starts a live pipeline once its first data is in: the
+ * gates `addLayer` and `startSourcePipeline` apply (a `refresh` block, or
+ * the legacy `refreshInterval`), then what `setupDataUpdates` starts (a
+ * `stream`, or an interval with a `url`). Only then is the `live` chunk
+ * fetched ahead; a legacy `updateStrategy` alone, or a `refresh` block with
+ * no interval and no stream, starts nothing.
+ */
+function startsLive(config: GeoJSONSourceConfig | undefined): boolean {
+  if (config?.type !== "geojson") return false;
+  if (!config.refresh && !config.refreshInterval) return false;
+  const format = formatOfSource(config);
+  if (format === "flatgeobuf" || format === "geoparquet") return false;
+  return Boolean(config.stream) || Boolean(intervalOf(config) && config.url);
+}
+
+/** The live-data chunk's module (data/live). */
+type LiveModule = Decoders["live"];
+
+/** The live-data managers one `LayerManager` runs, once the `live` chunk is in. */
+interface LiveData {
+  polling: PollingManager;
+  streams: StreamManager;
+  merger: DataMerger;
+  mergeKeyOf: LiveModule["mergeKeyOf"];
 }
 
 /** Everything a stream connection captured; `undefined` when the source has no stream. */
@@ -272,10 +308,35 @@ export class LayerManager {
   private map: MapLibreMap;
   private callbacks: LayerManagerCallbacks;
   private dataFetcher: DataFetcher;
-  private pollingManager: PollingManager;
-  private streamManager: StreamManager;
-  private dataMerger: DataMerger;
-  private loadingManager: LoadingManager;
+  /**
+   * The live-data managers (polling, streaming, merging), null until a
+   * source starts a pipeline and the `live` chunk is in (bundle headroom,
+   * KTD6). Every stop, pause, resume and destroy below goes through
+   * `this.live?.`: a no-op on a map that never refreshed.
+   */
+  private live: LiveData | null = null;
+  /** `destroy()` ran: a pipeline whose chunk arrives afterwards never starts. */
+  private destroyed = false;
+  /** `pause()` ran and `resume()` has not: a pipeline that starts meanwhile starts paused. */
+  private paused = false;
+  /**
+   * Streams that would have connected while {@link paused} (their `live`
+   * chunk arrived meanwhile), by pipeline key: `resume()` connects them; a
+   * stop or disconnect before then drops them (see {@link dropStream}).
+   */
+  private pausedStreams = new Map<string, { sourceId: string; config: GeoJSONSourceConfig }>();
+  /**
+   * Sources whose pipeline couldn't start because the `live` chunk didn't
+   * download: they keep their first data, and `reload()` retries them
+   * (they are among {@link failedSources}).
+   */
+  private liveUnavailable = new Set<string>();
+  /**
+   * Each `url:` source's first load, settled either way: a live-chunk
+   * failure is reported after it, since the data landing takes that
+   * layer's earlier lines off the notice.
+   */
+  private firstLoads = new Map<string, Promise<void>>();
   private sourceData: Map<string, FeatureCollection>;
   private layerToSource: Map<string, string>;
   /** Layer ids this manager has added (or is adding): a repeat is refused. */
@@ -286,6 +347,12 @@ export class LayerManager {
   private sourceRefCounts: Map<string, number>;
   /** Named sources with a refresh/stream pipeline currently running. */
   private activeSourcePipelines: Set<string>;
+  /**
+   * How many times each named source's last layer went (`releaseNow`
+   * reaching zero). A chunk wait spanning one starts nothing that release
+   * would have stopped: the release found nothing running to stop.
+   */
+  private sourceReleases = new Map<string, number>();
   /**
    * Named-source releases held back until `settleSources()` (live documents,
    * KTD4): set between `beginSourceSettlement()` and `settleSources()`, so
@@ -348,10 +415,6 @@ export class LayerManager {
     this.isProtocolRegistered = data.isProtocolRegistered ?? (() => false);
     this.columnsFor = data.columnsFor ?? (() => undefined);
     this.namedSourcesNeedingIds = data.namedSourcesNeedingIds ?? new Set();
-    this.pollingManager = new PollingManager();
-    this.streamManager = new StreamManager();
-    this.dataMerger = new DataMerger();
-    this.loadingManager = new LoadingManager({ showUI: false });
     this.sourceData = new Map();
     this.layerToSource = new Map();
     this.namedSources = new Map();
@@ -385,6 +448,8 @@ export class LayerManager {
       if (!spec || typeof spec !== "object") continue;
       this.namedSources.set(id, spec as Record<string, unknown>);
       this.sourceSpecs.set(id, spec as Record<string, unknown>);
+      // Its refresh starts once the first data is in: the chunk comes alongside.
+      if (startsLive(spec as unknown as GeoJSONSourceConfig)) prefetchDecoder("live");
 
       if (this.map.getSource(id)) continue;
 
@@ -529,9 +594,10 @@ export class LayerManager {
     }
 
     this.sourceRefCounts.delete(sourceId);
+    this.sourceReleases.set(sourceId, (this.sourceReleases.get(sourceId) ?? 0) + 1);
     if (this.activeSourcePipelines.delete(sourceId)) {
-      this.pollingManager.stop(sourceId);
-      this.streamManager.disconnect(sourceId);
+      this.live?.polling.stop(sourceId);
+      this.dropStream(sourceId);
     }
     // Shared: the data stayed as long as a sibling drew from it. Nothing
     // draws it now: a file read by view stops reading on every move, and
@@ -565,6 +631,16 @@ export class LayerManager {
     return zeroed;
   }
 
+  /** A mark to compare with {@link releasedSince} after a wait. */
+  private releaseMark(sourceId: string): number {
+    return this.sourceReleases.get(sourceId) ?? 0;
+  }
+
+  /** Whether a named source's last layer went since `mark` (see `sourceReleases`). */
+  private releasedSince(sourceId: string, mark: number): boolean {
+    return this.releaseMark(sourceId) !== mark;
+  }
+
   /** How many document layers draw a named source (pending releases not yet subtracted). */
   sourceRefCount(sourceId: string): number {
     return this.sourceRefCounts.get(sourceId) ?? 0;
@@ -596,8 +672,8 @@ export class LayerManager {
       );
     }
     if (this.activeSourcePipelines.delete(sourceId)) {
-      this.pollingManager.stop(sourceId);
-      this.streamManager.disconnect(sourceId);
+      this.live?.polling.stop(sourceId);
+      this.dropStream(sourceId);
     }
     this.forgetSource(sourceId);
     this.namedSources.delete(sourceId);
@@ -618,11 +694,17 @@ export class LayerManager {
     this.keylessWarned.delete(sourceId);
     this.pendingData.delete(sourceId);
     this.sourceSpecs.delete(sourceId);
+    this.liveUnavailable.delete(sourceId);
+    this.firstLoads.delete(sourceId);
   }
 
-  /** The sources whose last load failed (see the field). A copy: safe to hold across an update. */
+  /**
+   * The sources whose last load failed (see the field), and those whose
+   * live updates couldn't start for want of the `live` chunk. A copy: safe
+   * to hold across an update.
+   */
   failedSources(): ReadonlySet<string> {
-    return new Set(this.failed);
+    return new Set([...this.failed, ...this.liveUnavailable]);
   }
 
   /** The next generation for a source's loads (see `sourceGenerations`). */
@@ -651,11 +733,22 @@ export class LayerManager {
     return { key: sourceId, layerId: sourceId };
   }
 
+  /** Disconnect the stream under `key`, or forget one waiting for `resume()`. */
+  private dropStream(key: string): void {
+    this.pausedStreams.delete(key);
+    this.live?.streams.disconnect(key);
+  }
+
+  /** Whether a stream runs under `key`, or waits for `resume()` to connect. */
+  private hasStream(key: string): boolean {
+    return this.pausedStreams.has(key) || Boolean(this.live?.streams.getState(key));
+  }
+
   /** Stop a source's poll and stream, whatever key they run under. */
   private stopPipeline(sourceId: string): void {
     const { key } = this.pipelineOwner(sourceId);
-    this.pollingManager.stop(key);
-    this.streamManager.disconnect(key);
+    this.live?.polling.stop(key);
+    this.dropStream(key);
     this.activeSourcePipelines.delete(sourceId);
   }
 
@@ -761,6 +854,8 @@ export class LayerManager {
     if (next["type"] !== "geojson") return;
     const before = prev as GeoJSONSourceConfig | undefined;
     const after = next as unknown as GeoJSONSourceConfig;
+    // A pipeline this edit starts: its chunk comes alongside, as for a new source.
+    if (startsLive(after)) prefetchDecoder("live");
     const owner = this.pipelineOwner(sourceId);
 
     if (this.isFormatSource(after)) {
@@ -781,26 +876,32 @@ export class LayerManager {
     }
     if (options.reload && after.url) void this.fetchInto(sourceId, owner.layerId, after);
 
+    // A source whose live updates never started (the `live` chunk didn't
+    // download): this retry starts what its document asks for.
+    this.liveUnavailable.delete(sourceId);
     const interval = intervalOf(after);
     if (interval && after.url) {
-      const running = this.pollingManager.has(owner.key);
+      const running = this.live?.polling.has(owner.key) ?? false;
       if (running && intervalOf(before) && pollingShape(before) === pollingShape(after)) {
-        if (intervalOf(before) !== interval) this.pollingManager.setInterval(owner.key, interval);
+        if (intervalOf(before) !== interval) this.live!.polling.setInterval(owner.key, interval);
       } else {
-        this.pollingManager.stop(owner.key);
+        this.live?.polling.stop(owner.key);
         await this.startPolling(owner.key, sourceId, after, strategyChanged && !options.reload);
       }
     } else {
-      this.pollingManager.stop(owner.key);
+      this.live?.polling.stop(owner.key);
     }
 
-    if (streamShape(before) !== streamShape(after)) {
-      this.streamManager.disconnect(owner.key);
+    // A changed stream reconnects; one the document asks for that isn't
+    // running connects — its chunk failed (this is the retry), or this edit
+    // landed while the chunk downloaded and the first start gave way to it.
+    if (streamShape(before) !== streamShape(after) || (after.stream && !this.hasStream(owner.key))) {
+      this.dropStream(owner.key);
       if (after.stream) await this.startStream(owner.key, sourceId, after);
     }
 
     if (this.namedSources.has(sourceId)) {
-      if (this.pollingManager.has(owner.key) || this.streamManager.getState(owner.key)) this.activeSourcePipelines.add(sourceId);
+      if (this.live?.polling.has(owner.key) || this.hasStream(owner.key)) this.activeSourcePipelines.add(sourceId);
       else this.activeSourcePipelines.delete(sourceId);
     }
   }
@@ -1160,6 +1261,8 @@ export class LayerManager {
 
     if (source.type === "geojson") {
       const geojsonSource = source as unknown as GeoJSONSourceConfig;
+      // Its refresh starts once the first data is in: the chunk comes alongside.
+      if (startsLive(geojsonSource)) prefetchDecoder("live");
 
       if (geojsonSource.url) {
         await this.addGeoJSONSourceFromURL(
@@ -1341,6 +1444,7 @@ export class LayerManager {
     const generation = this.nextGeneration(sourceId);
 
     const load = this.loadGeoJSONSource(sourceId, layerId, config, initialData, generation);
+    this.firstLoads.set(sourceId, load.then(() => undefined, () => undefined));
     if (awaitData) {
       await load;
       return;
@@ -1419,21 +1523,88 @@ export class LayerManager {
     config: GeoJSONSourceConfig,
     suspended = false
   ): Promise<void> {
-    this.formatLoaders.get(sourceId)?.destroy();
-    this.callbacks.onDataLoading?.(layerId);
-    const loader = new FlatGeobufLoader(
-      this.map,
-      config.url!,
-      loadModeOf(config as unknown as Record<string, unknown>),
-      this.readerCallbacks(sourceId, layerId)
-    );
-    this.formatLoaders.set(sourceId, loader);
-    if (suspended) loader.suspend();
+    const load = loadModeOf(config as unknown as Record<string, unknown>);
     // A whole-file load the host already started (the `fitTo` prefetch,
     // ml-aot.75) is reused, not repeated; viewport reads ignore it.
     const pending = this.pendingData.get(sourceId);
     this.pendingData.delete(sourceId);
-    await loader.start(pending);
+    const mark = this.releaseMark(sourceId);
+    const ready = this.readersFor("flatgeobuf", sourceId, layerId, () =>
+      !pending && load.mode === "all" ? startFlatGeobufOpen(config.url!) : undefined
+    );
+    const got = "then" in ready ? await ready : ready;
+    if (!got) return;
+    const { readers, opening } = got;
+    const loader = new readers.FlatGeobufLoader(this.map, config.url!, load, this.readerCallbacks(sourceId, layerId));
+    this.formatLoaders.set(sourceId, loader);
+    if (suspended || this.paused || this.undrawnSince(sourceId, mark)) loader.suspend();
+    await loader.start(pending, opening);
+  }
+
+  /**
+   * Whether a named source's last layer went while its reader chunk
+   * downloaded and nothing draws it yet again: the release suspended no
+   * reader (there was none yet), so the new one starts suspended, as
+   * `releaseNow` would have left it; a layer drawing it again resumes it.
+   */
+  private undrawnSince(sourceId: string, mark: number): boolean {
+    return this.releasedSince(sourceId, mark) && this.sourceRefCount(sourceId) === 0;
+  }
+
+  /**
+   * The reader chunk for a FlatGeobuf or GeoParquet source: the old reader
+   * destroyed and the source's data loading reported first, as before the
+   * providers moved into their chunks (bundle headroom, U5). A chunk already
+   * loaded is returned at once — the reader starts in the same turn, as it
+   * did — and one still downloading through {@link awaitReaders}.
+   *
+   * @param open - Starts the file's first request, when the read begins
+   *   with one, for the wait (see {@link awaitReaders}).
+   */
+  private readersFor<F extends ReaderFormat, Opening extends StartedOpen | StartedTail>(
+    format: F,
+    sourceId: string,
+    layerId: string,
+    open: () => Opening | undefined
+  ):
+    | { readers: Decoders[F]; opening: Opening | undefined }
+    | Promise<{ readers: Decoders[F]; opening: Opening | undefined } | undefined> {
+    this.formatLoaders.get(sourceId)?.destroy();
+    this.formatLoaders.delete(sourceId);
+    this.callbacks.onDataLoading?.(layerId);
+    const loaded = loadedCloudReaders(format);
+    return loaded ? { readers: loaded, opening: undefined } : this.awaitReaders(format, sourceId, layerId, open);
+  }
+
+  /**
+   * Wait for a reader chunk still downloading. Meanwhile the file's first
+   * request (`open`) is already on its way, so the two downloads overlap.
+   *
+   * @returns `undefined` — nothing to start — when this manager was
+   *   destroyed, or the source removed, replaced or re-read, while the chunk
+   *   downloaded (the first request is then cancelled), or when the download
+   *   failed: the source's data error is then the seam's plain notice (KTD8),
+   *   and `reload()` retries it through the seam's `?retry=` path.
+   */
+  private async awaitReaders<F extends ReaderFormat, Opening extends StartedOpen | StartedTail>(
+    format: F,
+    sourceId: string,
+    layerId: string,
+    open: () => Opening | undefined
+  ): Promise<{ readers: Decoders[F]; opening: Opening | undefined } | undefined> {
+    // This load's callbacks (and generation): a load replaced meanwhile reports nothing.
+    const callbacks = this.readerCallbacks(sourceId, layerId);
+    const generation = this.sourceGenerations.get(sourceId) ?? 0;
+    const moved = () => this.destroyed || !this.isCurrent(sourceId, generation);
+    const opening = open();
+    try {
+      const readers = await cloudReaders(format);
+      if (!moved()) return { readers, opening };
+    } catch (error) {
+      if (!moved()) callbacks.onError(error instanceof Error ? error : new Error(String(error)));
+    }
+    if (opening) abandonStarted(opening);
+    return undefined;
   }
 
   /**
@@ -1448,21 +1619,22 @@ export class LayerManager {
     config: GeoJSONSourceConfig,
     suspended = false
   ): Promise<void> {
-    this.formatLoaders.get(sourceId)?.destroy();
-    this.callbacks.onDataLoading?.(layerId);
-    const columns = declaredColumns(config) ?? this.columnsFor(sourceId) ?? "all";
-    const loader = new GeoParquetLoader(
-      this.map,
-      config.url!,
-      loadModeOf(config as unknown as Record<string, unknown>),
-      columns,
-      this.readerCallbacks(sourceId, layerId)
-    );
-    this.formatLoaders.set(sourceId, loader);
-    if (suspended) loader.suspend();
+    const load = loadModeOf(config as unknown as Record<string, unknown>);
     const pending = this.pendingData.get(sourceId);
     this.pendingData.delete(sourceId);
-    await loader.start(pending);
+    const mark = this.releaseMark(sourceId);
+    // Both reads (whole, by view) begin with the footer.
+    const ready = this.readersFor("geoparquet", sourceId, layerId, () =>
+      pending && load.mode === "all" ? undefined : startGeoParquetTail(config.url!, sizeLimits(undefined, load).max)
+    );
+    const got = "then" in ready ? await ready : ready;
+    if (!got) return;
+    const { readers, opening } = got;
+    const columns = declaredColumns(config) ?? this.columnsFor(sourceId) ?? "all";
+    const loader = new readers.GeoParquetLoader(this.map, config.url!, load, columns, this.readerCallbacks(sourceId, layerId));
+    this.formatLoaders.set(sourceId, loader);
+    if (suspended || this.paused || this.undrawnSince(sourceId, mark)) loader.suspend();
+    await loader.start(pending, opening);
   }
 
   /**
@@ -1560,15 +1732,85 @@ export class LayerManager {
       );
       return;
     }
+    if (!config.stream && !(intervalOf(config) && config.url)) return;
+    // The first data is on the map: what keeps it current is the `live`
+    // chunk (prefetched when the source was added). Awaited once here, so a
+    // failed download is reported once for both the stream and the poll.
+    if (!(this.live ?? (await this.loadLive(layerId, sourceId)))) return;
     if (config.stream) await this.startStream(layerId, sourceId, config);
     if (intervalOf(config) && config.url) await this.startPolling(layerId, sourceId, config);
   }
 
+  /**
+   * The live-data managers, downloading the `live` chunk on first use
+   * (bundle headroom, KTD6). `undefined` — nothing to start — when this
+   * manager was destroyed, or the source removed, replaced or (a named
+   * source) left undrawn, while the chunk downloaded, or when the download
+   * failed (KTD8): the source keeps its
+   * first data, one notice says its updates stopped, and `reload()` retries
+   * it through the seam's `?retry=` path.
+   *
+   * @param layerId - The pipeline's key, which its data events name.
+   */
+  private async loadLive(layerId: string, sourceId: string): Promise<LiveData | undefined> {
+    // What the source is now: a re-target, replacement or removal during the
+    // wait records another spec (or none), and that call starts its own.
+    const spec = this.sourceSpecs.get(sourceId);
+    // A named source whose last layer went meanwhile: that release found
+    // nothing running to stop, and a layer drawing it again starts its own.
+    const mark = this.releaseMark(sourceId);
+    const moved = () => this.destroyed || this.sourceSpecs.get(sourceId) !== spec || this.releasedSince(sourceId, mark);
+    let library: LiveModule;
+    try {
+      library = await getDecoder("live");
+      // A chunk from another version (chunk names carry no version): the
+      // same notice as one that didn't download.
+      if (typeof library.PollingManager !== "function" || typeof library.StreamManager !== "function" || typeof library.DataMerger !== "function") {
+        throw foreignChunk("live");
+      }
+    } catch (error) {
+      if (moved()) return undefined;
+      // A named source's first load may still be on its way: report after
+      // it, or its data landing would take the line off the notice.
+      await this.firstLoads.get(sourceId);
+      if (moved()) return undefined;
+      // Nothing runs for it: not a refreshing named source.
+      this.activeSourcePipelines.delete(sourceId);
+      // Once per attempt: a source that streams and polls is one notice.
+      if (this.liveUnavailable.has(sourceId)) return undefined;
+      this.liveUnavailable.add(sourceId);
+      // A FormatError (code "chunk") worded for live updates: the first
+      // data stays, so the notice says updates stopped, not "no data". One
+      // line, about the first layer drawing the source: the layer the
+      // updates' own `data-loaded` names once a retry starts them, which
+      // takes the line off the notice.
+      const [target = layerId] = this.layersForPipeline(sourceId, layerId);
+      this.callbacks.onDataError?.(target, error instanceof Error ? error : new Error(String(error)));
+      return undefined;
+    }
+    if (moved()) return undefined;
+    this.live ??= {
+      polling: new library.PollingManager(),
+      streams: new library.StreamManager(),
+      merger: new library.DataMerger(),
+      mergeKeyOf: library.mergeKeyOf,
+    };
+    return this.live;
+  }
+
   /** Connect a source's `stream:` under `layerId` (the pipeline key; see `pipelineOwner`). */
   private async startStream(layerId: string, sourceId: string, config: GeoJSONSourceConfig): Promise<void> {
+    const live = this.live ?? (await this.loadLive(layerId, sourceId));
+    if (!live) return;
+    // `pause()` ran while the chunk downloaded: no new connection while the
+    // next map loads its own; `resume()` connects it.
+    if (this.paused) {
+      this.pausedStreams.set(layerId, { sourceId, config });
+      return;
+    }
     const streamConfig = config.stream!;
     const merge = mergeOptionsOf(config);
-    await this.streamManager.connect(layerId, {
+    await live.streams.connect(layerId, {
       type: streamConfig.type,
       url: streamConfig.url || config.url!,
       onData: (data) => {
@@ -1593,14 +1835,17 @@ export class LayerManager {
    * `pipelineOwner`). `immediate` fetches at once as well as on the schedule.
    */
   private async startPolling(layerId: string, sourceId: string, config: GeoJSONSourceConfig, immediate = false): Promise<void> {
+    const live = this.live ?? (await this.loadLive(layerId, sourceId));
+    if (!live) return;
     const url = config.url!;
     const cacheEnabled = config.cache?.enabled ?? true;
     const cacheTTL = config.cache?.ttl;
     const merge = mergeOptionsOf(config);
 
-    await this.pollingManager.start(layerId, {
+    live.polling.start(layerId, {
       interval: intervalOf(config)!,
-      immediate,
+      // Started while the map is paused (a fallback rebuild, KTD8): no tick now.
+      immediate: immediate && !this.paused,
       onTick: async () => {
         // A tick that started before the source was re-targeted lands on
         // data it no longer belongs to: dropped (KTD5).
@@ -1624,6 +1869,9 @@ export class LayerManager {
         this.callbacks.onDataError?.(layerId, error);
       },
     });
+    // `pause()` ran while the chunk downloaded: it starts paused, as the
+    // polls already running were, and `resume()` lets it go.
+    if (this.paused) live.polling.pause(layerId);
   }
 
   /**
@@ -1647,11 +1895,15 @@ export class LayerManager {
         features: [],
       };
 
-    const mergeResult = this.dataMerger.merge(existing, incoming, options);
+    // Only a running pipeline delivers updates, so the `live` chunk is in
+    // (none after `destroy()`).
+    const live = this.live;
+    if (!live) return;
+    const mergeResult = live.merger.merge(existing, incoming, options);
     this.sourceData.set(sourceId, mergeResult.data);
     this.failed.delete(sourceId);
     if (mergeResult.unkeyed && options.updateKey) {
-      this.warnKeyless(sourceId, incoming, options.updateKey, mergeResult.unkeyed);
+      this.warnKeyless(sourceId, incoming, options.updateKey, mergeResult.unkeyed, live.mergeKeyOf);
     }
 
     const source = this.map.getSource(sourceId) as GeoJSONSource;
@@ -1676,11 +1928,12 @@ export class LayerManager {
     sourceId: string,
     incoming: FeatureCollection,
     updateKey: string,
-    count: number
+    count: number,
+    keyOf: LiveModule["mergeKeyOf"]
   ): void {
     if (this.keylessWarned.has(sourceId)) return;
     this.keylessWarned.add(sourceId);
-    const sample = incoming.features.find((f) => mergeKeyOf(f, updateKey) === undefined);
+    const sample = incoming.features.find((f) => keyOf(f, updateKey) === undefined);
     const names = Object.keys(sample?.properties ?? {}).slice(0, 6);
     const has = names.length
       ? ` Its features have properties such as ${names.map((n) => `\`${n}\``).join(", ")}.`
@@ -1715,35 +1968,48 @@ export class LayerManager {
    * while the next map loads its own. Not resumed; the map is torn down.
    */
   pause(): void {
-    this.pollingManager.pauseAll();
+    this.paused = true;
+    this.live?.polling.pauseAll();
     for (const loader of this.formatLoaders.values()) loader.suspend?.();
   }
 
   /** The counterpart of {@link pause}: the rebuild failed and this map stays. */
   resume(): void {
-    this.pollingManager.resumeAll();
+    this.paused = false;
+    this.live?.polling.resumeAll();
     for (const loader of this.formatLoaders.values()) loader.resume?.();
+    const waiting = [...this.pausedStreams];
+    this.pausedStreams.clear();
+    for (const [key, { sourceId, config }] of waiting) {
+      void this.startStream(key, sourceId, config).catch((error: unknown) =>
+        this.callbacks.onDataError?.(key, error instanceof Error ? error : new Error(String(error)))
+      );
+    }
   }
 
   /**
    * Pause data refresh for a layer (polling)
    */
   pauseRefresh(layerId: string): void {
-    this.pollingManager.pause(this.pipelineKeyFor(layerId));
+    this.live?.polling.pause(this.pipelineKeyFor(layerId));
   }
 
   /**
    * Resume data refresh for a layer (polling)
    */
   resumeRefresh(layerId: string): void {
-    this.pollingManager.resume(this.pipelineKeyFor(layerId));
+    this.live?.polling.resume(this.pipelineKeyFor(layerId));
   }
 
   /**
    * Force immediate refresh for a layer (polling)
+   *
+   * @throws when the layer has no poll running (as `PollingManager.triggerNow` does).
    */
   async refreshNow(layerId: string): Promise<void> {
-    await this.pollingManager.triggerNow(this.pipelineKeyFor(layerId));
+    const key = this.pipelineKeyFor(layerId);
+    if (!this.live) throw new Error(`Polling subscription "${key}" not found`);
+    await this.live.polling.triggerNow(key);
   }
 
   /**
@@ -1765,16 +2031,15 @@ export class LayerManager {
    * Disconnect streaming connection for a layer
    */
   disconnectStream(layerId: string): void {
-    this.streamManager.disconnect(this.pipelineKeyFor(layerId));
+    this.dropStream(this.pipelineKeyFor(layerId));
   }
 
   removeLayer(layerId: string): void {
     this.claimedLayerIds.delete(layerId);
     this.parkedAnchors.delete(layerId);
     // Stop all data updates
-    this.pollingManager.stop(layerId);
-    this.streamManager.disconnect(layerId);
-    this.loadingManager.hideLoading(layerId);
+    this.live?.polling.stop(layerId);
+    this.dropStream(layerId);
 
     if (this.map.getLayer(layerId)) this.map.removeLayer(layerId);
 
@@ -1819,10 +2084,13 @@ export class LayerManager {
   }
 
   destroy(): void {
-    // Clean up all data management components
-    this.pollingManager.destroy();
-    this.streamManager.destroy();
-    this.loadingManager.destroy();
+    // Clean up all data management components (a live chunk still
+    // downloading starts nothing: `destroyed`).
+    this.destroyed = true;
+    this.pausedStreams.clear();
+    this.live?.polling.destroy();
+    this.live?.streams.destroy();
+    this.live = null;
     for (const loader of this.formatLoaders.values()) loader.destroy();
     this.formatLoaders.clear();
 
@@ -1834,7 +2102,10 @@ export class LayerManager {
     this.hintedAnchors.clear();
     this.sourceSpecs.clear();
     this.sourceGenerations.clear();
+    this.sourceReleases.clear();
     this.failed.clear();
+    this.liveUnavailable.clear();
+    this.firstLoads.clear();
     this.parkedAnchors.clear();
   }
 }

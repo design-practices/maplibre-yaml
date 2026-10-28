@@ -943,11 +943,13 @@ describe("LayerManager", () => {
       properties: { mag: n, place: `p${n}`, time: n },
     });
 
-    it("keeps the features and hints once per source, naming the key and real properties", () => {
+    it("keeps the features and hints once per source, naming the key and real properties", async () => {
       const setData = vi.fn();
       mockMap.getSource.mockReturnValue({ setData });
       const onSourceHint = vi.fn();
       manager = new LayerManager(mockMap, { ...callbacks, onSourceHint });
+      // Updates arrive only from a running pipeline, which has the live chunk in.
+      await (manager as any).loadLive("quakes-layer", "quakes");
       const update = (data: any) =>
         (manager as any).handleDataUpdate("quakes", "quakes-layer", data, {
           strategy: "merge",
@@ -967,10 +969,11 @@ describe("LayerManager", () => {
       expect(message).toContain("`mag`, `place`, `time`");
     });
 
-    it("says nothing when every feature has a key (property or top-level id)", () => {
+    it("says nothing when every feature has a key (property or top-level id)", async () => {
       mockMap.getSource.mockReturnValue({ setData: vi.fn() });
       const onSourceHint = vi.fn();
       manager = new LayerManager(mockMap, { ...callbacks, onSourceHint });
+      await (manager as any).loadLive("quakes-layer", "quakes");
       (manager as any).handleDataUpdate(
         "quakes",
         "quakes-layer",

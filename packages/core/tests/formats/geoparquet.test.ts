@@ -12,6 +12,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import "../helpers/cloud-host";
 import {
   open,
   openBytes,
@@ -24,13 +25,13 @@ import {
   rowGroupsInView,
   projectedSize,
   TAIL_BYTES,
-} from "../../src/formats/geoparquet";
+  GeoParquetLoader,
+  loadGeoParquetWhole,
+} from "../../src/formats/lib/geoparquet";
 import { getDecoder, hasDecoder } from "../../src/formats/decoders";
 import { decodeGeoParquet } from "../../src/index";
 import { isFormatError } from "../../src/formats/errors";
 import {
-  GeoParquetLoader,
-  loadGeoParquetWhole,
   loadModeOf,
   cloudSourceDataLoader,
   WholeFileTooLarge,

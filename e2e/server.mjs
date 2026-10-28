@@ -38,6 +38,10 @@
  *                                  site serves it; likewise `/playground/`
  *                                  with the `/configs/`, `/schema/` and
  *                                  `/data/classify/` files it loads
+ *  - `/sse/points?n=&dropAfter=&event=&every=`  a Server-Sent Events feed of
+ *                                  GeoJSON updates for the streaming fixture
+ *                                  (examples/verification/stream-sse.html);
+ *                                  see `streamPoints`
  *  - `/my-repo/*`                  examples/verification/base-path/site, as
  *                                  GitHub Pages serves a project site
  *                                  (ml-aot.30); `/my-repo/cloud-native/*`
@@ -400,6 +404,84 @@ function virtualSlice(file, size, start, end) {
   return out;
 }
 
+/**
+ * A Server-Sent Events feed of GeoJSON updates (bundle-headroom U3), the
+ * shape `stream: { type: sse }` reads: each event's `data:` is one
+ * FeatureCollection, as JSON text, and carries an `id:` so a reconnecting
+ * EventSource resumes with `Last-Event-ID`.
+ *
+ * Event k (1..n) holds `p<k>` (seq k, a new point) and `p0` (seq k, the
+ * seed point the fixture loads from its `url:`, updated in place), so a
+ * `merge` on `id` grows by one feature per event and moves p0's seq along.
+ * Every feature says which connection sent it (`conn`: `first`, or
+ * `resumed` after a reconnect).
+ *
+ * Query: `n` events (default 3); `every` ms between them and before the
+ * first (default 200); `event` names the SSE event type (default: none, so
+ * `message`); `dropAfter=k` ends the FIRST connection after event k, once:
+ * the browser reconnects (after the `retry:` it is sent) with
+ * `Last-Event-ID: k` and the feed resumes at k+1. Stateless: the header
+ * alone says where to resume, so parallel runs and reused servers can't
+ * interfere. After the last event the connection stays open (a comment
+ * every 15 s) until the client goes, as a live feed does.
+ */
+function streamPoints(req, res, url) {
+  const int = (name, fallback) => {
+    const v = Number.parseInt(url.searchParams.get(name) ?? "", 10);
+    return Number.isFinite(v) && v >= 0 ? v : fallback;
+  };
+  const n = int("n", 3);
+  const every = int("every", 200);
+  const dropAfter = int("dropAfter", 0);
+  const eventName = url.searchParams.get("event");
+  const lastId = Number.parseInt(String(req.headers["last-event-id"] ?? ""), 10);
+  const resumed = Number.isFinite(lastId);
+  let next = resumed ? lastId + 1 : 1;
+
+  res.writeHead(200, {
+    "content-type": "text/event-stream",
+    "cache-control": "no-store",
+    connection: "keep-alive",
+  });
+  // A short reconnect delay keeps the reconnect case quick (browsers default
+  // to about 3 s).
+  res.write("retry: 300\n\n");
+
+  const point = (id, seq) => ({
+    type: "Feature",
+    id,
+    geometry: { type: "Point", coordinates: [-73.99 + 0.01 * Number(id.slice(1)), 40.75] },
+    properties: { id, seq, conn: resumed ? "resumed" : "first" },
+  });
+
+  let timer = null;
+  let ping = null;
+  const stop = () => {
+    clearTimeout(timer);
+    clearInterval(ping);
+  };
+  req.on("close", stop);
+
+  const tick = () => {
+    if (next > n) {
+      ping = setInterval(() => res.write(": ping\n\n"), 15_000);
+      return;
+    }
+    const k = next++;
+    const features = [point(`p${k}`, k), point("p0", k)];
+    res.write(
+      `${eventName ? `event: ${eventName}\n` : ""}id: ${k}\ndata: ${JSON.stringify({ type: "FeatureCollection", features })}\n\n`
+    );
+    if (!resumed && dropAfter > 0 && k === dropAfter) {
+      stop();
+      res.end();
+      return;
+    }
+    timer = setTimeout(tick, every);
+  };
+  timer = setTimeout(tick, every);
+}
+
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, `http://localhost:${PORT}`);
   let path = decodeURIComponent(url.pathname);
@@ -492,6 +574,7 @@ const server = createServer(async (req, res) => {
   };
 
   try {
+    if (path === "/sse/points") return streamPoints(req, res, url);
     if (path === "/vendor/maplibre-gl.esm.js") {
       return send(200, ESM_SHIM, TYPES[".js"]);
     }

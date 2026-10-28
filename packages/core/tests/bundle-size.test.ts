@@ -62,8 +62,8 @@ describe.skipIf(!built)(`${baseline.file} stays within its gzip budget`, () => {
     expect(
       actual,
       `${baseline.file} is ${actual} bytes gzip-9, over the budget of ${budget} ` +
-        `(baseline ${baseline.baselineGzip} + allowance ${baseline.allowanceGzip}). Move the addition into the ` +
-        `update chunk, or have the maintainer approve a new baseline in size-baseline.json.`
+        `(baseline ${baseline.baselineGzip} + allowance ${baseline.allowanceGzip}). Move the addition behind the ` +
+        `on-demand chunk seam (formats/decoders.ts LOADERS), or have the maintainer approve a new baseline in size-baseline.json.`
     ).toBeLessThanOrEqual(budget);
   });
 });

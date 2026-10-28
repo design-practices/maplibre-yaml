@@ -2,6 +2,7 @@ import { readFileSync, realpathSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
 import { defineConfig, type Options } from "tsup";
+import { stripDescribePlugin } from "./scripts/strip-describe";
 
 // ---------------------------------------------------------------------------
 // On-demand format libraries (ml-7qa.5)
@@ -54,6 +55,49 @@ const geotiffBrowserOnly = {
           : "export default {};",
       loader: "js",
     }));
+  },
+};
+
+/**
+ * The story stylesheet, minified (ml-7qa, KTD2), browser builds only:
+ * `SCROLLYTELLING_CSS` in `src/scrollytelling/styles.ts` is one readable
+ * template literal, comments and all, and esbuild never minifies string
+ * contents. As the file loads, the literal becomes a string of the same
+ * rules minified by esbuild's own CSS minifier (`build.esbuild`, no extra
+ * dependency). The source, its tests (which read the selectors as written)
+ * and `dist/scrollytelling.css` (emitted from source) keep the readable form.
+ */
+const STORY_CSS_FILE = /[\\/]src[\\/]scrollytelling[\\/]styles\.ts$/;
+const STORY_CSS_LITERAL = /(export const SCROLLYTELLING_CSS = )`((?:[^`\\$]|\\[\s\S]|\$(?!\{))*)`;/;
+
+const minifyStoryCss = {
+  name: "maplibre-yaml-minify-story-css",
+  setup(build: {
+    onLoad: (
+      o: { filter: RegExp },
+      cb: (args: { path: string }) => Promise<{ contents: string; loader: "ts" }>
+    ) => void;
+    esbuild: { transform: (input: string, options: { loader: "css"; minify: boolean }) => Promise<{ code: string }> };
+  }) {
+    build.onLoad({ filter: STORY_CSS_FILE }, async (args) => {
+      const source = readFileSync(args.path, "utf8");
+      const literal = STORY_CSS_LITERAL.exec(source);
+      if (!literal) {
+        throw new Error(
+          `minify-story-css: ${args.path} no longer has \`export const SCROLLYTELLING_CSS = \`…\`;\` without \${…}; update tsup.config.ts`
+        );
+      }
+      // The template's escapes (`\``, `\\`, `\$`) cooked; any other escape would be a CSS one we can't see here.
+      const css = literal[2]!.replace(/\\([\s\S])/g, (_, c: string) => {
+        if (c === "`" || c === "\\" || c === "$") return c;
+        throw new Error(`minify-story-css: unexpected escape \\${c} in SCROLLYTELLING_CSS`);
+      });
+      const { code } = await build.esbuild.transform(css, { loader: "css", minify: true });
+      return {
+        contents: source.replace(literal[0], () => `${literal[1]}${JSON.stringify(code.trim())};`),
+        loader: "ts",
+      };
+    });
   },
 };
 
@@ -277,13 +321,19 @@ function browserBuild(entry: Record<string, string>, chunks: boolean): Options {
       "fzstd",
       "toml-eslint-parser",
       "eslint-visitor-keys",
+      // The PMTiles reader: the seam names its adapter (formats/lib/pmtiles),
+      // which re-exports the library, so the package is listed here itself.
+      "pmtiles",
       // Resolved to the stub below (the alias), not the package.
       "@bokuweb/zstd-wasm",
       ...Object.values(seam).filter((spec) => !spec.startsWith(".")),
     ],
     esbuildPlugins: [
       geotiffBrowserOnly as never,
-      ...(chunks ? [seamChunksExternal as never, cogCodecChunks as never] : []),
+      minifyStoryCss as never,
+      // The CDN entry only: index.browser.js (tooling pages, not size-gated)
+      // keeps its schema descriptions, as the npm build does.
+      ...(chunks ? [seamChunksExternal as never, cogCodecChunks as never, stripDescribePlugin as never] : []),
     ],
     esbuildOptions(options) {
       options.banner = {

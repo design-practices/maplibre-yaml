@@ -1,0 +1,11 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "id": "p0",
+      "geometry": { "type": "Point", "coordinates": [-73.99, 40.75] },
+      "properties": { "id": "p0", "seq": 0, "conn": "seed" }
+    }
+  ]
+}

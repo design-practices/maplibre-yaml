@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Live data: an SSE stream</title>
+  <!--
+    Bundle headroom U3: streaming characterization, the baseline the live
+    chunk (U4) must keep. The e2e server's /sse/points feed sends three
+    GeoJSON updates; each one adds a point and moves the seed point p0's
+    `seq` along (see streamPoints in e2e/server.mjs).
+
+    PASS =
+      1. "Stream": the named source loads its one seed point from `url:`,
+         then the stream's three events merge in: 1 -> 2 -> 3 -> 4 points,
+         p0's seq 0 -> 1 -> 2 -> 3.
+      2. "Reconnect": an inline source starting empty, on a feed with a
+         custom event type that hangs up after its first event. The browser
+         reconnects and the feed resumes: 4 points, p0's seq 3, and the
+         last point says it came over the resumed connection.
+      3. "Stream without refresh:": `stream:` with no `refresh:` block never
+         connects (ml-aot.134, a documented rule, not a bug): it keeps its
+         seed point, and the validation warning ("stream: connects only when
+         the source also has a refresh: block") is shown under the map.
+    FAIL = a count stays put, the reconnect map stops at 2 points, or the
+    third map's point count changes or it shows no warning.
+
+    Each status line carries data-count / data-seq / data-conn attributes
+    (set from ml-map:layer-data-loaded), which e2e/stream.spec.ts waits on.
+
+    Serve from the repo root:  pnpm verify:serve
+    Then open: http://localhost:4174/examples/verification/stream-sse.html
+    (the /sse/ feed only exists on that server, not a plain static one).
+  -->
+  <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; }
+    header { padding: 8px 16px; background: #1d3557; color: white; font-size: 13px; }
+    .maps { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 8px; padding: 8px; }
+    section h2 { font-size: 14px; margin: 4px 0; }
+    ml-map { display: block; height: 260px; }
+    output, .warning { display: block; font: 12px ui-monospace, monospace; margin-top: 4px; }
+    .warning { color: #9a3412; }
+  </style>
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }
+  </script>
+  <script>
+    // Validation warnings go to the console ([ml-map] …); copy them onto the
+    // page so a person can see case 3's warning without opening devtools.
+    // Installed before register.js loads, so the parse's warnings are seen.
+    window.streamDemo = { warnings: [] };
+    const originalWarn = console.warn.bind(console);
+    console.warn = (...args) => {
+      const text = args.map((a) => String(a)).join(" ");
+      window.streamDemo.warnings.push(text);
+      if (text.includes("stream: connects only")) {
+        for (const el of document.querySelectorAll(".warning[data-capture]")) el.textContent = text;
+      }
+      originalWarn(...args);
+    };
+  </script>
+</head>
+<body>
+  <header>PASS = 1 and 2 reach 4 points (seq 3); 3 keeps its 1 point and shows the stream warning.</header>
+  <div class="maps">
+    <section>
+      <h2>1. Stream</h2>
+      <ml-map id="stream">
+        <script type="text/yaml">
+type: map
+id: stream-sse
+config:
+  center: [-73.975, 40.75]
+  zoom: 12
+  mapStyle: "/examples/verification/configs/local-style.json"
+sources:
+  points:
+    type: geojson
+    url: "/examples/verification/data/stream-seed.geojson"
+    stream:
+      type: sse
+      url: "/sse/points?n=3"
+    refresh:
+      updateStrategy: merge
+      updateKey: id
+layers:
+  - id: points-dots
+    type: circle
+    source: points
+    paint:
+      circle-radius: 8
+      circle-color: "#e63946"
+        </script>
+      </ml-map>
+      <output data-for="stream" data-count="" data-seq="" data-conn="">waiting…</output>
+    </section>
+    <section>
+      <h2>2. Reconnect</h2>
+      <ml-map id="reconnect">
+        <script type="text/yaml">
+type: map
+id: stream-sse-reconnect
+config:
+  center: [-73.975, 40.75]
+  zoom: 12
+  mapStyle: "/examples/verification/configs/local-style.json"
+layers:
+  - id: reconnect-dots
+    type: circle
+    source:
+      type: geojson
+      data: { type: FeatureCollection, features: [] }
+      stream:
+        type: sse
+        url: "/sse/points?n=3&dropAfter=1&event=update"
+        eventTypes: [update]
+      refresh:
+        updateStrategy: merge
+        updateKey: id
+    paint:
+      circle-radius: 8
+      circle-color: "#457b9d"
+        </script>
+      </ml-map>
+      <output data-for="reconnect" data-count="" data-seq="" data-conn="">waiting…</output>
+    </section>
+    <section>
+      <h2>3. Stream without refresh:</h2>
+      <ml-map id="stream-only">
+        <script type="text/yaml">
+type: map
+id: stream-sse-no-refresh
+config:
+  center: [-73.975, 40.75]
+  zoom: 12
+  mapStyle: "/examples/verification/configs/local-style.json"
+sources:
+  ghost:
+    type: geojson
+    url: "/examples/verification/data/stream-seed.geojson"
+    stream:
+      type: sse
+      url: "/sse/points?n=3&case=stream-only"
+layers:
+  - id: ghost-dots
+    type: circle
+    source: ghost
+    paint:
+      circle-radius: 8
+      circle-color: "#6b7280"
+        </script>
+      </ml-map>
+      <output data-for="stream-only" data-count="" data-seq="" data-conn="">waiting…</output>
+      <p class="warning" data-capture>(no stream warning yet)</p>
+    </section>
+  </div>
+  <script type="module">
+    // Every data load (the first one and each stream message) fires
+    // ml-map:layer-data-loaded: read the source then and put its count, p0's
+    // seq and the newest feature's connection on the status line.
+    window.streamDemo.loads = {};
+    window.streamDemo.dataErrors = [];
+    for (const el of document.querySelectorAll("ml-map")) {
+      const out = document.querySelector(`output[data-for="${el.id}"]`);
+      window.streamDemo.loads[el.id] = [];
+      el.addEventListener("ml-map:layer-data-error", (event) => {
+        window.streamDemo.dataErrors.push(`${el.id}: ${event.detail.error?.message}`);
+      });
+      el.addEventListener("ml-map:layer-data-loaded", async (event) => {
+        const map = el.getMap();
+        const layer = map?.getStyle()?.layers?.find((l) => l.id === event.detail.layerId);
+        const data = layer ? await map.getSource(layer.source)?.getData?.() : null;
+        const features = data?.features ?? [];
+        const p0 = features.find((f) => f.properties?.id === "p0");
+        const newest = features.reduce((a, f) => ((f.properties?.seq ?? -1) > (a?.properties?.seq ?? -1) && f.properties?.id !== "p0" ? f : a), null);
+        const entry = { count: event.detail.featureCount, seq: p0?.properties?.seq ?? null, conn: newest?.properties?.conn ?? null };
+        window.streamDemo.loads[el.id].push(entry);
+        out.dataset.count = String(entry.count);
+        out.dataset.seq = entry.seq === null ? "" : String(entry.seq);
+        out.dataset.conn = entry.conn ?? "";
+        out.textContent = `${entry.count} points; p0 seq ${entry.seq ?? "–"}; newest via ${entry.conn ?? "–"} (${window.streamDemo.loads[el.id].length} loads)`;
+      });
+    }
+  </script>
+  <script type="module" src="../../packages/core/register.js"></script>
+</body>
+</html>

@@ -27,7 +27,7 @@ function online() {
 
 import { getDecoder, hasDecoder } from "../../src/formats/decoders";
 import { install } from "../../src/formats/pmtiles";
-import { decodeBytes } from "../../src/formats/flatgeobuf";
+import { decodeFlatGeobuf } from "../../src/renderer/cloud-sources";
 import { isFormatError } from "../../src/formats/errors";
 
 afterEach(online);
@@ -168,11 +168,11 @@ describe("the readers' callers", () => {
 
   it("flatgeobuf: decoding reports the missing reader as a FormatError, not a read error", async () => {
     offline();
-    const { decodeBytes: freshDecode } = await import("../../src/formats/flatgeobuf");
+    const { decodeFlatGeobuf: freshDecode } = await import("../../src/renderer/cloud-sources");
     const error = await freshDecode(new Uint8Array([0x66, 0x67, 0x62, 3, 0x66, 0x67, 0x62, 0]), "x.fgb").catch(
       (e: unknown) => e
     );
     expect(isFormatError(error) && error.failure).toMatchObject({ code: "chunk", format: "flatgeobuf" });
-    expect(typeof decodeBytes).toBe("function");
+    expect(typeof decodeFlatGeobuf).toBe("function");
   });
 });

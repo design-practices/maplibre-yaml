@@ -9,7 +9,7 @@
  * also needs its `.wasm` served next to the script, which a CDN build cannot
  * promise. maplibre-yaml never asks the reader for that mode (compressed
  * files are recognized and refused with a plain notice, see
- * formats/flatgeobuf), so in the browser build the import resolves here and
+ * formats/lib/flatgeobuf), so in the browser build the import resolves here and
  * fails plainly if anything ever reaches it. Bundler builds (Vite, Astro)
  * keep the real dependency.
  */

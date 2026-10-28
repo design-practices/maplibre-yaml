@@ -29,7 +29,29 @@
  * downloads it exactly once and a second change downloads nothing; a first
  * update whose chunk fetch fails is refused (`ml-map:update-rejected`, kind
  * `chunk`) with the map untouched and no error card, and `reload()` asks for
- * the file again under a `?retry=` URL. Requires `pnpm build` (core's dist/).
+ * the file again under a `?retry=` URL.
+ *
+ * Live data (polling, streaming, merging; bundle headroom U4) is
+ * `dist/chunks/live.js`: the third describe asserts a polling page paints its
+ * first data and then fetches it and polls, a static page (or one with only
+ * a legacy `updateStrategy`, or `refresh:` with no interval) never requests
+ * it, and a blocked download keeps the first data, says once that updates
+ * stopped, and `reload()` retries it.
+ *
+ * The FlatGeobuf and GeoParquet adapters and data providers ride inside their
+ * readers' chunks (bundle headroom U5): the last describe asserts a plain
+ * GeoJSON `url:` page requests no `chunks/` file (AE1), a FlatGeobuf or
+ * GeoParquet page requests only its own chunk, once, a brotli file's codec
+ * still loads from `chunks/` (not `chunks/chunks/`), and a FlatGeobuf `fitTo`
+ * page asks for the file before its chunk has arrived. (A blocked
+ * `chunks/flatgeobuf.js` and its `reload()` retry are the first describe's.)
+ * The COG adapter and the PMTiles failure path ride in `chunks/cog.js` and
+ * `chunks/pmtiles.js` the same way: a PMTiles or COG page requests only its
+ * own chunk, a COG `fitTo` page still asks for the file's header before its
+ * chunk has arrived, and with either chunk blocked the format's notice
+ * appears and the other layers draw. (`reload()` does not yet retry a tile
+ * protocol's source: see the `fixme` below.)
+ * Requires `pnpm build` (core's dist/).
  */
 import { test, expect, type Page } from "@playwright/test";
 import { cpSync, existsSync, mkdtempSync, rmSync } from "node:fs";
@@ -410,4 +432,386 @@ test.describe("the update engine loads on the first update only (ml-4ug, live do
     await expect(page.locator("#map .ml-map-error")).toHaveCount(0);
     expect(errors).toEqual([]);
   });
+});
+
+/** A map whose one source is `source` (YAML, indented under `quakes:`), drawn as circles. */
+function liveDoc(source: string): string {
+  return `
+type: map
+id: live-chunk
+config:
+  center: [-118.2, 34.07]
+  zoom: 9
+  mapStyle: "/examples/verification/configs/local-style.json"
+sources:
+  quakes:
+${source}
+layers:
+  - id: quakes-points
+    type: circle
+    source: quakes
+    paint: { circle-radius: 6, circle-color: "#e63946" }
+`;
+}
+
+const FEED_PATH = "/examples/verification/data/usgs-quakes-poll.geojson";
+const POLLING_SOURCE = `    type: geojson
+    url: "${FEED_PATH}"
+    cache: { enabled: false }
+    refresh: { refreshInterval: 1000, updateStrategy: replace }`;
+const LIVE_CHUNK = "/my-site/js/maplibre-yaml/chunks/live.js";
+
+/** Count every request for the feed (first load and polls). */
+function feedRequests(page: Page): () => number {
+  let n = 0;
+  page.on("request", (r) => {
+    if (new URL(r.url()).pathname === FEED_PATH) n += 1;
+  });
+  return () => n;
+}
+
+test.describe("live data loads only for documents that refresh (bundle headroom U4)", () => {
+  test("AE2: a polling page paints its first data, then fetches chunks/live.js and polls", async ({ page }) => {
+    const errors = await guard(page);
+    const scripts = scriptsOf(page);
+    const polls = feedRequests(page);
+    await serveSite(page, site, pageHtml("/my-site/js/maplibre-yaml/register.browser.js", liveDoc(POLLING_SOURCE)));
+    await page.goto("/my-site/index.html", { waitUntil: "domcontentloaded" });
+    await page.evaluate(() => (document.getElementById("map") as any).mapReady());
+    await waitForLayer(page, "map", "quakes-points");
+    expect(scripts.filter((s) => s.includes("/chunks/"))).toEqual([LIVE_CHUNK]);
+    // The refresh runs: the feed is asked again on the schedule.
+    await expect.poll(polls, { timeout: 10_000 }).toBeGreaterThanOrEqual(3);
+    expect(scripts.filter((s) => s.includes("/chunks/"))).toEqual([LIVE_CHUNK]);
+    await expect(page.locator("#map .ml-map-notice")).toHaveCount(0);
+    expect(errors).toEqual([]);
+  });
+
+  test("a static url: source, a legacy updateStrategy alone, or refresh with no interval never request chunks/live.js", async ({ page }) => {
+    const errors = await guard(page);
+    const scripts = scriptsOf(page);
+    for (const source of [
+      `    type: geojson\n    url: "${FEED_PATH}"`,
+      `    type: geojson\n    url: "${FEED_PATH}"\n    updateStrategy: merge\n    updateKey: id`,
+      `    type: geojson\n    url: "${FEED_PATH}"\n    refresh: { updateStrategy: merge, updateKey: id }`,
+    ]) {
+      await page.unroute(/\/my-site\//);
+      await serveSite(page, site, pageHtml("/my-site/js/maplibre-yaml/register.browser.js", liveDoc(source)));
+      await page.goto("/my-site/index.html", { waitUntil: "domcontentloaded" });
+      await page.evaluate(() => (document.getElementById("map") as any).mapReady());
+      await waitForLayer(page, "map", "quakes-points");
+      await page.waitForTimeout(1500);
+    }
+    expect(scripts.filter((s) => s.includes("/chunks/"))).toEqual([]);
+    expect(errors).toEqual([]);
+  });
+
+  test("chunks/live.js blocked: the first data stays, one notice says updates stopped, reload() retries and polls", async ({
+    page,
+  }) => {
+    const errors = await guard(page);
+    const polls = feedRequests(page);
+    const asked: string[] = [];
+    let offline = true;
+    await serveSite(page, site, pageHtml("/my-site/js/maplibre-yaml/register.browser.js", liveDoc(POLLING_SOURCE)));
+    // Registered after serveSite: Playwright tries the newest route first.
+    await page.route("**/chunks/live.js*", (route) => {
+      asked.push(new URL(route.request().url()).search || "(no query)");
+      return offline ? route.abort("blockedbyclient") : route.fallback();
+    });
+    await page.goto("/my-site/index.html", { waitUntil: "domcontentloaded" });
+    await page.evaluate(() => (document.getElementById("map") as any).mapReady());
+    // The first data is drawn…
+    await waitForLayer(page, "map", "quakes-points");
+    // …and one line says its updates stopped, naming the file.
+    const notice = page.locator("#map .ml-map-notice");
+    await expect(notice).toContainText(/`?quakes-points`? shows the data it loaded first, but its live updates stopped/, { timeout: 30_000 });
+    await expect(notice).toContainText(/chunks\/live\.js/);
+    await expect(notice).not.toContainText("has no data");
+    expect((await notice.innerText()).match(/live updates stopped/g)).toHaveLength(1);
+    // No poll ran.
+    const firstLoads = polls();
+    await page.waitForTimeout(2500);
+    expect(polls()).toBe(firstLoads);
+    const failedAsks = asked.length;
+    expect(failedAsks).toBeGreaterThan(0);
+    await page.screenshot({ path: "e2e/results/lazy_live_blocked.png" });
+
+    // Back online: reload() asks for the file again under a URL of its own,
+    // the poll starts, and the line goes once fresh data lands.
+    offline = false;
+    await page.evaluate(() => (document.getElementById("map") as any).reload());
+    await expect.poll(() => asked.at(-1), { timeout: 10_000 }).toBe(`?retry=${failedAsks}`);
+    await expect.poll(polls, { timeout: 10_000 }).toBeGreaterThan(firstLoads + 1);
+    await expect(page.locator("#map .ml-map-notice")).toHaveCount(0);
+    expect(errors).toEqual([]);
+  });
+});
+
+/** A PMTiles (`vector`) or COG (`raster`) source, and an inline GeoJSON layer that needs no reader. */
+function tiledDoc(id: string, kind: "pmtiles" | "cog", extra = ""): string {
+  const source =
+    kind === "pmtiles"
+      ? "{ type: vector, url: /gallery-assets/cloud-native/districts.pmtiles }"
+      : "{ type: raster, url: /gallery-assets/cloud-native/imagery.cog.tif }";
+  const layer =
+    kind === "pmtiles"
+      ? '{ id: tiled, type: line, source: tiled, source-layer: districts, paint: { line-color: "#1d3557" } }'
+      : "{ id: tiled, type: raster, source: tiled }";
+  return `
+type: map
+id: ${id}
+config:
+  center: [10.2, 42.15]
+  zoom: 9.6
+  mapStyle: "/examples/verification/configs/local-style.json"
+${extra}
+sources:
+  tiled: ${source}
+layers:
+  - ${layer}
+  - id: marker
+    type: circle
+    source:
+      type: geojson
+      data:
+        type: FeatureCollection
+        features:
+          - { type: Feature, properties: {}, geometry: { type: Point, coordinates: [10.2, 42.15] } }
+    paint: { circle-radius: 8, circle-color: "#d62828" }
+`;
+}
+
+/** Wait until a tiled source's tiles in view have loaded. */
+async function waitForTiled(page: Page, mapId: string, source: string) {
+  await page.waitForFunction(
+    ({ mapId, source }) => {
+      const map = (document.getElementById(mapId) as any)?.getMap?.();
+      return Boolean(map?.getSource(source)) && map.isSourceLoaded(source) && map.areTilesLoaded();
+    },
+    { mapId, source },
+    { timeout: 45_000 }
+  );
+}
+
+/** A page whose one source (`kind: url`) is drawn by a fill or circle layer. */
+function sourceDoc(id: string, url: string, extra = "", type: "fill" | "circle" = "fill"): string {
+  return `
+type: map
+id: ${id}
+config:
+  center: [10.2, 42.15]
+  zoom: 9
+  mapStyle: "/examples/verification/configs/local-style.json"
+${extra}
+sources:
+  data:
+    type: geojson
+    url: ${url}
+layers:
+  - id: data
+    type: ${type}
+    source: data
+    paint: ${type === "fill" ? '{ fill-color: "#e9c46a", fill-opacity: 0.6 }' : '{ circle-radius: 3, circle-color: "#1d3557" }'}
+`;
+}
+
+/** The `chunks/…` scripts a page asked for, in order, under the self-hosted copy. */
+const chunksOf = (scripts: string[]) => scripts.filter((s) => s.includes("/chunks/"));
+const SELF = "/my-site/js/maplibre-yaml";
+
+test.describe("cloud adapters ride in their reader chunks (bundle headroom U5)", () => {
+  test("AE1: a plain GeoJSON url: page requests no chunks/ file", async ({ page }) => {
+    const errors = await guard(page);
+    const scripts = scriptsOf(page);
+    await serveSite(page, site, pageHtml(`${SELF}/register.browser.js`, sourceDoc("plain-url", "/gallery-assets/alpine-countries.geojson", "  fitTo: { source: data }")));
+    await page.goto("/my-site/index.html", { waitUntil: "domcontentloaded" });
+    await page.evaluate(() => (document.getElementById("map") as any).mapReady());
+    await waitForFeatures(page, "map", "data");
+    expect(chunksOf(scripts)).toEqual([]);
+    expect(errors).toEqual([]);
+  });
+
+  test("a FlatGeobuf page requests chunks/flatgeobuf.js once, and no other chunk", async ({ page }) => {
+    const errors = await guard(page);
+    const scripts = scriptsOf(page);
+    await serveSite(page, site, pageHtml(`${SELF}/register.browser.js`, sourceDoc("fgb", "/gallery-assets/cloud-native/districts.fgb")));
+    await page.goto("/my-site/index.html", { waitUntil: "domcontentloaded" });
+    await page.evaluate(() => (document.getElementById("map") as any).mapReady());
+    await waitForFeatures(page, "map", "data");
+    await expect(page.locator("#map .ml-map-notice")).toHaveCount(0);
+    expect(chunksOf(scripts)).toEqual([`${SELF}/chunks/flatgeobuf.js`]);
+    expect(errors).toEqual([]);
+  });
+
+  test("a GeoParquet page requests chunks/geoparquet.js once, and no other chunk", async ({ page }) => {
+    const errors = await guard(page);
+    const scripts = scriptsOf(page);
+    await serveSite(page, site, pageHtml(`${SELF}/register.browser.js`, sourceDoc("gp", "/gallery-assets/cloud-native/districts.parquet")));
+    await page.goto("/my-site/index.html", { waitUntil: "domcontentloaded" });
+    await page.evaluate(() => (document.getElementById("map") as any).mapReady());
+    await waitForFeatures(page, "map", "data");
+    await expect(page.locator("#map .ml-map-notice")).toHaveCount(0);
+    expect(chunksOf(scripts)).toEqual([`${SELF}/chunks/geoparquet.js`]);
+    expect(errors).toEqual([]);
+  });
+
+  test("a brotli GeoParquet footer still loads its codec, from chunks/ (not chunks/chunks/), and draws", async ({ page }) => {
+    const errors = await guard(page);
+    const scripts = scriptsOf(page);
+    await serveSite(
+      page,
+      site,
+      pageHtml(`${SELF}/register.browser.js`, sourceDoc("brotli", "/gallery-assets/cloud-native/points-brotli.parquet", "", "circle"))
+    );
+    await page.goto("/my-site/index.html", { waitUntil: "domcontentloaded" });
+    await page.evaluate(() => (document.getElementById("map") as any).mapReady());
+    await waitForFeatures(page, "map", "data");
+    await expect(page.locator("#map .ml-map-notice")).toHaveCount(0);
+    expect(chunksOf(scripts)).toEqual([`${SELF}/chunks/geoparquet.js`, `${SELF}/chunks/geoparquet-brotli.js`]);
+    expect(errors).toEqual([]);
+  });
+
+  test("a FlatGeobuf fitTo page asks for the file before its reader chunk has arrived (the downloads overlap)", async ({
+    page,
+  }) => {
+    const errors = await guard(page);
+    await serveSite(
+      page,
+      site,
+      pageHtml(`${SELF}/register.browser.js`, sourceDoc("fit-fgb", "/gallery-assets/cloud-native/districts.fgb", "  fitTo: { source: data, padding: 20 }"))
+    );
+    // The network order, as the page saw it. The chunk is held until the
+    // file's request is seen (or 10 s, when it never comes first).
+    const order: string[] = [];
+    let fileAsked!: () => void;
+    const asked = new Promise<void>((resolve) => (fileAsked = resolve));
+    page.on("request", (r) => {
+      if (/\/districts\.fgb(\?|$)/.test(r.url())) {
+        order.push("file requested");
+        fileAsked();
+      }
+    });
+    await page.route(`**${SELF}/chunks/flatgeobuf.js*`, async (route) => {
+      order.push("chunk requested");
+      await Promise.race([asked, new Promise((done) => setTimeout(done, 10_000))]);
+      order.push("chunk served");
+      await route.fallback();
+    });
+    await page.goto("/my-site/index.html", { waitUntil: "domcontentloaded" });
+    await page.evaluate(() => (document.getElementById("map") as any).mapReady());
+    await waitForFeatures(page, "map", "data");
+    expect(order.indexOf("file requested")).toBeGreaterThanOrEqual(0);
+    expect(order.indexOf("file requested"), order.join(" → ")).toBeLessThan(order.indexOf("chunk served"));
+    // One request for the file: the map was framed on the read the layer reuses.
+    expect(order.filter((e) => e === "file requested")).toHaveLength(1);
+    expect(errors).toEqual([]);
+  });
+  test("a PMTiles page requests chunks/pmtiles.js once, and no other chunk", async ({ page }) => {
+    const errors = await guard(page);
+    const scripts = scriptsOf(page);
+    await serveSite(page, site, pageHtml(`${SELF}/register.browser.js`, tiledDoc("pm", "pmtiles")));
+    await page.goto("/my-site/index.html", { waitUntil: "domcontentloaded" });
+    await page.evaluate(() => (document.getElementById("map") as any).mapReady());
+    await waitForFeatures(page, "map", "tiled", "districts");
+    await expect(page.locator("#map .ml-map-notice")).toHaveCount(0);
+    expect(chunksOf(scripts)).toEqual([`${SELF}/chunks/pmtiles.js`]);
+    expect(errors).toEqual([]);
+  });
+
+  test("a COG page requests chunks/cog.js once, and no codec for its DEFLATE file", async ({ page }) => {
+    const errors = await guard(page);
+    const scripts = scriptsOf(page);
+    await serveSite(page, site, pageHtml(`${SELF}/register.browser.js`, tiledDoc("cog", "cog")));
+    await page.goto("/my-site/index.html", { waitUntil: "domcontentloaded" });
+    await page.evaluate(() => (document.getElementById("map") as any).mapReady());
+    await waitForTiled(page, "map", "tiled");
+    await expect(page.locator("#map .ml-map-notice")).toHaveCount(0);
+    expect(chunksOf(scripts)).toEqual([`${SELF}/chunks/cog.js`]);
+    expect(errors).toEqual([]);
+  });
+
+  test("a COG fitTo page asks for the file's header before its reader chunk has arrived, and reads it once", async ({
+    page,
+  }) => {
+    const errors = await guard(page);
+    await serveSite(page, site, pageHtml(`${SELF}/register.browser.js`, tiledDoc("fit-cog", "cog", "  fitTo: { source: tiled }")));
+    const order: string[] = [];
+    const headerReads: string[] = [];
+    let fileAsked!: () => void;
+    const asked = new Promise<void>((resolve) => (fileAsked = resolve));
+    page.on("request", (r) => {
+      if (/\/imagery\.cog\.tif(\?|$)/.test(r.url())) {
+        const range = r.headers()["range"] ?? "(none)";
+        if (range === "bytes=0-65535") headerReads.push(range);
+        order.push("file requested");
+        fileAsked();
+      }
+    });
+    await page.route(`**${SELF}/chunks/cog.js*`, async (route) => {
+      order.push("chunk requested");
+      await Promise.race([asked, new Promise((done) => setTimeout(done, 10_000))]);
+      order.push("chunk served");
+      await route.fallback();
+    });
+    await page.goto("/my-site/index.html", { waitUntil: "domcontentloaded" });
+    await page.evaluate(() => (document.getElementById("map") as any).mapReady());
+    await waitForTiled(page, "map", "tiled");
+    expect(order.indexOf("file requested")).toBeGreaterThanOrEqual(0);
+    expect(order.indexOf("file requested"), order.join(" → ")).toBeLessThan(order.indexOf("chunk served"));
+    // One read of the first 64 KB: made ahead of the map, reused by the handler.
+    expect(headerReads).toHaveLength(1);
+    await expect(page.locator("#map .ml-map-notice")).toHaveCount(0);
+    expect(errors).toEqual([]);
+  });
+
+  for (const [kind, label, name] of [
+    ["pmtiles", "The PMTiles reader", "pmtiles"],
+    ["cog", "The Cloud Optimized GeoTIFF \\(COG\\) reader", "cog"],
+  ] as const) {
+    test(`chunks/${name}.js blocked: its notice, and the other layers draw`, async ({ page }) => {
+      const errors = await guard(page);
+      await serveSite(page, site, pageHtml(`${SELF}/register.browser.js`, tiledDoc(`blocked-${kind}`, kind)));
+      // Every request for the file, retries (`?retry=1`) included.
+      await page.route(`**${SELF}/chunks/${name}.js*`, (route) => route.abort("internetdisconnected"));
+      await page.goto("/my-site/index.html", { waitUntil: "domcontentloaded" });
+      await page.evaluate(() => (document.getElementById("map") as any).mapReady());
+      const notice = page.locator("#map .ml-map-notice");
+      await expect(notice).toContainText(new RegExp(`Source tiled didn't load: ${label} \\(.*chunks/${name}\\.js\\) couldn't be downloaded`), {
+        timeout: 30_000,
+      });
+      // The layer that needs no reader draws.
+      await waitForLayer(page, "map", "marker");
+      expect(errors).toEqual([]);
+    });
+
+    // Not yet: a tile protocol's source whose reader chunk failed isn't among
+    // the renderer's failed sources (only LayerManager's own loads are), so
+    // `reload()` sees an unchanged document, clears the notice and asks for
+    // nothing — the source stays blank. As before bundle headroom U5 (the
+    // same at 2b843dc); FlatGeobuf's retry is the first describe's.
+    test.fixme(`chunks/${name}.js blocked, then back: reload() asks again and the source draws`, async ({ page }) => {
+      const errors = await guard(page);
+      const asked: string[] = [];
+      let offline = true;
+      await serveSite(page, site, pageHtml(`${SELF}/register.browser.js`, tiledDoc(`retry-${kind}`, kind)));
+      await page.route(`**${SELF}/chunks/${name}.js*`, (route) => {
+        asked.push(new URL(route.request().url()).search || "(no query)");
+        return offline ? route.abort("internetdisconnected") : route.fallback();
+      });
+      await page.goto("/my-site/index.html", { waitUntil: "domcontentloaded" });
+      await page.evaluate(() => (document.getElementById("map") as any).mapReady());
+      await expect(page.locator("#map .ml-map-notice")).toContainText(`${name}.js`, { timeout: 30_000 });
+      const failedAsks = asked.length;
+      offline = false;
+      await page.evaluate(() => (document.getElementById("map") as any).reload());
+      await page.evaluate(() => (document.getElementById("map") as any).mapReady());
+      await expect.poll(() => asked.length, { timeout: 10_000 }).toBeGreaterThan(failedAsks);
+      expect(asked.at(-1)).toMatch(/^\?retry=\d+$/);
+      if (kind === "pmtiles") await waitForFeatures(page, "map", "tiled", "districts");
+      else await waitForTiled(page, "map", "tiled");
+      await expect(page.locator("#map .ml-map-notice")).toHaveCount(0);
+      expect(errors).toEqual([]);
+    });
+  }
 });

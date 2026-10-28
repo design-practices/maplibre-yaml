@@ -112,6 +112,14 @@ export class FormatError extends Error {
 }
 
 /**
+ * A {@link FormatError} for `failure`: the factory the reader chunks' hosts
+ * hand over (a chunk can't construct the class — see renderer/cloud-host).
+ */
+export function formatError(failure: FormatFailure): FormatError {
+  return new FormatError(failure);
+}
+
+/**
  * Whether `error` is a {@link FormatError}. Duck-typed, not `instanceof`:
  * the error may cross a bundle boundary (two copies of core on a page).
  */
@@ -124,45 +132,4 @@ export function isFormatError(error: unknown): error is FormatError {
 export function isAbortError(error: unknown): boolean {
   const e = error as { name?: unknown; message?: unknown } | null;
   return e?.name === "AbortError" || /\baborted?\b/i.test(String(e?.message ?? ""));
-}
-
-/** A network-level failure (`fetch` rejected: CORS, DNS, offline). */
-function isNetworkFailure(message: string): boolean {
-  return /failed to fetch|networkerror|load failed|network request failed/i.test(message);
-}
-
-/**
- * Classify what the `pmtiles` library threw for an archive.
- *
- * @param error - The raw error.
- * @param url - The archive URL (without the `pmtiles://` scheme).
- * @returns The classified error; aborts are returned unchanged.
- */
-export function classifyPmtilesError(error: unknown, url: string): unknown {
-  if (isAbortError(error) || isFormatError(error)) return error;
-  const message = String((error as { message?: unknown } | null)?.message ?? error);
-  const base = { format: "pmtiles" as const, url };
-  if (/content-length exceeding request|byte serving/i.test(message)) {
-    return new FormatError({ ...base, code: "no-range" });
-  }
-  // A server that refused the first range (16 KB from the start) of an
-  // archive shorter than that, and hid its `Content-Range` from this page:
-  // the reader can't learn the size to ask again. Ranges work; the file is
-  // fine — the host's CORS headers are what is missing.
-  if (/missing content-length on 416/i.test(message)) {
-    return new FormatError({
-      ...base,
-      code: "read",
-      detail:
-        "the server refused the first range request and didn't let this page read the file size " +
-        "(it needs to send `Access-Control-Expose-Headers: Content-Range`)",
-    });
-  }
-  if (/wrong magic number/i.test(message) || /spec version/i.test(message)) {
-    return new FormatError({ ...base, code: "not-format" });
-  }
-  const status = /bad response code:\s*(\d+)/i.exec(message);
-  if (status) return new FormatError({ ...base, code: "http", status: Number(status[1]) });
-  if (isNetworkFailure(message)) return new FormatError({ ...base, code: "cors" });
-  return error;
 }

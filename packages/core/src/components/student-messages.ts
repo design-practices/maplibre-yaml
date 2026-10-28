@@ -667,12 +667,24 @@ export const RANGE_REQUEST_HINT =
   "preview locally with `npx serve` instead.";
 
 /**
+ * Whether a failure is the live-data chunk's (`chunks/live.js`) failed
+ * download. The seam (formats/decoders) reports every chunk under its name as
+ * a `format`; `"live"` is no `CloudFormat`, hence the widening cast.
+ */
+function isLiveChunkFailure(failure: FormatFailure): boolean {
+  return failure.code === "chunk" && (failure.format as string) === "live";
+}
+
+/**
  * One cloud-native failure, in plain language: what happened to which file
  * and what to do about it. Used as the `message` of every
  * {@link FormatError}, so the notice, the console and the
  * `ml-map:layer-data-error` / `ml-map:error` events all say the same thing.
  */
 export function describeFormatFailure(failure: FormatFailure): string {
+  // The live-data chunk (polling and streaming) is no file-format reader:
+  // its own words, before the reader label (FORMAT_LABELS has no entry).
+  if (isLiveChunkFailure(failure)) return describeLiveCodeFailure(failure.url);
   const label = FORMAT_LABELS[failure.format] ?? failure.format;
   const file = `\`${failure.url}\``;
   switch (failure.code) {
@@ -804,6 +816,31 @@ export function describeFormatFailure(failure: FormatFailure): string {
   }
 }
 
+/** What stops an on-demand file downloading, and what to do: shared by the reader and live-update notices. */
+const CHUNK_HINT =
+  "maplibre-yaml loads it on demand from the folder its script came from: if you copied " +
+  "maplibre-yaml to your own site, copy the whole `dist/` folder (not just `register.js`), " +
+  "or load it from the CDN. Offline or a content blocker can also stop it.";
+
+/** The live-update code (`chunks/live.js`) didn't download: the message of its FormatError. */
+function describeLiveCodeFailure(url: string): string {
+  return `The live-update code (\`${url}\`) couldn't be downloaded, so live updates are off. ${CHUNK_HINT}`;
+}
+
+/**
+ * A source with `refresh:` (or a stream) whose live updates couldn't start
+ * because their code (`chunks/live.js`, loaded on demand) didn't download.
+ * Its first data is on the map; it just won't change. `name` is the (first)
+ * layer drawing the source.
+ */
+export function describeLiveUpdatesStopped(name: string, url: string): string {
+  return (
+    `\`${name}\` shows the data it loaded first, but its live updates stopped: their code ` +
+    `(\`${url}\`) couldn't be downloaded. ${CHUNK_HINT} Reload the map to try again; ` +
+    "other layers are unaffected."
+  );
+}
+
 /**
  * A COG that isn't in Web Mercator — the one projection the COG reader
  * draws — or has no coordinates at all, with the GDAL command that fixes it.
@@ -842,9 +879,15 @@ export function describeDataProblem(
     base?: string | null;
   }
 ): string {
+  const failure = (error as { failure?: FormatFailure }).failure;
+  // Live updates that couldn't start (their chunk didn't download): the
+  // layer has its first data, so not "has no data" (bundle headroom, KTD8).
+  if (failure && isLiveChunkFailure(failure)) {
+    return describeLiveUpdatesStopped(layerId, failure.url);
+  }
   // A cloud-native file (FlatGeobuf, a reserved format) already carries its
   // own plain-language reason; say which layer it leaves empty.
-  if ((error as { failure?: FormatFailure }).failure) {
+  if (failure) {
     return (
       `Layer \`${layerId}\` has no data: ${error.message}` +
       (context.filePage ? ` ${FILE_PAGE_HINT}` : "")
