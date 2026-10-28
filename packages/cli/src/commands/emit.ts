@@ -40,6 +40,7 @@ import {
   type TrustContext,
   type ClassifyDataLoader,
 } from '@maplibre-yaml/core';
+import { lineColumnSuffix, tomlReaderFailureMessage } from '../lib/formatter.js';
 import { logger } from '../lib/logger.js';
 import { resolveDataRefs, type DataReader } from '../lib/data-refs.js';
 import { createDataLoader } from '../lib/data-loader.js';
@@ -319,16 +320,15 @@ export const emitCommand = defineCommand({
     const parsed = await parseDocumentText(contents, {
       kind: 'map',
       signals: { fileName: filePath },
-    }).catch((err: Error) => {
+    }).catch((err: unknown) => {
       // Only a failed load of the TOML reader rejects.
-      logger.error(`The TOML reader could not be loaded: ${err.message}`);
+      logger.error(tomlReaderFailureMessage(err));
       return process.exit(EXIT_CODES.UNKNOWN_ERROR);
     });
     if (!parsed.success) {
       logger.error(`${filePath} is not a valid map document.`);
       for (const err of parsed.errors) {
-        const where = err.line ? ` (${err.line}:${err.column ?? 1})` : '';
-        logger.error(`  ${err.path ? err.path + ': ' : ''}${err.message}${where}`);
+        logger.error(`  ${err.path ? err.path + ': ' : ''}${err.message}${lineColumnSuffix(err)}`);
       }
       process.exit(EXIT_CODES.VALIDATION_ERROR);
     }

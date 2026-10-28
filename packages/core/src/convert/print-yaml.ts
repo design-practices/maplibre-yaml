@@ -19,8 +19,7 @@
  */
 
 import type { AuthoredNode } from "./types";
-
-const WIDTH = 80;
+import { WIDTH, fillLines } from "./wrap";
 
 type NumberNode = Extract<AuthoredNode, { kind: "number" }>;
 
@@ -28,6 +27,11 @@ type NumberNode = Extract<AuthoredNode, { kind: "number" }>;
 export function numberText(node: NumberNode): string {
   const text = String(node.value);
   return node.float && /^-?\d+$/.test(text) ? `${text}.0` : text;
+}
+
+/** A non-finite number's name: `nan`, `inf` or `-inf`, as TOML and the loss messages write it (YAML adds a `.`). */
+export function nonFiniteLabel(value: number): string {
+  return Number.isNaN(value) ? "nan" : value > 0 ? "inf" : "-inf";
 }
 
 const pad = (n: number) => " ".repeat(n);
@@ -72,9 +76,8 @@ function scalar(node: AuthoredNode, flow: boolean): string {
     case "string":
       return plain(node.value, flow) ? node.value : quoted(node.value);
     case "number":
-      if (Number.isNaN(node.value)) return ".nan";
-      if (!Number.isFinite(node.value)) return node.value > 0 ? ".inf" : "-.inf";
-      return numberText(node);
+      // `.nan`, `.inf`, `-.inf`.
+      return Number.isFinite(node.value) ? numberText(node) : nonFiniteLabel(node.value).replace(/^-?/, "$&.");
     case "boolean":
       return String(node.value);
     case "null":
@@ -110,25 +113,13 @@ function flowLines(node: AuthoredNode, indent: number, lead: string): string[] {
   if (node.kind !== "seq" || lead.length + one.length <= WIDTH || node.items.length === 0) return [lead + one];
   // As many items to a line as fit; an item too long for a line of its own wraps by itself.
   const inner = indent + 2;
-  const groups: string[][] = [];
-  let line = "";
-  const flush = () => {
-    if (line) groups.push([pad(inner) + line]);
-    line = "";
-  };
-  for (const item of node.items) {
-    const text = flowText(item);
-    if (inner + text.length + 1 > WIDTH) {
-      flush();
-      groups.push(item.kind === "seq" ? flowLines(item, inner, pad(inner)) : [pad(inner) + text]);
-    } else if (line !== "" && inner + line.length + 2 + text.length + 1 > WIDTH) {
-      flush();
-      line = text;
-    } else {
-      line = line === "" ? text : `${line}, ${text}`;
-    }
-  }
-  flush();
+  const groups = fillLines(node.items, inner, flowText).map((line) =>
+    typeof line === "string"
+      ? [pad(inner) + line]
+      : line.item.kind === "seq"
+        ? flowLines(line.item, inner, pad(inner))
+        : [pad(inner) + line.text]
+  );
   groups.forEach((group, i) => {
     if (i < groups.length - 1) group[group.length - 1] += ",";
   });

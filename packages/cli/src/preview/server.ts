@@ -8,7 +8,8 @@ import { resolve, dirname, join, basename, extname, relative, isAbsolute } from 
 import { readFile } from 'node:fs/promises';
 import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { parseDocumentText, type ParseError } from '@maplibre-yaml/core';
+import { isFormatError, parseDocumentText, type ParseError } from '@maplibre-yaml/core';
+import { tomlReaderFailureMessage } from '../lib/formatter.js';
 import { logger } from '../lib/logger.js';
 import { getDebugPanelHTML, getDebugPanelCSS, getDebugPanelJS } from './debug-panel.js';
 import type { PreviewOptions } from '../types.js';
@@ -364,7 +365,12 @@ export async function createPreviewServer(
       return { valid: true, config: result.data };
     } catch (error) {
       currentConfig = null;
-      currentError = error instanceof Error ? error.message : String(error);
+      currentError =
+        isFormatError(error) && error.failure.code === 'chunk'
+          ? tomlReaderFailureMessage(error)
+          : error instanceof Error
+            ? error.message
+            : String(error);
       return { valid: false, error: currentError };
     }
   }

@@ -7,11 +7,13 @@ import { existsSync } from 'node:fs';
 import { resolve } from 'pathe';
 import {
   parseDocumentText,
+  stripBom,
   type DocumentFormat,
   type DocumentTextResult,
   type ParseError,
 } from '@maplibre-yaml/core';
 import type { ValidationResult, ValidationError } from '../types.js';
+import { tomlReaderFailureMessage } from './formatter.js';
 
 /**
  * Validate a single map or story document, in YAML, JSON or TOML (the file
@@ -64,7 +66,7 @@ export async function validateFile(filePath: string): Promise<ValidationResult> 
       valid: false,
       errors: [{
         path: '',
-        message: `The TOML reader could not be loaded: ${error instanceof Error ? error.message : String(error)}`,
+        message: tomlReaderFailureMessage(error),
         severity: 'error',
       }],
       warnings: [],
@@ -94,7 +96,7 @@ export async function validateFile(filePath: string): Promise<ValidationResult> 
   }
 
   // Convert parse errors to validation errors
-  const lines = content.replace(/^\uFEFF/, '').split(/\r?\n/);
+  const lines = stripBom(content).split(/\r?\n/);
   const errors: ValidationError[] = result.errors.map((err: ParseError) => {
     const located = isRootFallback(err, lines, format)
       ? {}

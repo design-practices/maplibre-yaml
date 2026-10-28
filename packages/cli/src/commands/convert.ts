@@ -26,6 +26,7 @@ import { mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import consola from 'consola';
 import { convertDocument, type DocumentFormat } from '@maplibre-yaml/core';
+import { lineColumnSuffix } from '../lib/formatter.js';
 import { logger } from '../lib/logger.js';
 import { EXIT_CODES } from '../types.js';
 
@@ -39,9 +40,6 @@ function realOrResolved(path: string): string {
     return resolve(path);
   }
 }
-
-const where = (item: { line?: number; column?: number }) =>
-  item.line ? ` (${item.line}:${item.column ?? 1})` : '';
 
 export const convertCommand = defineCommand({
   meta: {
@@ -97,14 +95,14 @@ export const convertCommand = defineCommand({
     if (!result.validation.result.success) {
       logger.error(`${filePath} is not a valid document; nothing was written.`);
       for (const err of result.validation.result.errors) {
-        logger.error(`  ${err.path ? err.path + ': ' : ''}${err.message}${where(err)}`);
+        logger.error(`  ${err.path ? err.path + ': ' : ''}${err.message}${lineColumnSuffix(err)}`);
       }
       process.exit(EXIT_CODES.VALIDATION_ERROR);
     }
     if (!result.success) {
       logger.error(`${filePath} cannot be written as ${to.toUpperCase()}; nothing was written.`);
       for (const err of result.errors) {
-        logger.error(`  ${err.path ? err.path + ': ' : ''}${err.message}${where(err)}`);
+        logger.error(`  ${err.path ? err.path + ': ' : ''}${err.message}${lineColumnSuffix(err)}`);
       }
       process.exit(EXIT_CODES.VALIDATION_ERROR);
     }

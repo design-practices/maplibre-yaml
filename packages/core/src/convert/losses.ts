@@ -20,6 +20,7 @@
 
 import type { DocumentFormat } from "../parser/yaml-parser";
 import type { AuthoredDocument, AuthoredNode, ConvertError, ConvertLoss, SourceAt } from "./types";
+import { nonFiniteLabel } from "./print-yaml";
 
 type Segment = string | number;
 type MapNode = Extract<AuthoredNode, { kind: "map" }>;
@@ -49,10 +50,6 @@ function droppableNull(map: MapNode, key: string, parent: MapNode | undefined, p
     return "the property is left out, which reads the same as null";
   }
   return undefined;
-}
-
-function describe(value: number): string {
-  return Number.isNaN(value) ? "nan" : value > 0 ? "inf" : "-inf";
 }
 
 /** The tree to print (nulls dropped where allowed), with the losses, or the failures. */
@@ -105,7 +102,7 @@ export function checkFor(
           fail(
             "convert-number",
             path,
-            `JSON has no ${describe(node.value)}. Write a number, or keep the document in YAML or TOML.`,
+            `JSON has no ${nonFiniteLabel(node.value)}. Write a number, or keep the document in YAML or TOML.`,
             node.at
           );
         }

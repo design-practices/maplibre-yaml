@@ -58,7 +58,7 @@ if (!existsSync(coreDist)) {
   process.exit(2);
 }
 
-const { YAMLParser, parseDocumentText } = await import(coreDist);
+const { YAMLParser, parseDocumentText, looksLikeDocumentText } = await import(coreDist);
 // The YAML library core itself parses with, to inspect a fragment's shape.
 const YAML = createRequire(join(repoRoot, "packages/core/package.json"))("yaml");
 
@@ -130,33 +130,6 @@ function placeholderSources(layers) {
   if (names.length === 0) return undefined;
   const empty = { type: "geojson", data: { type: "FeatureCollection", features: [] } };
   return Object.fromEntries(names.map((name) => [name, empty]));
-}
-
-/** A `$schema` URL (or TOML `#:schema` directive) under this site's schema folder. */
-const SCHEMA_URL = String.raw`https?://docs\.maplibre-yaml\.org/schema/`;
-
-/**
- * What makes a JSON or TOML fence a whole document: the marks `mlym
- * validate` looks for in a folder's .json and .toml files
- * (packages/cli/src/lib/glob.ts), so a fence counts exactly when the same
- * text saved as a file would.
- */
-const DOCUMENT_MARKS = {
-  json: [
-    /"type"\s*:\s*"(?:map|scrollytelling)"/,
-    /"pages"\s*:\s*\[/,
-    new RegExp(String.raw`"\$schema"\s*:\s*"` + SCHEMA_URL),
-  ],
-  toml: [
-    /^type[ \t]*=[ \t]*["'](?:map|scrollytelling)["']/m,
-    /^(?:pages[ \t]*=|\[\[[ \t]*pages[ \t]*\]\])/m,
-    new RegExp(String.raw`^(?:#:schema[ \t]+|["']\$schema["'][ \t]*=[ \t]*["'])` + SCHEMA_URL, "m"),
-  ],
-};
-
-/** True when a ```json or ```toml fence is a whole map, story or root document. */
-function isDocumentFence(content, format) {
-  return DOCUMENT_MARKS[format].some((mark) => mark.test(content));
 }
 
 /** True for a root document: no top-level `type:`, a top-level `pages:` key. */
@@ -343,7 +316,10 @@ for (const file of files) {
   // TOML guide's side-by-side documents, an agent's JSON map).
   for (const fence of extractFences(text, /json|toml/)) {
     const format = fence.lang;
-    if (!isDocumentFence(fence.content, format)) {
+    // A whole document by core's `looksLikeDocumentText`, the marks `mlym
+    // validate` looks for in a folder's .json and .toml files, so a fence
+    // counts exactly when the same text saved as a file would.
+    if (!looksLikeDocumentText(fence.content, format)) {
       skipped++;
       continue;
     }

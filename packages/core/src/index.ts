@@ -268,7 +268,7 @@ export type {
 
 // Converting a document between YAML, JSON and TOML (`mlym convert`, the
 // playground's toggle). The printers are a lazy chunk; no element imports this.
-export { convertDocument } from "./convert/index";
+export { convertDocument, UNREADABLE_CODES } from "./convert/index";
 export type { ConvertOptions, ConvertResult, ConvertLoss, ConvertError } from "./convert/index";
 
 // Note: Components are exported separately via './components' entry point

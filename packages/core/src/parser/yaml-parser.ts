@@ -1164,7 +1164,8 @@ export class YAMLParser {
   ): ParseResult<MapBlock | MapBlockV2> {
     let asYaml: string;
     try {
-      asYaml = stringifyYAML(normalizeDates(value));
+      // A value read from TOML (`source`) holds no date objects: the reader keeps dates as their text.
+      asYaml = stringifyYAML(source ? value : normalizeDates(value));
     } catch (error) {
       return {
         success: false,
@@ -1344,7 +1345,8 @@ export class YAMLParser {
   ): ParseResult<ScrollytellingBlock> {
     let asYaml: string;
     try {
-      asYaml = stringifyYAML(normalizeDates(value));
+      // A value read from TOML (`source`) holds no date objects: the reader keeps dates as their text.
+      asYaml = stringifyYAML(source ? value : normalizeDates(value));
     } catch (error) {
       return {
         success: false,

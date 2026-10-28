@@ -14,8 +14,7 @@
 
 import type { AuthoredNode } from "./types";
 import { numberText } from "./print-yaml";
-
-const WIDTH = 80;
+import { WIDTH, fillLines } from "./wrap";
 
 const quote = (s: string) => JSON.stringify(s);
 
@@ -56,37 +55,13 @@ function block(node: AuthoredNode, indent: number, prefix: number, top = false):
         })
       : node.items.some((item) => item.kind === "map")
         ? node.items.map((item) => pad + block(item, indent + 2, 0))
-        : fill(node.items, indent + 2).map((line) => pad + line);
+        : // An expression: as many items to a line as fit, so `["interpolate", ["linear"],
+          // ["get", "mag"], 1, 2, 7, 20]` takes two lines, not nine. One too long wraps by itself.
+          fillLines(node.items, indent + 2, inline).map(
+            (line) => pad + (typeof line === "string" ? line : block(line.item, indent + 2, 0))
+          );
   const [open, close] = node.kind === "map" ? ["{", "}"] : ["[", "]"];
   return `${open}\n${lines.join(",\n")}\n${" ".repeat(indent)}${close}`;
-}
-
-/**
- * A list with no object in it (an expression), wrapped: as many items to a
- * line as fit, so `["interpolate", ["linear"], ["get", "mag"], 1, 2, 7, 20]`
- * takes two lines, not nine. An item too long for a line of its own wraps
- * by itself.
- */
-function fill(items: AuthoredNode[], indent: number): string[] {
-  const lines: string[] = [];
-  let line = "";
-  for (const item of items) {
-    const text = inline(item);
-    if (indent + text.length + 1 > WIDTH) {
-      if (line) lines.push(line);
-      line = "";
-      lines.push(block(item, indent, 0));
-    } else if (line === "") {
-      line = text;
-    } else if (indent + line.length + 2 + text.length + 1 <= WIDTH) {
-      line += `, ${text}`;
-    } else {
-      lines.push(line);
-      line = text;
-    }
-  }
-  if (line) lines.push(line);
-  return lines;
 }
 
 /** The document as JSON text, ending in a newline. */

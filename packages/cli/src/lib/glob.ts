@@ -8,6 +8,7 @@ import { glob, escapePath, isDynamicPattern } from 'tinyglobby';
 import { statSync } from 'node:fs';
 import { open } from 'node:fs/promises';
 import { resolve as resolvePath, relative as relativePath, basename, extname } from 'pathe';
+import { looksLikeDocumentText, stripBom } from '@maplibre-yaml/core';
 
 export interface GlobOptions {
   cwd?: string;
@@ -68,29 +69,17 @@ const PROJECT_CONFIG_FILE = 'maplibre-yaml.config.json';
 /** How much of a JSON or TOML file the folder sniff reads. */
 const SNIFF_BYTES = 64 * 1024;
 
-/** A `$schema` (or TOML `#:schema` directive) under this site's schema folder. */
-const SCHEMA_URL = String.raw`https?://docs\.maplibre-yaml\.org/schema/`;
-
-const DOCUMENT_MARKS: Record<'json' | 'toml', RegExp[]> = {
-  json: [
-    /"type"\s*:\s*"(?:map|scrollytelling)"/,
-    /"pages"\s*:\s*\[/,
-    new RegExp(String.raw`"\$schema"\s*:\s*"` + SCHEMA_URL),
-  ],
-  toml: [
-    /^type[ \t]*=[ \t]*["'](?:map|scrollytelling)["']/m,
-    /^(?:pages[ \t]*=|\[\[[ \t]*pages[ \t]*\]\])/m,
-    new RegExp(String.raw`^(?:#:schema[ \t]+|["']\$schema["'][ \t]*=[ \t]*["'])` + SCHEMA_URL, 'm'),
-  ],
-};
+/** How many folder candidates are sniffed at once. */
+const SNIFF_CONCURRENCY = 16;
 
 /**
  * Whether a JSON or TOML file under a folder argument is a map or story
  * document, judged from the raw text of its first 64 KB, not a parse
- * (KTD11): a `type` of `map` or `scrollytelling`, a `pages` key, or a
- * `$schema` under docs.maplibre-yaml.org/schema/. A document with a syntax
- * error, or one too large to parse quickly, still joins the run and fails
- * there, rather than vanishing from it.
+ * (KTD11), by core's {@link looksLikeDocumentText}: a `type` of `map` or
+ * `scrollytelling`, a `pages` key, or a `$schema` under
+ * docs.maplibre-yaml.org/schema/. A document with a syntax error, or one too
+ * large to parse quickly, still joins the run and fails there, rather than
+ * vanishing from it.
  */
 export async function looksLikeDocument(file: string): Promise<boolean> {
   const format = extname(file).toLowerCase() === '.toml' ? 'toml' : 'json';
@@ -107,8 +96,21 @@ export async function looksLikeDocument(file: string): Promise<boolean> {
   } catch {
     return false;
   }
-  if (text.charCodeAt(0) === 0xfeff) text = text.slice(1);
-  return DOCUMENT_MARKS[format].some((mark) => mark.test(text));
+  return looksLikeDocumentText(stripBom(text), format);
+}
+
+/** `fn` over `items`, at most `limit` at a time; the results in `items` order. */
+async function mapConcurrent<T, R>(items: readonly T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let next = 0;
+  const worker = async (): Promise<void> => {
+    while (next < items.length) {
+      const i = next++;
+      results[i] = await fn(items[i]!);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
 }
 
 /**
@@ -160,13 +162,14 @@ export async function resolveTargets(
       const rel = relativePath(cwd, literal);
       const base = rel === '' ? '' : `${escapePath(rel.startsWith('..') ? literal : rel)}/`;
       const files = await resolveGlobPatterns([base + FOLDER_PATTERN], options);
-      for (const candidate of await resolveGlobPatterns([base + FOLDER_CANDIDATE_PATTERN], options)) {
-        if (basename(candidate) !== PROJECT_CONFIG_FILE && (await looksLikeDocument(candidate))) {
-          files.push(candidate);
-        } else {
-          skipped.add(candidate);
-        }
-      }
+      const candidates = await resolveGlobPatterns([base + FOLDER_CANDIDATE_PATTERN], options);
+      const isDocument = await mapConcurrent(candidates, SNIFF_CONCURRENCY, async (candidate) =>
+        basename(candidate) !== PROJECT_CONFIG_FILE && (await looksLikeDocument(candidate))
+      );
+      candidates.forEach((candidate, i) => {
+        if (isDocument[i]) files.push(candidate);
+        else skipped.add(candidate);
+      });
       if (files.length === 0) {
         emptyFolders.push(arg);
         return [];

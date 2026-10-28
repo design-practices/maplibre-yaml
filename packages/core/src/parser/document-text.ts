@@ -150,7 +150,7 @@ function readText(
   let outcome: Outcome;
   try {
     if (typeof text !== "string") throw new TypeError("expected the document as text");
-    const body = text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
+    const body = stripBom(text);
     format = detectDocumentFormat(body, options);
     if (body.trim() === "") outcome = failure(EMPTY_MESSAGE);
     else if (format !== "toml") outcome = readYamlOrJson(body, kind, format);
@@ -167,6 +167,11 @@ function readText(
   return kind === "any"
     ? ({ blockType: outcome.blockType, result, format } as DocumentTextResult)
     : result;
+}
+
+/** The text without a leading byte-order mark (U+FEFF), which Node's `readFile` keeps. */
+export function stripBom(text: string): string {
+  return text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
 }
 
 function failure(message: string, extra: Partial<ParseError> = {}): Outcome {

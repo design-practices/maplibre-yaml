@@ -33,10 +33,9 @@ import { fileURLToPath } from 'node:url';
 import { cloudflarePageRedirectLines } from '../redirects.mjs';
 import * as share from '../src/playground/share.mjs';
 
-// The playground's share-link prefix for a YAML document (`#code/`). The
-// playground keeps one prefix per format (`#json/`, `#toml/` beside it); a
-// namespace import reads either shape of share.mjs.
-const SHARE_PREFIX = share.SHARE_PREFIXES?.yaml ?? share.SHARE_PREFIX;
+// The playground's share-link prefix for a YAML document (`#code/`); the
+// playground keeps one prefix per format (`#json/`, `#toml/` beside it).
+const SHARE_PREFIX = share.SHARE_PREFIXES.yaml;
 const { SHARE_WARN_LENGTH } = share;
 
 const __dirname = dirname(fileURLToPath(import.meta.url));

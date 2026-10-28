@@ -6,6 +6,20 @@ import pc from 'picocolors';
 import { displayPath } from '@maplibre-yaml/core';
 import type { ValidationResult, ValidationError } from '../types.js';
 
+/** ` (line:column)` after a one-line finding that has a line, else nothing. */
+export function lineColumnSuffix(item: { line?: number; column?: number }): string {
+  return item.line ? ` (${item.line}:${item.column ?? 1})` : '';
+}
+
+/**
+ * What the CLI says when the TOML reader's file (core's on-demand `toml`
+ * chunk, a `FormatError` of code `"chunk"`) could not be loaded: the one way
+ * reading a document rejects (KTD1).
+ */
+export function tomlReaderFailureMessage(error: unknown): string {
+  return `The TOML reader could not be loaded: ${error instanceof Error ? error.message : String(error)}`;
+}
+
 /**
  * Format validation results for human-readable terminal output
  */

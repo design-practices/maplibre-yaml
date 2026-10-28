@@ -11,7 +11,13 @@
  *
  * Design: docs/plans/2026-10-22-docs-playground-design.md (ml-vjs.17).
  */
-import { parseDocumentText, convertDocument, type DocumentTextResult, type ConvertLoss } from "@maplibre-yaml/core";
+import {
+  parseDocumentText,
+  convertDocument,
+  UNREADABLE_CODES,
+  type DocumentTextResult,
+  type ConvertLoss,
+} from "@maplibre-yaml/core";
 import { toDiagnostics, trustNotes, holdWhileTyping, summarize, type Diagnostic } from "./diagnostics.mjs";
 import { decodeShare, shareLink, hostsOf, safeSrc } from "./share.mjs";
 import { schemaNameFor } from "./schema-assist.mjs";
@@ -27,8 +33,6 @@ const DRAFT_FORMAT_KEY = "mlym-playground-draft-format";
 const FORMATS: Format[] = ["yaml", "json", "toml"];
 const FORMAT_NAME: Record<Format, string> = { yaml: "YAML", json: "JSON", toml: "TOML" };
 const isFormat = (f: unknown): f is Format => FORMATS.includes(f as Format);
-/** Errors that mean the text isn't a document at all, whatever it says. */
-const UNREADABLE = new Set(["yaml-syntax", "toml-syntax", "yaml-expansion", "yaml-merge"]);
 const PHONE = "(max-width: 50rem)";
 
 type Kind = "map" | "scrollytelling";
@@ -445,7 +449,7 @@ export function start(): void {
     if (!result.success) {
       formatSelect.value = from;
       const first = result.errors[0];
-      const unreadable = result.errors.find((e) => e.code !== undefined && UNREADABLE.has(e.code));
+      const unreadable = result.errors.find((e) => e.code !== undefined && UNREADABLE_CODES.has(e.code));
       // The converter's own errors name the path of the value it can't write.
       message.textContent = unreadable
         ? `Can't switch to ${FORMAT_NAME[to]}: the ${FORMAT_NAME[from]} has a syntax error${unreadable.line ? ` on line ${unreadable.line}` : ""}. Fix it, then switch.`

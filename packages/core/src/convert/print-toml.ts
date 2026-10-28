@@ -31,9 +31,8 @@
  */
 
 import type { AuthoredNode } from "./types";
-import { numberText } from "./print-yaml";
-
-const WIDTH = 80;
+import { nonFiniteLabel, numberText } from "./print-yaml";
+import { WIDTH, fillLines } from "./wrap";
 
 type MapNode = Extract<AuthoredNode, { kind: "map" }>;
 
@@ -53,9 +52,7 @@ const key = (k: string) => (/^[A-Za-z0-9_-]+$/.test(k) ? k : basic(k));
 const isTable = (node: AuthoredNode): node is MapNode => node.kind === "map";
 
 function number(node: Extract<AuthoredNode, { kind: "number" }>): string {
-  if (Number.isNaN(node.value)) return "nan";
-  if (!Number.isFinite(node.value)) return node.value > 0 ? "inf" : "-inf";
-  return numberText(node);
+  return Number.isFinite(node.value) ? numberText(node) : nonFiniteLabel(node.value);
 }
 
 /**
@@ -90,23 +87,10 @@ function value(node: AuthoredNode, column: number, indent: number, wrap: boolean
         return `[\n${items.join("\n")}\n${pad(indent)}]`;
       }
       // An expression: as many items to a line as fit; one too long for a line of its own wraps by itself.
-      const lines: string[] = [];
-      let line = "";
-      for (const item of node.items) {
-        const text = value(item, 0, 0, false);
-        if (inner + text.length + 1 > WIDTH) {
-          if (line) lines.push(`${line},`);
-          line = "";
-          lines.push(`${value(item, inner, inner, true)},`);
-        } else if (line !== "" && inner + line.length + 2 + text.length + 1 > WIDTH) {
-          lines.push(`${line},`);
-          line = text;
-        } else {
-          line = line === "" ? text : `${line}, ${text}`;
-        }
-      }
-      if (line) lines.push(`${line},`);
-      return `[\n${lines.map((l) => pad(inner) + l).join("\n")}\n${pad(indent)}]`;
+      const lines = fillLines(node.items, inner, (item) => value(item, 0, 0, false)).map(
+        (line) => `${pad(inner)}${typeof line === "string" ? line : value(line.item, inner, inner, true)},`
+      );
+      return `[\n${lines.join("\n")}\n${pad(indent)}]`;
     }
   }
 }

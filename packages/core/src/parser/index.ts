@@ -29,7 +29,10 @@ export { normalizeDocumentValue } from './normalize';
 export type { NormalizedValue } from './normalize';
 // The front door for document text in YAML, JSON or TOML: detects the
 // format and words every error for it.
-export { parseDocumentText } from './document-text';
+export { parseDocumentText, stripBom } from './document-text';
+// Whether JSON or TOML text is a map or story document, judged from the text
+// (the rule `mlym validate` picks a folder's .json and .toml files by).
+export { looksLikeDocumentText } from './document-marks';
 export type {
   DocumentFormat,
   DocumentKind,

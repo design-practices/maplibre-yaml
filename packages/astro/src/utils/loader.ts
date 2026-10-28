@@ -54,10 +54,12 @@ import { parse as parseYAML } from "yaml";
 // unvalidated (any data, not only documents), after the front door has read
 // it, with core's canonical `YAML_PARSE_OPTIONS` imported, never re-declared.
 import {
+  UNREADABLE_CODES,
   YAML_PARSE_OPTIONS,
   convertDocument,
   displayPath,
   parseDocumentText,
+  stripBom,
 } from "@maplibre-yaml/core";
 import { trackFile } from "./dev-watch";
 import type {
@@ -234,9 +236,6 @@ function overlayEntries(path: string, errors: ParseError[], warnings: Finding[] 
   });
 }
 
-/** Codes of the errors that mean the text could not be read at all. */
-const UNREADABLE = new Set(["yaml-syntax", "toml-syntax", "yaml-expansion", "yaml-merge"]);
-
 /**
  * Read a file's text as a plain value, in whichever format its name (or,
  * failing that, its content) says, without validating it as a document.
@@ -258,10 +257,10 @@ async function readValue(
 ): Promise<{ value: unknown; format: DocumentFormat }> {
   const read = await parseDocumentText(contents, { signals: { fileName: path } });
   const { format } = read;
-  const unreadable = read.result.errors.filter((e) => e.code !== undefined && UNREADABLE.has(e.code));
+  const unreadable = read.result.errors.filter((e) => e.code !== undefined && UNREADABLE_CODES.has(e.code));
   if (unreadable.length > 0) throw syntaxError(path, unreadable);
 
-  const body = contents.charCodeAt(0) === 0xfeff ? contents.slice(1) : contents;
+  const body = stripBom(contents);
   if (format !== "toml") return { value: parseYAML(body, YAML_PARSE_OPTIONS), format };
   // An empty TOML file is an empty table.
   if (body.trim() === "") return { value: {}, format };

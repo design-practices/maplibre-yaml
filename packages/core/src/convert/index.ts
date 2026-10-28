@@ -17,7 +17,7 @@
 
 import { getDecoder } from "../formats/decoders";
 import { isFormatError } from "../formats/errors";
-import { parseDocumentText, type DocumentSignals, type DocumentTextResult } from "../parser/document-text";
+import { parseDocumentText, stripBom, type DocumentSignals, type DocumentTextResult } from "../parser/document-text";
 import type { DocumentFormat, ParseError } from "../parser/yaml-parser";
 import { tomlTree, yamlTree } from "./tree";
 import type { ConvertError, ConvertLoss } from "./types";
@@ -56,8 +56,12 @@ export type ConvertResult =
       validation: DocumentTextResult;
     };
 
-/** Errors that mean the text is not a document at all: nothing to convert. */
-const UNREADABLE = new Set(["yaml-syntax", "toml-syntax", "yaml-expansion", "yaml-merge"]);
+/**
+ * The error codes that mean the text could not be read at all (a syntax
+ * error, an alias or merge key past core's guards), as opposed to a document
+ * that reads but does not validate. There is nothing to convert.
+ */
+export const UNREADABLE_CODES: ReadonlySet<string> = new Set(["yaml-syntax", "toml-syntax", "yaml-expansion", "yaml-merge"]);
 
 const FORMATS = new Set<string>(["yaml", "json", "toml"]);
 
@@ -109,10 +113,10 @@ export async function convertDocument(text: string, options: ConvertOptions): Pr
     return failed([{ path: "", message: `Cannot convert to "${String(to)}": choose yaml, json or toml.` }]);
   }
   const errors = validation.result.errors;
-  if (errors.some((e) => e.code !== undefined && UNREADABLE.has(e.code))) return failed(errors);
+  if (errors.some((e) => e.code !== undefined && UNREADABLE_CODES.has(e.code))) return failed(errors);
 
   try {
-    const body = text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
+    const body = stripBom(text);
     let doc;
     if (from === "toml") {
       const read = (await getDecoder("toml")).readToml(body);

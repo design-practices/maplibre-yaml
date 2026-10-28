@@ -133,7 +133,7 @@ describe("the seam", () => {
     const dir = join(PKG_ROOT, "src/convert");
     // The entry half (index.ts reads the text, tree.ts builds the authored
     // tree) may import core; everything chunk.ts reaches may not.
-    const chunkFiles = ["chunk.ts", "losses.ts", "print-json.ts", "print-toml.ts", "print-yaml.ts", "types.ts"];
+    const chunkFiles = ["chunk.ts", "losses.ts", "print-json.ts", "print-toml.ts", "print-yaml.ts", "types.ts", "wrap.ts"];
     expect(readdirSync(dir).filter((f) => f.endsWith(".ts")).sort()).toEqual([...chunkFiles, "index.ts", "tree.ts"].sort());
     for (const file of chunkFiles) {
       const code = readFileSync(join(dir, file), "utf8").replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
