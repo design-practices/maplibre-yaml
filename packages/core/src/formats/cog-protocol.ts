@@ -29,7 +29,7 @@ import { consoleText } from "../utils/console-text";
 import { fileUrlOf, HEADER_BYTES, type CogRequest } from "./cog";
 import type { CogHeader } from "./cog-header";
 import { getDecoder, type Decoders } from "./decoders";
-import { FormatError } from "./errors";
+import { FormatError, formatError } from "./errors";
 import type { InstallResult, ProtocolHost } from "./pmtiles";
 
 /** Modules this core has registered `cog://` on (one registration per module per page). */
@@ -89,7 +89,7 @@ function startHeaderRead(fileUrl: string): void {
  * @internal
  */
 export const cogHost: CogHost = {
-  formatError: (failure) => new FormatError(failure),
+  formatError,
   consoleText,
   takeHeaderRead(fileUrl) {
     const read = headerReads.get(fileUrl);
@@ -104,6 +104,7 @@ export const cogHost: CogHost = {
  * {@link FormatError}) drops the reads started for it: a retry asks again.
  */
 function cogReader(): Promise<Decoders["cog"]> {
+  if (ready) return Promise.resolve(ready);
   return getDecoder("cog").then(
     (lib) => {
       if (ready !== lib) {

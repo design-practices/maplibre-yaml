@@ -32,7 +32,7 @@
 import type { Protocol } from "pmtiles";
 import type { PmtilesHost } from "../renderer/cloud-host";
 import { getDecoder, type Decoders } from "./decoders";
-import { FormatError, isAbortError, isFormatError } from "./errors";
+import { FormatError, formatError, isAbortError, isFormatError } from "./errors";
 import { rangeRepliesUnreadable } from "./http";
 
 /** The slice of the maplibre-gl module this decoder needs (injected). */
@@ -86,9 +86,12 @@ export async function archiveMetadata(url: string): Promise<Record<string, unkno
  * @internal
  */
 export const pmtilesHost: PmtilesHost = {
-  formatError: (failure) => new FormatError(failure),
+  formatError,
   rangeRepliesUnreadable,
 };
+
+/** The reader chunk once it has loaded and been given the host. */
+let ready: Decoders["pmtiles"] | undefined;
 
 /**
  * The reader chunk, given the host before anything in it runs (a failed
@@ -98,7 +101,10 @@ export const pmtilesHost: PmtilesHost = {
  */
 function pmtilesReader(): Promise<Decoders["pmtiles"]> {
   return getDecoder("pmtiles").then((lib) => {
-    lib.useHost?.(pmtilesHost);
+    if (ready !== lib) {
+      lib.useHost?.(pmtilesHost);
+      ready = lib;
+    }
     return lib;
   });
 }

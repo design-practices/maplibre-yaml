@@ -376,18 +376,18 @@ export async function probe(url: string, signal?: AbortSignal): Promise<ProbeRes
     const failure = fetchFailure(error, url);
     // A reply that wouldn't decode: a host that compresses the parts of files
     // it sends (jsDelivr's Cloudflare leg)?
-    if (isFormatError(failure) && failure.failure.code === "cors" && (await host().rangeRepliesUnreadable(url))) {
+    if (isFormatError(failure) && failure.failure.code === "cors" && (await host().http.rangeRepliesUnreadable(url))) {
       throw host().formatError({ code: "encoded-range", format: "flatgeobuf", url });
     }
     throw failure;
   }
-  if (!response.ok) throw host().httpError(response, url);
+  if (!response.ok) throw host().http.httpError(response, url);
   if (response.status !== 206) {
     const length = Number(response.headers.get("content-length"));
     void response.body?.cancel().catch(() => undefined);
     return { ranges: false, ...(Number.isFinite(length) && length > 0 ? { size: length } : {}) };
   }
-  if (host().isEncodedRange(response)) {
+  if (host().http.isEncodedRange(response)) {
     // Parts of a compressed copy (jsDelivr's Cloudflare leg): the index
     // can't be read a part at a time from this host.
     void response.body?.cancel().catch(() => undefined);
@@ -396,7 +396,7 @@ export async function probe(url: string, signal?: AbortSignal): Promise<ProbeRes
   const bytes = new Uint8Array(await response.arrayBuffer());
   const magic = bytes[0] === 0x66 && bytes[1] === 0x67 && bytes[2] === 0x62;
   if (!magic && isZstd(bytes)) throw compressedFailure(url);
-  if (!magic && (await host().rangeRepliesUnreadable(url))) {
+  if (!magic && (await host().http.rangeRepliesUnreadable(url))) {
     throw host().formatError({ code: "encoded-range", format: "flatgeobuf", url });
   }
   if (!magic) throw host().formatError({ code: "not-format", format: "flatgeobuf", url });

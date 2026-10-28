@@ -124,6 +124,12 @@ export type CloudMessages = Pick<
   | "wholeFileCause"
 >;
 
+/** The HTTP helpers (formats/http) the readers' range and whole-file reads use. */
+export type CloudHttp = Pick<
+  typeof http,
+  "fetchTail" | "fetchWhole" | "httpError" | "isEncodedRange" | "rangeRepliesUnreadable"
+>;
+
 /** Everything the FlatGeobuf and GeoParquet chunks use from core. */
 export interface CloudHost {
   /**
@@ -137,7 +143,7 @@ export interface CloudHost {
    * it to `chunks/chunks/…`.
    */
   getDecoder(name: "geoparquet-brotli"): Promise<typeof import("../formats/lib/geoparquet-brotli")>;
-  /** Thrown by the body reads ({@link CloudHost.fetchTail} and the FlatGeobuf stream guard); one class, so `instanceof` holds. */
+  /** Thrown by the body reads (`http.fetchTail` and the FlatGeobuf stream guard); one class, so `instanceof` holds. */
   BodyTooLarge: typeof http.BodyTooLarge;
   /** A whole-file read refused for size (one class, so `instanceof` holds on both sides). */
   WholeFileTooLarge: typeof WholeFileTooLarge;
@@ -147,11 +153,7 @@ export interface CloudHost {
   openWhole(url: string, signal?: AbortSignal): Promise<OpenedFile>;
   /** Throw away a response body that won't be read. */
   discard(opened: OpenedFile): void;
-  fetchTail: typeof http.fetchTail;
-  fetchWhole: typeof http.fetchWhole;
-  httpError: typeof http.httpError;
-  isEncodedRange: typeof http.isEncodedRange;
-  rangeRepliesUnreadable: typeof http.rangeRepliesUnreadable;
+  http: CloudHttp;
   /** A message with its `` `code` `` spans quoted for the console. */
   consoleText(message: string): string;
   /** Record a file's own column names against the data read from it (the property-name hints read them back). */

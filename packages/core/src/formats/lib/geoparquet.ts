@@ -268,12 +268,12 @@ function rangeReader(
       } catch (error) {
         throw fetchFailure(error, url);
       }
-      if (!response.ok) throw host().httpError(response, url);
+      if (!response.ok) throw host().http.httpError(response, url);
       if (response.status !== 206) {
         void response.body?.cancel().catch(() => undefined);
         throw host().formatError({ code: "no-range", format: "geoparquet", url });
       }
-      if (host().isEncodedRange(response)) {
+      if (host().http.isEncodedRange(response)) {
         void response.body?.cancel().catch(() => undefined);
         throw host().formatError({ code: "encoded-range", format: "geoparquet", url });
       }
@@ -322,7 +322,7 @@ export async function open(url: string, options: OpenOptions = {}): Promise<GeoP
   let tail: Tail;
   try {
     tail = await (options.started?.tail ??
-      host().fetchTail(url, tailBytes, {
+      host().http.fetchTail(url, tailBytes, {
         ...(signal ? { signal } : {}),
         ...(options.maxWholeBytes !== undefined ? { maxWholeBytes: options.maxWholeBytes } : {}),
       }));
@@ -352,11 +352,11 @@ export async function open(url: string, options: OpenOptions = {}): Promise<GeoP
     const b = new Uint8Array(t.bytes);
     return b.length >= 12 && hasMagic(b, b.length - 4) && (t.start !== 0 || hasMagic(b, 0));
   };
-  if (!looksRight(tail) && tail.ranges && (await host().rangeRepliesUnreadable(url))) {
+  if (!looksRight(tail) && tail.ranges && (await host().http.rangeRepliesUnreadable(url))) {
     // A host that answers ranges from a compressed copy (jsDelivr's
     // Cloudflare leg): the whole file, which the browser decodes, is right.
     try {
-      tail = await host().fetchWhole(url, {
+      tail = await host().http.fetchWhole(url, {
         ...(signal ? { signal } : {}),
         ...(options.maxWholeBytes !== undefined ? { maxWholeBytes: options.maxWholeBytes } : {}),
       });
@@ -438,10 +438,6 @@ function crsFacts(crs: unknown): { org?: string; code?: number | string; name?: 
 }
 
 /**
- * Read the GeoParquet facts from a parsed footer, and refuse what this
- * version can't draw.
- */
-/**
  * The `geo:overviews` key (or its planned home, `geo.overviews`), read into
  * {@link Overviews}; undefined when the file has none, or one whose levels
  * don't tile the row groups (then it is read as plain GeoParquet).
@@ -513,6 +509,10 @@ function topLevelColumns(metadata: FileMetaData): { name: string; logical_type?:
   return out;
 }
 
+/**
+ * Read the GeoParquet facts from a parsed footer, and refuse what this
+ * version can't draw.
+ */
 export function geoInfo(metadata: FileMetaData, url: string): GeoParquetInfo {
   const schema = topLevelColumns(metadata);
   const topColumns = schema.map((c) => c.name);

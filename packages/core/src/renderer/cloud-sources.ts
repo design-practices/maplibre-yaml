@@ -39,7 +39,7 @@ import {
 } from "../formats/detect";
 import { getDecoder, type Decoders } from "../formats/decoders";
 import { cogSourceSpec } from "../formats/cog-spec";
-import { FormatError } from "../formats/errors";
+import { FormatError, formatError } from "../formats/errors";
 import { discard, openWhole } from "../formats/flatgeobuf";
 import { TAIL_BYTES } from "../formats/geoparquet";
 import {
@@ -281,18 +281,14 @@ export type ReaderFormat = "flatgeobuf" | "geoparquet";
  * @internal
  */
 export const cloudHost: CloudHost = {
-  formatError: (failure) => new FormatError(failure),
-  getDecoder: (name) => getDecoder(name),
+  formatError,
+  getDecoder,
   BodyTooLarge,
   WholeFileTooLarge,
   sizeLimits,
   openWhole,
   discard,
-  fetchTail,
-  fetchWhole,
-  httpError,
-  isEncodedRange,
-  rangeRepliesUnreadable,
+  http: { fetchTail, fetchWhole, httpError, isEncodedRange, rangeRepliesUnreadable },
   consoleText,
   recordPropertyNames,
   messages: {

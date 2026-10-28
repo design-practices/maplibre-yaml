@@ -667,6 +667,15 @@ export const RANGE_REQUEST_HINT =
   "preview locally with `npx serve` instead.";
 
 /**
+ * Whether a failure is the live-data chunk's (`chunks/live.js`) failed
+ * download. The seam (formats/decoders) reports every chunk under its name as
+ * a `format`; `"live"` is no `CloudFormat`, hence the widening cast.
+ */
+function isLiveChunkFailure(failure: FormatFailure): boolean {
+  return failure.code === "chunk" && (failure.format as string) === "live";
+}
+
+/**
  * One cloud-native failure, in plain language: what happened to which file
  * and what to do about it. Used as the `message` of every
  * {@link FormatError}, so the notice, the console and the
@@ -675,7 +684,7 @@ export const RANGE_REQUEST_HINT =
 export function describeFormatFailure(failure: FormatFailure): string {
   // The live-data chunk (polling and streaming) is no file-format reader:
   // its own words, before the reader label (FORMAT_LABELS has no entry).
-  if (failure.code === "chunk" && (failure.format as string) === "live") return describeLiveCodeFailure(failure.url);
+  if (isLiveChunkFailure(failure)) return describeLiveCodeFailure(failure.url);
   const label = FORMAT_LABELS[failure.format] ?? failure.format;
   const file = `\`${failure.url}\``;
   switch (failure.code) {
@@ -873,7 +882,7 @@ export function describeDataProblem(
   const failure = (error as { failure?: FormatFailure }).failure;
   // Live updates that couldn't start (their chunk didn't download): the
   // layer has its first data, so not "has no data" (bundle headroom, KTD8).
-  if (failure?.code === "chunk" && (failure.format as string) === "live") {
+  if (failure && isLiveChunkFailure(failure)) {
     return describeLiveUpdatesStopped(layerId, failure.url);
   }
   // A cloud-native file (FlatGeobuf, a reserved format) already carries its

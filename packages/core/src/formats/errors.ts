@@ -112,6 +112,14 @@ export class FormatError extends Error {
 }
 
 /**
+ * A {@link FormatError} for `failure`: the factory the reader chunks' hosts
+ * hand over (a chunk can't construct the class — see renderer/cloud-host).
+ */
+export function formatError(failure: FormatFailure): FormatError {
+  return new FormatError(failure);
+}
+
+/**
  * Whether `error` is a {@link FormatError}. Duck-typed, not `instanceof`:
  * the error may cross a bundle boundary (two copies of core on a page).
  */
