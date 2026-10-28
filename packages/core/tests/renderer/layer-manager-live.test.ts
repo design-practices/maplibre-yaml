@@ -36,6 +36,7 @@ vi.mock("../../src/formats/decoders", async (importOriginal) => {
 });
 
 import { LayerManager } from "../../src/renderer/layer-manager";
+import { getDecoder, prefetchDecoder } from "../../src/formats/decoders";
 import { FormatError } from "../../src/formats/errors";
 import { describeDataProblem } from "../../src/components/student-messages";
 import { PollingManager } from "../../src/data/polling-manager";
@@ -211,6 +212,26 @@ describe("LayerManager: live data as the `live` chunk (bundle headroom U4)", () 
     expect(start).not.toHaveBeenCalled();
   });
 
+  it("a named source's last layer removed while the chunk downloads: no poll starts, and a layer added again polls", async () => {
+    const chunk = holdLiveChunk();
+    const start = vi.spyOn(PollingManager.prototype, "start");
+    manager.registerSources({ shared: { type: "geojson", url: "https://example.com/s.geojson", refresh: REFRESH } });
+    const adding = manager.addLayer(layer("shared" as any, "a"));
+    await flush();
+    // The document keeps the source; nothing draws it any more.
+    manager.removeLayer("a");
+    chunk.resolve();
+    await adding;
+    expect(start).not.toHaveBeenCalled();
+    expect(manager.isRefreshing("shared")).toBe(false);
+
+    // Drawn again: its pipeline starts once, as on first add.
+    await manager.addLayer(layer("shared" as any, "b"));
+    expect(start).toHaveBeenCalledTimes(1);
+    expect(live(manager)!.polling.getActiveIds()).toEqual(["shared"]);
+    expect(manager.isRefreshing("shared")).toBe(true);
+  });
+
   it("pause() while the chunk downloads: polling starts paused, and resume() lets it go", async () => {
     const chunk = holdLiveChunk();
     const adding = manager.addLayer(layer({ type: "geojson", url: "https://example.com/q.geojson", refresh: REFRESH }));
@@ -221,6 +242,57 @@ describe("LayerManager: live data as the `live` chunk (bundle headroom U4)", () 
     expect(live(manager)!.polling.getState("quakes")).toMatchObject({ isActive: true, isPaused: true });
     manager.resume();
     expect(live(manager)!.polling.getState("quakes")).toMatchObject({ isActive: true, isPaused: false });
+  });
+
+  it("pause() while the chunk downloads: a stream doesn't connect, and resume() connects it", async () => {
+    const chunk = holdLiveChunk();
+    const connect = vi.spyOn(StreamManager.prototype, "connect").mockResolvedValue(undefined);
+    const adding = manager.addLayer(
+      layer({
+        type: "geojson",
+        url: "https://example.com/q.geojson",
+        refresh: { updateStrategy: "replace" },
+        stream: { type: "sse", url: "https://example.com/feed" },
+      })
+    );
+    await flush();
+    manager.pause();
+    chunk.resolve();
+    await adding;
+    await flush();
+    // A paused map (a fallback rebuild) opens no new connection.
+    expect(connect).not.toHaveBeenCalled();
+    manager.resume();
+    await flush();
+    expect(connect).toHaveBeenCalledTimes(1);
+    expect(connect).toHaveBeenCalledWith("quakes", expect.objectContaining({ type: "sse", url: "https://example.com/feed" }));
+    // Once: a second resume() connects nothing more.
+    manager.pause();
+    manager.resume();
+    await flush();
+    expect(connect).toHaveBeenCalledTimes(1);
+  });
+
+  it("a refresh edit while the chunk downloads on a source that streams and polls: both start, the stream once", async () => {
+    const chunk = holdLiveChunk();
+    const connect = vi.spyOn(StreamManager.prototype, "connect").mockResolvedValue(undefined);
+    const spec = {
+      type: "geojson",
+      url: "https://example.com/q.geojson",
+      refresh: REFRESH,
+      stream: { type: "sse", url: "https://example.com/feed" },
+    };
+    const adding = manager.addLayer(layer(spec));
+    await flush();
+    // Only a non-stream key changes: the stream's shape is the same.
+    const edited = manager.retargetPipeline("quakes-source", { ...spec, refresh: { ...REFRESH, refreshInterval: 30_000 } });
+    chunk.resolve();
+    await adding;
+    await edited;
+    await flush();
+    expect(live(manager)!.polling.has("quakes")).toBe(true);
+    expect(connect).toHaveBeenCalledTimes(1);
+    expect(connect).toHaveBeenCalledWith("quakes", expect.objectContaining({ type: "sse", url: "https://example.com/feed" }));
   });
 
   it("a document update that adds refresh to a static source starts polling; one that removes it stops", async () => {
@@ -234,6 +306,26 @@ describe("LayerManager: live data as the `live` chunk (bundle headroom U4)", () 
 
     await manager.retargetPipeline("quakes-source", plain);
     expect(live(manager)!.polling.has("quakes")).toBe(false);
+  });
+
+  it("a document update that adds refresh fetches the chunk ahead, as a new source does, before the poll asks for it", async () => {
+    const plain = { type: "geojson", url: "https://example.com/q.geojson" };
+    await manager.addLayer(layer(plain));
+    expect(seam.prefetches).toEqual([]);
+    const chunk = holdLiveChunk();
+    const start = vi.spyOn(PollingManager.prototype, "start");
+    vi.mocked(prefetchDecoder).mockClear();
+    vi.mocked(getDecoder).mockClear();
+    const edited = manager.retargetPipeline("quakes-source", { ...plain, refresh: REFRESH });
+    expect(seam.prefetches).toEqual(["live"]);
+    expect(start).not.toHaveBeenCalled();
+    // Asked ahead of the poll's own wait for it.
+    const prefetchedAt = vi.mocked(prefetchDecoder).mock.invocationCallOrder[0]!;
+    const awaitedAt = vi.mocked(getDecoder).mock.invocationCallOrder.at(-1)!;
+    expect(prefetchedAt).toBeLessThan(awaitedAt);
+    chunk.resolve();
+    await edited;
+    expect(start).toHaveBeenCalledTimes(1);
   });
 
   it("a blocked chunk: the first data stays, one notice says updates stopped, and reload() retries and polls", async () => {
@@ -297,6 +389,23 @@ describe("LayerManager: live data as the `live` chunk (bundle headroom U4)", () 
     expect(order).toEqual(["loaded:shared", "error:a"]);
     expect(manager.isRefreshing("shared")).toBe(false);
     expect(manager.failedSources().has("shared")).toBe(true);
+  });
+
+  it("a live chunk from another maplibre-yaml version: the first data stays and the updates-stopped notice says so", async () => {
+    // Chunk names carry no version: a cached or stale `chunks/live.js` whose
+    // exports this bundle doesn't know is the chunk notice, not a TypeError.
+    const stale = Promise.resolve({ mergeKeyOf: () => undefined });
+    seam.gate = { promise: stale, resolve: () => {}, reject: () => {} };
+    await manager.addLayer(layer({ type: "geojson", url: "https://example.com/q.geojson", refresh: REFRESH }));
+    await flush();
+    expect(callbacks.onDataLoaded).toHaveBeenCalledWith("quakes", 3);
+    expect(callbacks.onDataError).toHaveBeenCalledTimes(1);
+    const [layerId, error] = callbacks.onDataError.mock.calls[0];
+    expect(error.failure).toMatchObject({ code: "chunk", format: "live", url: "chunks/live.js" });
+    expect(error.failure.detail).toMatch(/another maplibre-yaml version/);
+    expect(describeDataProblem(layerId, error, { filePage: false })).toMatch(/^`quakes` shows the data it loaded first, but its live updates stopped/);
+    expect(live(manager)).toBeNull();
+    expect(manager.failedSources().has("quakes-source")).toBe(true);
   });
 
   it("refreshNow on a layer with no poll still rejects as it did", async () => {

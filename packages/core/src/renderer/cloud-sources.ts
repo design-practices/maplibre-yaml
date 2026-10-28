@@ -37,7 +37,7 @@ import {
   type CloudFormat,
   type LoadMode,
 } from "../formats/detect";
-import { getDecoder, type Decoders } from "../formats/decoders";
+import { foreignChunk, getDecoder, type Decoders } from "../formats/decoders";
 import { cogSourceSpec } from "../formats/cog-spec";
 import { FormatError, formatError } from "../formats/errors";
 import { discard, openWhole } from "../formats/flatgeobuf";
@@ -315,6 +315,8 @@ const ready = new Map<ReaderFormat, Decoders[ReaderFormat]>();
 export function cloudReaders<F extends ReaderFormat>(format: F): Promise<Decoders[F]> {
   return getDecoder(format).then((readers) => {
     if (ready.get(format) !== readers) {
+      // A chunk from another version (no adapter): the chunk notice, not kept.
+      if (typeof readers.useHost !== "function") throw foreignChunk(format);
       readers.useHost(cloudHost);
       ready.set(format, readers);
     }

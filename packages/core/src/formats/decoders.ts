@@ -212,6 +212,21 @@ export function getDecoder<F extends DecodedFormat>(name: F): Promise<Decoders[F
 }
 
 /**
+ * The seam's `chunk` {@link FormatError} for `name`'s file when it
+ * downloaded but is not the shape this bundle expects: a `chunks/` folder
+ * (or a browser's cached copy of one — chunk names carry no version) from
+ * another maplibre-yaml version. The fix is the same as for a missing file.
+ */
+export function foreignChunk(name: DecodedFormat): FormatError {
+  return new FormatError({
+    code: "chunk",
+    format: name as CloudFormat,
+    url: `chunks/${name}.js`,
+    detail: "this chunks/ folder is from another maplibre-yaml version; copy the whole dist/",
+  });
+}
+
+/**
  * Start downloading `name`'s library without waiting for it (a document that
  * will need it, seen at parse time). Never rejects: the caller that actually
  * needs the library awaits {@link getDecoder} and reports the failure there.

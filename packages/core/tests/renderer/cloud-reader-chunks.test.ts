@@ -5,7 +5,8 @@
  * (the two overlap, one request each); a manager destroyed — or a source
  * removed — meanwhile starts no reader and cancels that request; a failed
  * download is the source's plain notice, and the next load asks again; a
- * `pause()` meanwhile starts the reader suspended.
+ * `pause()` meanwhile — or a named source's last layer removed meanwhile —
+ * starts the reader suspended.
  */
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { readFileSync } from "node:fs";
@@ -20,6 +21,8 @@ vi.mock("maplibre-gl", () => {
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "../../../../docs/public/gallery-assets/cloud-native");
 const fgb = new Uint8Array(readFileSync(join(FIXTURES, "districts.fgb")));
 const parquet = new Uint8Array(readFileSync(join(FIXTURES, "districts.parquet")));
+/** Sorted row groups with a bbox column: a file GeoParquet reads by view. */
+const byViewParquet = new Uint8Array(readFileSync(join(FIXTURES, "points.parquet")));
 const FGB = "https://h.org/districts.fgb";
 const PARQUET = "https://h.org/districts.parquet";
 const FGB_LIB = "../../src/formats/lib/flatgeobuf";
@@ -217,6 +220,32 @@ describe("LayerManager takes the cloud readers from their chunks (bundle headroo
     expect(next.onDataError).not.toHaveBeenCalled();
     fresh.destroy();
   });
+
+  it.each([
+    ["FlatGeobuf", FGB_LIB, FGB, fgb],
+    ["GeoParquet", GP_LIB, "https://h.org/points.parquet", byViewParquet],
+  ] as const)(
+    "%s: a named source's last layer removed while the chunk downloads: the by-view reader starts suspended, and a layer drawing it again resumes it",
+    async (_name, lib, url, bytes) => {
+      const { LayerManager, release, log } = await heldChunk(lib);
+      serving(bytes, log);
+      const { map } = mockMap();
+      const manager = new LayerManager(map as never, callbacksFor());
+      manager.registerSources({ p: { type: "geojson", url, load: "viewport" } } as never);
+      await manager.addLayer({ id: "d", type: "fill", source: "p" } as never);
+      await flush();
+      // The document keeps the source; nothing draws it any more.
+      manager.removeLayer("d");
+      release();
+      await vi.waitFor(() => expect((manager as any).formatLoaders.get("p")).toBeDefined());
+      await flush();
+      expect((manager as any).formatLoaders.get("p").suspended).toBe(true);
+      expect(map.on).not.toHaveBeenCalledWith("moveend", expect.any(Function));
+      await manager.addLayer({ id: "e", type: "fill", source: "p" } as never);
+      await vi.waitFor(() => expect(map.on).toHaveBeenCalledWith("moveend", expect.any(Function)));
+      manager.destroy();
+    }
+  );
 
   it("pause() while the chunk downloads: the by-view reader starts suspended, and resume() starts it", async () => {
     const { LayerManager, release, log } = await heldChunk(FGB_LIB);

@@ -28,7 +28,7 @@ import type { CogHost } from "../renderer/cloud-host";
 import { consoleText } from "../utils/console-text";
 import { fileUrlOf, HEADER_BYTES, type CogRequest } from "./cog";
 import type { CogHeader } from "./cog-header";
-import { getDecoder, type Decoders } from "./decoders";
+import { foreignChunk, getDecoder, type Decoders } from "./decoders";
 import { FormatError, formatError } from "./errors";
 import type { InstallResult, ProtocolHost } from "./pmtiles";
 
@@ -105,20 +105,19 @@ export const cogHost: CogHost = {
  */
 function cogReader(): Promise<Decoders["cog"]> {
   if (ready) return Promise.resolve(ready);
-  return getDecoder("cog").then(
-    (lib) => {
-      if (ready !== lib) {
-        lib.useHost(cogHost);
-        ready = lib;
-      }
+  return getDecoder("cog")
+    .then((lib) => {
+      // A chunk from another version (no adapter): the chunk notice, not kept.
+      if (typeof lib.useHost !== "function") throw foreignChunk("cog");
+      lib.useHost(cogHost);
+      ready = lib;
       return lib;
-    },
-    (error: unknown) => {
+    })
+    .catch((error: unknown) => {
       for (const read of headerReads.values()) void read.then((r) => r.body?.cancel()).catch(() => undefined);
       headerReads.clear();
       throw error;
-    }
-  );
+    });
 }
 
 /**
