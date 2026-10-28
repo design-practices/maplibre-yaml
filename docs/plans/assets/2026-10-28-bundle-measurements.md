@@ -156,3 +156,23 @@ classify, cloud) = **−73.3 KB** marginal; with the `describe()` strip, the pla
   or preload hints (ml-7qa.7) a hop costs ~0.5–0.6 s on Fast 3G.
 - **Budget:** 387 B headroom today — any further 0.10.x addition to the entry fails
   `bundle-size.test.ts`; the `describe()` strip alone would buy ~8.7 KB.
+
+## 7. After the headroom pass (perf/bundle-headroom @ ef086f1)
+
+`gzip -9 -c | wc -c`, fresh build.
+
+| File | Before (525157b) | After | Change |
+|---|---:|---:|---:|
+| `register.browser.js` (entry) | 197,751 | **174,730** | **−23,021** |
+| `chunks/flatgeobuf.js` | 11,956 | 16,857 | +4,901 |
+| `chunks/geoparquet.js` | 22,673 | 30,261 | +7,588 |
+| `chunks/cog.js` | 131,922 | 133,491 | +1,569 |
+| `chunks/pmtiles.js` | 7,586 | 8,187 | +601 |
+| `chunks/live.js` (new) | — | 4,017 | +4,017 |
+| other chunks (update, toml, convert, protomaps-basemap, geoparquet-brotli, cog codecs) | unchanged | unchanged | 0 |
+
+Per step on the entry: `.describe()` strip −8,795 · story CSS minify −1,340 · live chunk + loading manager −3,553 · FlatGeobuf/GeoParquet adapters −8,031 · COG adapter + PMTiles error path −1,302.
+
+The cloud saving (−9.3 KB) is below the −17.6 KB marginal measured in §3: detection, the tile-spec rewrite, size limits, `http.ts`, the protocol installs, the COG hint map and a thin loader that starts the file request early all stay in the entry by design (plan KTD4). Chunks grew by more than the entry shrank because each self-contained chunk carries its own copy of the shared reader code; only pages with that format pay it.
+
+Size gate: `size-baseline.json` re-recorded at 174,730 B (ef086f1) with a 3,072 B allowance — the large-data round 2 plan's remaining entry-side additions (MLT encoding and BigInt handling, `archiveTileType`, hint text, the classify by-view hook), estimated at about 2-3 KB now that its GeoParquet loader work lands in `chunks/geoparquet.js`.
