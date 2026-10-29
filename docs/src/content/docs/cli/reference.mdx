@@ -447,7 +447,7 @@ npx maplibre-yaml@latest breaks <file> --field <name> [options]
 | `--classes` | | number | `5` | How many classes, 2 to 12, as `classes:` |
 | `--normalize` | | string | | Divide the field by this property to break a rate, as `normalize:` |
 | `--multiply` | | number | | Multiply the rate (`100000` for "per 100,000"), as `multiply:`. Needs `--normalize` |
-| `--format` | `-f` | string | `text` | `json` prints one JSON object on stdout instead: `success`, `file`, `format`, `field`, `method`, `classes`, `breaks`, `min`, `max`, `count` and `noData`, or `success: false` and `errors` |
+| `--format` | `-f` | string | `text` | `json` prints one JSON object on stdout instead: `success`, `file`, `format`, `field`, `method`, `classes`, `breaks`, `min`, `max`, `count` and `noData`, or `success: false` and `errors` (as [`convert`'s](#convert-json-output): one `{ path, message, code }` per problem, `code` naming the exit code, e.g. `file-not-found`) |
 
 The output is a comment naming what was computed, the field's range, and the
 breaks:
@@ -515,14 +515,17 @@ npx maplibre-yaml@latest prepare <file> [options]
 
 | Option | Alias | Type | Default | Description |
 | ------ | ----- | ---- | ------- | ----------- |
-| `--format` | `-f` | string | `text` | `json` prints one JSON object on stdout instead: `success`, `file`, `facts` and `recommendation` (`verdict`, `route`, `summary`, `steps`, `yaml`, `alternative`, `notes`), or `success: false` and `errors` |
+| `--format` | `-f` | string | `text` | `json` prints one JSON object on stdout instead: `success`, `file`, `facts` and `recommendation` (`verdict`, `route`, `summary`, `steps`, `yaml`, `alternative`, `notes`), or `success: false` and `errors` (as `breaks` prints them) |
 
 What it reads:
 
 - **GeoParquet and FlatGeobuf:** only the footer or header, never the
   features: rows or features, size, geometry, CRS, the `bbox` column, row
   groups and rows per group, sort order, and a GeoParquet overview file's
-  levels.
+  levels. A FlatGeobuf whose header doesn't record its feature count (some
+  streaming writers leave it out) is routed by its size instead: up to
+  10 MB it is read whole; above that, the `ogr2ogr` command re-creates it
+  with an index and the count, to read by view.
 - **GeoJSON:** the whole file up to 200 MB, to count its features. Above
   that it reads the first 8 MB and estimates the count from them, and the
   report calls it an estimate.
@@ -533,7 +536,8 @@ What it reads:
 - **A URL** is read with range requests, as a map reading the file by view
   reads it. A server that ignores them (`python -m http.server`) is refused
   rather than downloaded whole; the message says to host the file where range
-  requests work, or to run `prepare` on a downloaded copy.
+  requests work, or to run `prepare` on a downloaded copy. Each request
+  waits up to 30 seconds for an answer.
 
 The route, from the number of features at full detail:
 
@@ -590,7 +594,8 @@ sources:
 The command exits `1` with no file argument, a bad `--format`, a file of none
 of the four formats (a Parquet file without geometry metadata included), or a
 server without range requests. A path that can't be read (missing, a folder,
-no permission) or a URL that answers 404 or can't be reached exits `2`.
+no permission) or a URL that answers 404, can't be reached, or doesn't
+answer within 30 seconds exits `2`.
 
 ```bash
 npx maplibre-yaml@latest prepare data/trees.fgb
@@ -642,7 +647,7 @@ the built-in default. With the file above, `preview map.yaml` serves on port
 | ---- | ------------------- | ----------------- |
 | `0`  | Success. For `emit`, the style was written; warnings, if any, are on stderr | All |
 | `1`  | Invalid input: validation or syntax errors, warnings in strict mode, an unknown template or option, a non-empty `init` folder, an `emit --strict` or `convert --strict` refusal, a `breaks` field that is missing or not numeric, a file `prepare` doesn't read or a server without range requests | validate, emit, convert, init, schema, bake, breaks, prepare |
-| `2`  | File not found, no file matched a pattern, a folder held no map or story document, or a `prepare` URL answered 404 or couldn't be reached | validate, preview, emit, convert, breaks, prepare |
+| `2`  | File not found, no file matched a pattern, a folder held no map or story document, or a `prepare` URL answered 404, couldn't be reached or didn't answer in 30 s | validate, preview, emit, convert, breaks, prepare |
 | `4`  | Unexpected error (for `emit`, for example, a basemap or image that could not be fetched) | All |
 
 ---

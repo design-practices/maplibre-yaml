@@ -138,6 +138,8 @@ export interface PrepareOptions {
   fullParseBytes?: number;
   /** Above it, the feature count is estimated from this many first bytes (default 8 MB). */
   sampleBytes?: number;
+  /** For a URL, each range request's timeout in milliseconds (default 30 s). */
+  timeoutMs?: number;
 }
 
 const MB = 1024 * 1024;
@@ -146,6 +148,13 @@ const SAMPLE_BYTES = 8 * MB;
 /** The guide's size-to-format table, in features at full detail. */
 export const AS_IS_FEATURES = 50_000;
 export const BY_VIEW_FEATURES = 250_000;
+/**
+ * A FlatGeobuf whose header records no feature count is routed by its size:
+ * up to this many bytes the map reads it whole (core's `WHOLE_FILE_WARN_BYTES`,
+ * where a whole-file read starts to warn); above it, it is re-created with an
+ * index and a count and read by view.
+ */
+const UNKNOWN_COUNT_WHOLE_BYTES = 10 * MB;
 /** Row groups larger than this make reading by view decode too much (the guide says about 10,000). */
 const LARGE_ROW_GROUP = 25_000;
 
@@ -214,7 +223,10 @@ function formatByBytes(head: Uint8Array): Detected | undefined {
 async function openBuffer(file: string, options: PrepareOptions): Promise<AsyncBuffer & { close?: () => Promise<void> }> {
   if (isUrl(file)) {
     try {
-      return await openUrlBuffer(file, options.fetch ? { fetch: options.fetch } : {});
+      return await openUrlBuffer(file, {
+        ...(options.fetch ? { fetch: options.fetch } : {}),
+        ...(options.timeoutMs !== undefined ? { timeoutMs: options.timeoutMs } : {}),
+      });
     } catch (error) {
       throw urlFailure(file, error);
     }
@@ -229,7 +241,7 @@ async function openBuffer(file: string, options: PrepareOptions): Promise<AsyncB
   }
 }
 
-/** A URL read failure as a refusal: no range support is the input's problem (1), 4xx and unreachable 2, 5xx 4. */
+/** A URL read failure as a refusal: no range support is the input's problem (1), 4xx, unreachable and no answer in time 2, 5xx 4. */
 function urlFailure(url: string, error: unknown): PrepareError {
   if (error instanceof FileBufferError) {
     if (error.code === 'no-range') {
@@ -240,6 +252,9 @@ function urlFailure(url: string, error: unknown): PrepareError {
           'Netlify, or `npx serve` locally), or download it and run mlym prepare on the local copy.',
         EXIT_CODES.VALIDATION_ERROR,
       );
+    }
+    if (error.code === 'timeout') {
+      return new PrepareError(`Could not read ${url}: ${error.message.replace(/ \(.*\)$/, '')}. Try again later.`, EXIT_CODES.FILE_NOT_FOUND);
     }
     if (error.code === 'http' && error.status !== undefined && error.status >= 500) {
       return new PrepareError(`Could not read ${url}: ${error.message}. Try again later.`, EXIT_CODES.UNKNOWN_ERROR);
@@ -514,6 +529,8 @@ const OVERVIEW_NOTE =
 interface Shape {
   format: Exclude<Detected, 'pmtiles'>;
   features: number;
+  /** A FlatGeobuf whose header doesn't record its feature count (`features` is 0, the file isn't empty). */
+  countUnknown: boolean;
   kind: Kind;
   lonLat: boolean;
   crs?: string;
@@ -524,6 +541,11 @@ interface Shape {
   /** Why not, in a few words. */
   notByView?: string;
   overviews?: GeoParquetFacts['overviews'];
+}
+
+/** A FlatGeobuf header's count is 0 when the writer didn't record it (streaming writers leave it out). */
+function countUnrecorded(facts: FlatGeobufFacts): boolean {
+  return facts.features === 0 && facts.byteLength > 0;
 }
 
 function shapeOf(facts: Exclude<FileFacts, PmtilesFacts>): Shape {
@@ -540,6 +562,7 @@ function shapeOf(facts: Exclude<FileFacts, PmtilesFacts>): Shape {
     return {
       format: 'geoparquet',
       features: facts.rows,
+      countUnknown: false,
       kind: kindOf(facts.geometryTypes),
       lonLat: facts.lonLat,
       ...(facts.crs ? { crs: facts.crs } : {}),
@@ -553,6 +576,7 @@ function shapeOf(facts: Exclude<FileFacts, PmtilesFacts>): Shape {
     return {
       format: 'flatgeobuf',
       features: facts.features,
+      countUnknown: countUnrecorded(facts),
       kind: kindOf([facts.geometryType]),
       lonLat: facts.lonLat,
       ...(facts.crs ? { crs: facts.crs } : {}),
@@ -564,6 +588,7 @@ function shapeOf(facts: Exclude<FileFacts, PmtilesFacts>): Shape {
   return {
     format: 'geojson',
     features: facts.features,
+    countUnknown: false,
     kind: kindOf(facts.geometryTypes),
     lonLat: facts.lonLat,
     ...(facts.crs ? { crs: facts.crs } : {}),
@@ -683,6 +708,44 @@ export function recommend(facts: FileFacts, file: string): Recommendation {
         : `An overview file; at ${count(features)} rows of full detail the map reads its full-detail level whole. ` +
           'With load: viewport it reads the level that fits the zoom instead.',
       yaml: sourceYaml({ id, type: 'geojson', url: urlFor(current), ...(big ? { load: OVERVIEW_LOAD } : {}) }),
+    });
+  }
+
+  // No count in a FlatGeobuf's header: route by the file's size instead.
+  if (shape.countUnknown) {
+    const size = formatBytes(facts.byteLength);
+    notes.push(
+      `Its header doesn't record how many features it has (streaming writers leave the count out), so this goes by its size. ` +
+        'Re-created with ogr2ogr it records the count; run mlym prepare on that file to check whether it needs PMTiles or an overview file instead.',
+    );
+    if (facts.byteLength <= UNKNOWN_COUNT_WHOLE_BYTES) {
+      const rec = finish({
+        route: 'as-is',
+        summary: `${size}, feature count not recorded: small enough that the map reads it whole.`,
+        yaml: sourceYaml({ id, type: 'geojson', url: urlFor(current) }),
+      });
+      if (!ready && steps.length === 0) {
+        const fix = byViewFix(current, shape, notByView);
+        rec.alternative = {
+          why: 'To record its feature count, and a spatial index to read it by view (load: viewport), re-create it:',
+          commands: fix.commands,
+          yaml: sourceYaml({ id, type: 'geojson', url: urlFor(sibling(file, fix.output)), load: BY_VIEW_LOAD }),
+        };
+      }
+      return rec;
+    }
+    let target = current;
+    if (!ready) {
+      const fix = byViewFix(current, shape, notByView);
+      steps.push({ why: 'Re-create it with a spatial index and a feature count (ogr2ogr writes both), to read it by view:', commands: fix.commands });
+      target = sibling(file, fix.output);
+    }
+    return finish({
+      route: 'by-view',
+      summary:
+        `${size}, feature count not recorded: over ${formatBytes(UNKNOWN_COUNT_WHOLE_BYTES)}, too large to count on reading it whole. ` +
+        'An indexed FlatGeobuf, read by view (only what is on screen).',
+      yaml: sourceYaml({ id, type: 'geojson', url: urlFor(target), load: BY_VIEW_LOAD }),
     });
   }
 
@@ -881,7 +944,7 @@ function factLines(facts: FileFacts): [string, string][] {
     }
     case 'flatgeobuf':
       return [
-        ['features', count(facts.features)],
+        ['features', countUnrecorded(facts) ? 'not recorded in the header' : count(facts.features)],
         ['geometry', facts.geometryType],
         ['CRS', crsLine(facts.crs, facts.lonLat)],
         ['spatial index', facts.indexed ? `yes (node size ${facts.nodeSize})` : 'no spatial index'],

@@ -8,6 +8,8 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createServer, type Server } from 'node:http';
 import { readFileSync, statSync } from 'node:fs';
+import { copyFile, mkdtemp, rm, truncate } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { AddressInfo } from 'node:net';
@@ -44,6 +46,29 @@ describe('openFileBuffer', () => {
     expect(file.closed).toBe(true);
     await expect(file.slice(0, 4)).rejects.toBeInstanceOf(FileBufferError);
     await expect(file.close()).resolves.toBeUndefined();
+  });
+
+  it('a file that shrinks after it was opened: a slice past its new end is a short-read', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'mlym-file-buffer-'));
+    try {
+      const path = join(dir, 'shrinks.parquet');
+      await copyFile(PARQUET, path);
+      const file = await openFileBuffer(path);
+      try {
+        await truncate(path, 1000);
+        const error = await file.slice(500, 2000).then(
+          () => undefined,
+          (e: unknown) => e
+        );
+        expect(error).toBeInstanceOf(FileBufferError);
+        expect(error).toMatchObject({ code: 'short-read' });
+        expect((error as Error).message).toMatch(/ended at byte 1000, before 2000/);
+      } finally {
+        await file.close();
+      }
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 
   it('withFileBuffer closes the handle when the work throws', async () => {
@@ -83,8 +108,11 @@ describe('openUrlBuffer', () => {
     server = createServer((req, res) => {
       const url = req.url ?? '/';
       requests.push({ url, ...(req.headers.range ? { range: req.headers.range } : {}) });
+      if (url.startsWith('/hang/')) return; // accepts the connection, never answers
       const norange = url.startsWith('/norange/');
-      const name = url.replace(/^\/(norange\/)?/, '');
+      const nototal = url.startsWith('/nototal/');
+      const short = url.startsWith('/short/');
+      const name = url.replace(/^\/(norange\/|nototal\/|short\/)?/, '');
       let body: Uint8Array;
       try {
         body = bytesOf(join(FIXTURES, name));
@@ -99,15 +127,23 @@ describe('openUrlBuffer', () => {
       }
       const start = Number(m[1]);
       const end = Math.min(Number(m[2]), body.length - 1);
+      if (nototal) {
+        // A 206 whose Content-Range a proxy stripped: the size is unknown.
+        res.writeHead(206, { 'Content-Length': end - start + 1 }).end(body.subarray(start, end + 1));
+        return;
+      }
+      // /short/: the Content-Range promises the range, the body is half of it.
+      const sent = short && end > start ? start + Math.floor((end - start + 1) / 2) - 1 : end;
       res
-        .writeHead(206, { 'Content-Range': `bytes ${start}-${end}/${body.length}`, 'Content-Length': end - start + 1 })
-        .end(body.subarray(start, end + 1));
+        .writeHead(206, { 'Content-Range': `bytes ${start}-${end}/${body.length}`, 'Content-Length': sent - start + 1 })
+        .end(body.subarray(start, sent + 1));
     });
     await new Promise<void>((done) => server.listen(0, '127.0.0.1', done));
     base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   });
 
   afterAll(async () => {
+    server.closeAllConnections();
     await new Promise((done) => server.close(done));
   });
 
@@ -134,5 +170,62 @@ describe('openUrlBuffer', () => {
 
   it('an HTTP error carries its status', async () => {
     await expect(openUrlBuffer(`${base}/missing.fgb`)).rejects.toMatchObject({ code: 'http', status: 404 });
+  });
+
+  it('a 206 without a Content-Range is refused as no-range: the size is unknown', async () => {
+    const error = await openUrlBuffer(`${base}/nototal/districts.fgb`).then(
+      () => undefined,
+      (e: unknown) => e
+    );
+    expect(error).toBeInstanceOf(FileBufferError);
+    expect(error).toMatchObject({ code: 'no-range' });
+    expect((error as Error).message).toMatch(/size/);
+  });
+
+  it('a range reply shorter than asked is a short-read', async () => {
+    const file = await openUrlBuffer(`${base}/short/districts.fgb`);
+    const error = await file.slice(100, 300).then(
+      () => undefined,
+      (e: unknown) => e
+    );
+    expect(error).toBeInstanceOf(FileBufferError);
+    expect(error).toMatchObject({ code: 'short-read' });
+    expect((error as Error).message).toMatch(/asked for 200 bytes at 100, got 100/);
+  });
+
+  it('a server that never answers times out (each request), naming the host', async () => {
+    const started = Date.now();
+    const error = await openUrlBuffer(`${base}/hang/districts.fgb`, { timeoutMs: 200 }).then(
+      () => undefined,
+      (e: unknown) => e
+    );
+    expect(Date.now() - started).toBeLessThan(5_000);
+    expect(error).toBeInstanceOf(FileBufferError);
+    expect(error).toMatchObject({ code: 'timeout' });
+    expect((error as Error).message).toContain(new URL(base).host);
+    expect((error as Error).message).toMatch(/0\.2 s/);
+  });
+
+  it('the timeout is on by default (30 s)', async () => {
+    let signal: AbortSignal | undefined;
+    const fetchStub = (async (_url: string, init?: RequestInit) => {
+      signal = init?.signal ?? undefined;
+      return new Response(new Uint8Array(1), { status: 206, headers: { 'Content-Range': 'bytes 0-0/10' } });
+    }) as typeof fetch;
+    await openUrlBuffer(`${base}/districts.fgb`, { fetch: fetchStub });
+    expect(signal).toBeInstanceOf(AbortSignal);
+    expect(signal?.aborted).toBe(false);
+  });
+
+  it("the caller's own signal still aborts, and is not reported as a timeout", async () => {
+    const controller = new AbortController();
+    const pending = openUrlBuffer(`${base}/hang/districts.fgb`, { signal: controller.signal, timeoutMs: 10_000 });
+    setTimeout(() => controller.abort(), 50);
+    const error = await pending.then(
+      () => undefined,
+      (e: unknown) => e
+    );
+    expect(error).not.toBeInstanceOf(FileBufferError);
+    expect((error as Error).name).toBe('AbortError');
   });
 });

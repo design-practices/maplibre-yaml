@@ -16,17 +16,19 @@
  *   does).
  * - {@link openUrlBuffer}: an http(s) URL, by `Range:` requests — one
  *   `bytes=0-0` to learn the size, then one per slice. A server that ignores
- *   ranges is refused (`no-range`) rather than downloaded whole.
+ *   ranges is refused (`no-range`) rather than downloaded whole. Each request
+ *   has a timeout (30 s by default, as the CLI's other fetches): a host that
+ *   accepts the connection and never answers is a `timeout`, not a hang.
  */
 
 import { open } from 'node:fs/promises';
 import type { AsyncBuffer } from '@maplibre-yaml/core';
 
-/** Why a byte source failed: closed, no range support, or an HTTP status. */
+/** Why a byte source failed: closed, no range support, an HTTP status, fewer bytes than asked, or no answer in time. */
 export class FileBufferError extends Error {
   constructor(
     message: string,
-    readonly code: 'closed' | 'no-range' | 'http' | 'short-read',
+    readonly code: 'closed' | 'no-range' | 'http' | 'short-read' | 'timeout',
     readonly status?: number
   ) {
     super(message);
@@ -110,12 +112,34 @@ export async function withFileBuffer<T>(path: string, work: (file: FileBuffer) =
   }
 }
 
+/** How long one range request (its reply and its body) may take, as the CLI's other fetches (`data-loader`). */
+export const URL_TIMEOUT_MS = 30_000;
+
 /** Options for {@link openUrlBuffer}. */
 export interface UrlBufferOptions {
   /** The fetch to use (default: the global one). */
   fetch?: typeof fetch;
-  /** Abort every request (per request, a timeout is the caller's `AbortSignal.timeout`). */
+  /** Abort every request (the caller's own cancel; reported as fetch reports it, not as a timeout). */
   signal?: AbortSignal;
+  /** Per request, give up after this many milliseconds (default {@link URL_TIMEOUT_MS}). */
+  timeoutMs?: number;
+}
+
+/** "30 s", "0.2 s". */
+const seconds = (ms: number) => `${Number((ms / 1000).toFixed(3))} s`;
+
+/** The caller's signal and a fresh per-request timeout, as one signal. */
+function requestSignal(timeout: AbortSignal, caller: AbortSignal | undefined): AbortSignal {
+  if (!caller) return timeout;
+  const any = (AbortSignal as { any?: (signals: AbortSignal[]) => AbortSignal }).any;
+  if (any) return any([caller, timeout]);
+  // No AbortSignal.any (Node < 20.3): forward both by hand.
+  const controller = new AbortController();
+  const forward = (from: AbortSignal) => () => controller.abort(from.reason);
+  if (caller.aborted) controller.abort(caller.reason);
+  else caller.addEventListener('abort', forward(caller), { once: true });
+  timeout.addEventListener('abort', forward(timeout), { once: true });
+  return controller.signal;
 }
 
 /**
@@ -125,15 +149,37 @@ export interface UrlBufferOptions {
  * compressed copy's.
  *
  * @throws {@link FileBufferError}: `http` (with the status) for an error
- *   status, `no-range` for a server that ignores `Range:` or hides the size;
- *   what `fetch` threw for a network failure.
+ *   status, `no-range` for a server that ignores `Range:` or hides the size,
+ *   `short-read` for a reply shorter than its range, `timeout` for a request
+ *   (reply or body) that took longer than `timeoutMs`; what `fetch` threw for
+ *   a network failure or the caller's abort.
  */
 export async function openUrlBuffer(url: string, options: UrlBufferOptions = {}): Promise<AsyncBuffer> {
   const get = options.fetch ?? fetch;
-  const request = async (start: number, end: number): Promise<Response> => {
+  const timeoutMs = options.timeoutMs ?? URL_TIMEOUT_MS;
+  const host = (() => {
+    try {
+      return new URL(url).host;
+    } catch {
+      return url;
+    }
+  })();
+  /** Run one request and read what it needs from the reply, inside one timeout. */
+  const timed = async <T>(work: (signal: AbortSignal) => Promise<T>): Promise<T> => {
+    const timeout = AbortSignal.timeout(timeoutMs);
+    try {
+      return await work(requestSignal(timeout, options.signal));
+    } catch (error) {
+      if (timeout.aborted && !options.signal?.aborted) {
+        throw new FileBufferError(`${host} didn't answer within ${seconds(timeoutMs)} (${url})`, 'timeout');
+      }
+      throw error;
+    }
+  };
+  const request = async (start: number, end: number, signal: AbortSignal): Promise<Response> => {
     const response = await get(url, {
       headers: { Range: `bytes=${start}-${end - 1}`, 'Accept-Encoding': 'identity' },
-      ...(options.signal ? { signal: options.signal } : {}),
+      signal,
     });
     if (!response.ok) {
       void response.body?.cancel().catch(() => undefined);
@@ -145,9 +191,11 @@ export async function openUrlBuffer(url: string, options: UrlBufferOptions = {})
     }
     return response;
   };
-  const first = await request(0, 1);
-  const total = /\/(\d+)\s*$/.exec(first.headers.get('content-range') ?? '')?.[1];
-  void first.body?.cancel().catch(() => undefined);
+  const total = await timed(async (signal) => {
+    const first = await request(0, 1, signal);
+    void first.body?.cancel().catch(() => undefined);
+    return /\/(\d+)\s*$/.exec(first.headers.get('content-range') ?? '')?.[1];
+  });
   if (total === undefined) {
     throw new FileBufferError(`${url}: the server doesn't say the file's size (no Content-Range total)`, 'no-range');
   }
@@ -157,7 +205,7 @@ export async function openUrlBuffer(url: string, options: UrlBufferOptions = {})
     async slice(start: number, end?: number): Promise<ArrayBuffer> {
       const [from, to] = bounds(size, start, end);
       if (to === from) return new ArrayBuffer(0);
-      const bytes = await (await request(from, to)).arrayBuffer();
+      const bytes = await timed(async (signal) => (await request(from, to, signal)).arrayBuffer());
       if (bytes.byteLength !== to - from) {
         throw new FileBufferError(`${url}: asked for ${to - from} bytes at ${from}, got ${bytes.byteLength}`, 'short-read');
       }

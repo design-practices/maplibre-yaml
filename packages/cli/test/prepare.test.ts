@@ -375,6 +375,85 @@ describe('prepare: the repo’s sample files', () => {
     expect(report.facts).toMatchObject({ lonLat: false });
     expect(commandsOf(report)[0]).toBe('ogr2ogr -t_srs EPSG:4326 projected-4326.geojson projected.geojson');
   });
+
+  it('a GeoJSON naming a projected CRS in its legacy crs member is flagged, though its coordinates look like lon/lat', async () => {
+    const path = join(dir, 'legacy-2263.geojson');
+    const fc = { ...points(10), crs: { type: 'name', properties: { name: 'urn:ogc:def:crs:EPSG::2263' } } };
+    await writeFile(path, JSON.stringify(fc));
+    const report = await prepareFile(path);
+    expect(report.facts).toMatchObject({ format: 'geojson', lonLat: false, crs: 'EPSG:2263' });
+    expect(commandsOf(report)[0]).toBe('ogr2ogr -t_srs EPSG:4326 legacy-2263-4326.geojson legacy-2263.geojson');
+    expect(formatPrepare(report)).toMatch(/EPSG:2263/);
+  });
+
+  it('a GeoJSON whose legacy crs member names CRS84 is longitude/latitude: no reprojection', async () => {
+    const path = join(dir, 'legacy-crs84.geojson');
+    const fc = { ...points(10), crs: { type: 'name', properties: { name: 'urn:ogc:def:crs:OGC:1.3:CRS84' } } };
+    await writeFile(path, JSON.stringify(fc));
+    const report = await prepareFile(path);
+    expect(report.facts).toMatchObject({ format: 'geojson', lonLat: true, crs: 'EPSG:4326' });
+    expect(report.recommendation.verdict).toBe('no-change');
+    expect(commandsOf(report)).toEqual([]);
+  });
+
+  it('a GeoJSON over the full-parse limit with no features in its sample exits 1: the count can’t be estimated', async () => {
+    const path = join(dir, 'no-features-in-sample.geojson');
+    // 300 KB of whitespace before the first feature; the sample is the first 100 KB.
+    await writeFile(path, `{"type":"FeatureCollection","features":[${' '.repeat(300_000)}${JSON.stringify(points(5).features[0])}]}`);
+    const error = await failure(prepareFile(path, { fullParseBytes: 200_000, sampleBytes: 100_000 }));
+    expect(error.exitCode).toBe(EXIT_CODES.VALIDATION_ERROR);
+    expect(error.message).toMatch(/no GeoJSON features/);
+  });
+
+  describe('a FlatGeobuf whose header records no feature count (a streaming writer)', () => {
+    /** points-noindex.fgb with its header's features_count set to 0, optionally padded to `size` bytes. */
+    async function countless(name: string, size?: number): Promise<string> {
+      const bytes = new Uint8Array(readFileSync(at('points-noindex.fgb')));
+      const view = new DataView(bytes.buffer);
+      const table = 12 + view.getUint32(12, true); // the size-prefixed header's root table
+      const vtable = table - view.getInt32(table, true);
+      const field = view.getUint16(vtable + 4 + 2 * 8, true); // Header field 8: features_count (ulong)
+      expect(field).toBeGreaterThan(0);
+      view.setBigUint64(table + field, 0n, true);
+      const path = join(dir, name);
+      await writeFile(path, bytes);
+      if (size) {
+        const handle = await open(path, 'r+');
+        await handle.truncate(size);
+        await handle.close();
+      }
+      return path;
+    }
+
+    it('a small one: read whole, but the report says the count is not recorded (not "0 features")', async () => {
+      const report = await prepareFile(await countless('countless.fgb'));
+      expect(report.facts).toMatchObject({ format: 'flatgeobuf', features: 0, indexed: false });
+      const rec = report.recommendation;
+      expect(rec.route).toBe('as-is');
+      expect(rec.summary).not.toMatch(/\b0 (points|features)/);
+      expect(rec.summary).toMatch(/count/i);
+      expect(rec.notes.join('\n')).toMatch(/doesn't record how many features/);
+      // Re-writing it records the count (and an index): the alternative.
+      expect(rec.alternative?.commands).toEqual(shellCommands(indexedFlatGeobufCommand('countless.fgb')));
+      const text = formatPrepare(report);
+      expect(text).toMatch(/features\s+not recorded in the header/);
+      expect(text).not.toMatch(/\b0 points\b/);
+      expectValidSource(rec.yaml);
+    });
+
+    it('a large one (300 MB): routed by size — re-create it with an index and a count, read by view', async () => {
+      const report = await prepareFile(await countless('countless-big.fgb', 300 * MB));
+      const rec = report.recommendation;
+      expect(rec.verdict).toBe('change');
+      expect(rec.route).toBe('by-view');
+      expect(rec.summary).not.toMatch(/No change needed/);
+      expect(rec.summary).toMatch(/300 MB/);
+      expect(commandsOf(report)).toEqual(shellCommands(indexedFlatGeobufCommand('countless-big.fgb')));
+      expect(rec.yaml).toMatch(/url: countless-big-indexed\.fgb\n {4}load: viewport/);
+      expect(rec.notes.join('\n')).toMatch(/mlym prepare/);
+      expectValidSource(rec.yaml);
+    });
+  });
 });
 
 describe('prepare: refusals and their exit codes', () => {
@@ -420,6 +499,7 @@ describe('prepare: an http(s) URL is read by range requests', () => {
     server = createServer((req, res) => {
       const url = req.url ?? '/';
       requests.push({ url, ...(req.headers.range ? { range: req.headers.range } : {}) });
+      if (url.startsWith('/hang/')) return; // accepts the connection, never answers
       const norange = url.startsWith('/norange/');
       if (url.startsWith('/boom/')) {
         res.writeHead(503).end('down');
@@ -447,6 +527,7 @@ describe('prepare: an http(s) URL is read by range requests', () => {
     base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   });
   afterAll(async () => {
+    server.closeAllConnections();
     await new Promise((done) => server.close(done));
   });
 
@@ -477,6 +558,34 @@ describe('prepare: an http(s) URL is read by range requests', () => {
   it('a 404 exits 2; a 5xx exits 4', async () => {
     expect((await failure(prepareFile(`${base}/missing.parquet`))).exitCode).toBe(EXIT_CODES.FILE_NOT_FOUND);
     expect((await failure(prepareFile(`${base}/boom/x.parquet`))).exitCode).toBe(EXIT_CODES.UNKNOWN_ERROR);
+  });
+
+  it('a host that accepts the connection and never answers times out: exit 2, naming the host and the wait', async () => {
+    const started = Date.now();
+    const error = await failure(prepareFile(`${base}/hang/districts.parquet`, { timeoutMs: 200 }));
+    expect(Date.now() - started).toBeLessThan(5_000);
+    expect(error.exitCode).toBe(EXIT_CODES.FILE_NOT_FOUND);
+    expect(error.message).toContain(new URL(base).host);
+    expect(error.message).toMatch(/didn't answer within 0\.2 s/);
+  });
+
+  it('an unreachable URL (nothing listening) exits 2, naming the host and why', async () => {
+    const closed = createServer();
+    await new Promise<void>((done) => closed.listen(0, '127.0.0.1', done));
+    const port = (closed.address() as AddressInfo).port;
+    await new Promise((done) => closed.close(done));
+    const error = await failure(prepareFile(`http://127.0.0.1:${port}/districts.parquet`));
+    expect(error.exitCode).toBe(EXIT_CODES.FILE_NOT_FOUND);
+    expect(error.message).toMatch(new RegExp(`^Could not reach http://127\\.0\\.0\\.1:${port}/districts\\.parquet \\(ECONNREFUSED\\)`));
+  });
+
+  it("a fetch that fails as undici does (TypeError with a cause) exits 2, with the cause's code", async () => {
+    const failing = (async () => {
+      throw Object.assign(new TypeError('fetch failed'), { cause: { code: 'ENOTFOUND', message: 'getaddrinfo ENOTFOUND' } });
+    }) as typeof fetch;
+    const error = await failure(prepareFile('https://data.example.invalid/lots.parquet', { fetch: failing }));
+    expect(error.exitCode).toBe(EXIT_CODES.FILE_NOT_FOUND);
+    expect(error.message).toBe('Could not reach https://data.example.invalid/lots.parquet (ENOTFOUND).');
   });
 });
 
