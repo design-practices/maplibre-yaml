@@ -39,9 +39,21 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "22" # Node 22 includes npm 11.x
+          node-version: "22" # trusted publishing needs Node >= 22.14
           cache: "pnpm"
-          registry-url: "https://registry.npmjs.org"
+          # No registry-url: setup-node would write an .npmrc with an
+          # `_authToken=${NODE_AUTH_TOKEN}` placeholder, and a token in npm's
+          # config shadows the OIDC exchange. The default registry is npmjs.
+
+      # npm trusted publishing (OIDC): `pnpm publish` (pnpm 9) packs each
+      # package and hands the tarball to the npm CLI on PATH, so npm is what
+      # authenticates. OIDC needs npm >= 11.5.1; Node 22 bundles npm 10.
+      # That bundled npm 10 — not pnpm — is why the first OIDC attempt
+      # (0.3.0) went out unauthenticated and npm answered E404 (todo 038).
+      - name: Use npm 11 for trusted publishing
+        run: |
+          npm install -g npm@^11.5.1
+          npm --version
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -88,9 +100,7 @@ jobs:
           title: "chore: version packages"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Granular npm automation token (packages: @maplibre-yaml/*).
-          # The pinned pnpm 9 cannot mint npm OIDC trusted-publishing tokens
-          # (support landed in pnpm 10.13) -- without this, the publish PUT
-          # goes out unauthenticated and npm masks it as E404. See todo 038
-          # for the migration to true OIDC.
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          # No npm token: npm authenticates with this job's OIDC identity
+          # (`id-token: write` above) against each package's trusted publisher
+          # on npmjs.com (design-practices/maplibre-yaml, release.yml), and
+          # attaches provenance. See ml-101 for the npmjs.com setup.
