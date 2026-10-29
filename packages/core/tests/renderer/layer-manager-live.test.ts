@@ -408,6 +408,94 @@ describe("LayerManager: live data as the `live` chunk (bundle headroom U4)", () 
     expect(manager.failedSources().has("quakes-source")).toBe(true);
   });
 
+  it("merge onto inline `data:`: the starting features stay and stream messages merge into them (ml-7qa.12)", async () => {
+    let onData!: (data: unknown) => void;
+    vi.spyOn(StreamManager.prototype, "connect").mockImplementation(async (_id, config) => {
+      onData = config.onData as never;
+    });
+    const seed = fc(2);
+    await manager.addLayer(
+      layer({
+        type: "geojson",
+        data: seed,
+        stream: { type: "sse", url: "https://example.com/feed" },
+        refresh: { updateStrategy: "merge", updateKey: "id" },
+      })
+    );
+    await flush();
+    const setData = mockMap.getSource("quakes-source").setData;
+    // Feature 1 moves; feature 7 is new; feature 0 is only in the starting data.
+    onData({
+      type: "FeatureCollection",
+      features: [
+        { type: "Feature", properties: { id: 1, moved: true }, geometry: { type: "Point", coordinates: [9, 9] } },
+        { type: "Feature", properties: { id: 7 }, geometry: { type: "Point", coordinates: [7, 7] } },
+      ],
+    });
+    const merged = setData.mock.calls.at(-1)[0];
+    expect(merged.features.map((f: any) => f.properties.id).sort()).toEqual([0, 1, 7]);
+    expect(merged.features.find((f: any) => f.properties.id === 1).properties.moved).toBe(true);
+    expect(callbacks.onDataLoaded).toHaveBeenLastCalledWith("quakes", 3);
+    // The document's own `data:` object is untouched.
+    expect(seed.features).toHaveLength(2);
+  });
+
+  it("a stream whose first connection fails keeps the layer and its data, with one notice (ml-7qa.12)", async () => {
+    vi.useFakeTimers();
+    try {
+      const made: any[] = [];
+      vi.stubGlobal(
+        "EventSource",
+        class {
+          readyState = 0;
+          private listeners = new Map<string, Set<() => void>>();
+          constructor() {
+            made.push(this);
+            // The feed answers 404: the browser gives up (CLOSED).
+            setTimeout(() => {
+              this.readyState = 2;
+              for (const fn of this.listeners.get("error") ?? []) fn();
+            }, 0);
+          }
+          addEventListener(type: string, fn: () => void) {
+            if (!this.listeners.has(type)) this.listeners.set(type, new Set());
+            this.listeners.get(type)!.add(fn);
+          }
+          removeEventListener(type: string, fn: () => void) {
+            this.listeners.get(type)?.delete(fn);
+          }
+          close() {
+            this.readyState = 2;
+          }
+        }
+      );
+      const adding = manager.addLayer(
+        layer({
+          type: "geojson",
+          data: fc(2),
+          stream: { type: "sse", url: "https://example.com/missing", reconnectMaxAttempts: 2, reconnectDelay: 100 },
+          refresh: { updateStrategy: "merge", updateKey: "id" },
+        })
+      );
+      await vi.advanceTimersByTimeAsync(0);
+      await expect(adding).resolves.toBeUndefined();
+      expect(mockMap.addLayer).toHaveBeenCalledTimes(1);
+      expect(mockMap.removeLayer).not.toHaveBeenCalled();
+      expect(callbacks.onDataError).toHaveBeenCalledTimes(1);
+      const [layerId, error] = callbacks.onDataError.mock.calls[0];
+      expect(layerId).toBe("quakes");
+      expect(describeDataProblem(layerId, error, { filePage: false })).toBe(
+        "`quakes` shows the data it has, but isn't getting live updates: the stream `https://example.com/missing` couldn't connect."
+      );
+      // Retried per the reconnect options (two attempts), silently.
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(made).toHaveLength(3);
+      expect(callbacks.onDataError).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("refreshNow on a layer with no poll still rejects as it did", async () => {
     await manager.addLayer(layer({ type: "geojson", data: fc(1) }));
     await expect(manager.refreshNow("quakes")).rejects.toThrow('Polling subscription "quakes" not found');

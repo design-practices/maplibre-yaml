@@ -196,9 +196,12 @@ describe("BaseConnection", () => {
       connection.on("disconnect", onDisconnect);
 
       await connection.connect();
-      await connection.testHandleDisconnect("Connection lost");
+      const disconnecting = connection.testHandleDisconnect("Connection lost");
 
       expect(onDisconnect).toHaveBeenCalledWith({ reason: "Connection lost" });
+      // The reconnect it starts waits reconnectConfig.initialDelay first.
+      await vi.runAllTimersAsync();
+      await disconnecting;
     });
 
     it("does not reconnect when reconnect is disabled", async () => {
@@ -260,10 +263,15 @@ describe("BaseConnection", () => {
       await vi.runAllTimersAsync();
       await disconnectPromise;
 
-      // onRetry is only called on retries (after first attempt fails)
-      expect(onReconnecting).toHaveBeenCalledTimes(1);
-      expect(onReconnecting).toHaveBeenCalledWith({
+      // Before each attempt, with the wait ahead of it (ml-7qa.12): the
+      // first fails, the second connects.
+      expect(onReconnecting).toHaveBeenCalledTimes(2);
+      expect(onReconnecting).toHaveBeenNthCalledWith(1, {
         attempt: 1,
+        delay: expect.any(Number),
+      });
+      expect(onReconnecting).toHaveBeenNthCalledWith(2, {
+        attempt: 2,
         delay: expect.any(Number),
       });
 
@@ -304,8 +312,9 @@ describe("BaseConnection", () => {
       await disconnectPromise;
 
       expect(onReconnecting).toHaveBeenCalledTimes(2);
+      expect(connectFn).toHaveBeenCalledTimes(3); // the first connection + maxRetries attempts
       expect(onFailed).toHaveBeenCalledWith({
-        attempts: 3, // Initial + 2 retries
+        attempts: 2, // maxRetries
         lastError: expect.any(Error),
       });
       expect(connection.getState()).toBe("failed");

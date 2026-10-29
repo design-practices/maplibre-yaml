@@ -938,6 +938,11 @@ export function describeDataProblem(
   if (failure && isLiveChunkFailure(failure)) {
     return describeLiveUpdatesStopped(layerId, failure.url);
   }
+  // A `stream:` that couldn't connect or gave up reconnecting: the layer
+  // keeps what it loaded (ml-7qa.12).
+  if ((error as { stream?: string }).stream) {
+    return `\`${layerId}\` shows the data it has, but isn't getting live updates: ${error.message}.`;
+  }
   // A cloud-native file (FlatGeobuf, a reserved format) already carries its
   // own plain-language reason; say which layer it leaves empty.
   if (failure) {

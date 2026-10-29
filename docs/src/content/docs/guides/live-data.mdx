@@ -149,11 +149,22 @@ source:
   connects only when one is there, and its `updateStrategy` says how each
   message is applied. Validation warns when it is missing.
 - **The source needs somewhere to start**: a `url:` with the current state,
-  or `data:` with an empty `FeatureCollection` to start blank.
+  or `data:` with an empty `FeatureCollection` to start blank. Under
+  `merge`, messages merge into those starting features.
 - **Reconnecting is automatic.** After a dropped connection the stream
   retries up to `reconnectMaxAttempts` times (10), waiting `reconnectDelay`
   (1 second) and doubling the wait each time up to `reconnectMaxDelay`
-  (30 seconds). `reconnect: false` turns it off.
+  (30 seconds). An SSE stream is reconnected by the browser itself, which
+  resumes it with `Last-Event-ID` after the wait the server sends as
+  `retry:`; those tries count toward `reconnectMaxAttempts`, and the
+  delays apply once the browser gives up (an HTTP error, say).
+  `reconnect: false` turns it off.
+- **The layer keeps its data when the stream is down.** A drop the stream
+  is reconnecting from shows nothing. A stream that can't connect at first,
+  that runs out of attempts, or that closes with `reconnect: false` keeps
+  the layer and the data it has, and the map's notice says once that it
+  isn't getting live updates (a first connection that fails is still
+  retried). The line goes when the next message arrives.
 - An SSE stream listens for the `message` event unless `eventTypes` names
   others. A WebSocket can ask for sub-`protocols`.
 

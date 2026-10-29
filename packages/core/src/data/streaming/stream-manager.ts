@@ -160,10 +160,19 @@ export class StreamManager {
     this.subscriptions.set(id, { config, connection, state });
 
     // Setup event handlers
-    this.setupEventHandlers(connection, config, state);
+    const handlers = this.setupEventHandlers(id, connection, config, state);
 
-    // Connect
-    await connection.connect();
+    // Connect. A first connection that fails is reported once (onError) and,
+    // with reconnecting on, retried with the reconnect backoff in the
+    // background; the returned promise still rejects. `disconnect(id)` stops
+    // the retries.
+    try {
+      await connection.connect();
+    } catch (error) {
+      handlers.report(`the stream \`${config.url}\` couldn't connect`);
+      void connection.reconnect();
+      throw error;
+    }
   }
 
   /**
@@ -182,8 +191,9 @@ export class StreamManager {
       return;
     }
 
-    subscription.connection.disconnect();
+    // Forgotten first: what the disconnect emits isn't reported.
     this.subscriptions.delete(id);
+    subscription.connection.disconnect();
   }
 
   /**
@@ -303,7 +313,7 @@ export class StreamManager {
       config.reconnect?.enabled !== false
         ? {
             reconnect: true,
-            retryConfig: {
+            reconnectConfig: {
               maxRetries: config.reconnect?.maxRetries ?? 10,
               initialDelay: config.reconnect?.initialDelay ?? 1000,
               maxDelay: config.reconnect?.maxDelay ?? 30000,
@@ -330,16 +340,37 @@ export class StreamManager {
 
   /**
    * Setup event handlers for a connection.
+   *
+   * @remarks
+   * A stream's outage is reported to `onError` once: a first connection
+   * that fails, the attempts running out after a drop, or a drop with
+   * reconnecting off. A drop it is reconnecting from is not reported, and
+   * the next connection resets the count. The error carries the stream's
+   * URL as `stream`, so a host can say the data it has stays.
    */
   private setupEventHandlers(
+    id: string,
     connection: SSEConnection | WebSocketConnection,
     config: StreamConfig,
     state: StreamState
-  ): void {
+  ): { report: (message: string) => void } {
+    let reported = false;
+    const report = (message: string): void => {
+      // Disconnected meanwhile (`disconnect(id)`): nothing to report.
+      if (reported || this.subscriptions.get(id)?.connection !== connection) return;
+      reported = true;
+      config.onError?.(Object.assign(new Error(message), { stream: config.url }));
+    };
+
     // State change handler
     connection.on("stateChange", ({ to }) => {
       state.connectionState = to;
       config.onStateChange?.(to);
+    });
+
+    // A new outage is reported again.
+    connection.on("connect", () => {
+      reported = false;
     });
 
     // Message handler
@@ -358,9 +389,17 @@ export class StreamManager {
       }
     });
 
-    // Error handler
+    // A message that isn't JSON. A connection that fails to open is
+    // reported by `report` (above, and in `connect`), not here.
     connection.on("error", ({ error }) => {
-      config.onError?.(error);
+      if (connection.isConnected()) config.onError?.(error);
+    });
+
+    // A drop with reconnecting off: the stream has ended.
+    connection.on("disconnect", () => {
+      if (config.reconnect?.enabled === false) {
+        report(`the stream \`${config.url}\` closed, and \`reconnect: false\` keeps it closed`);
+      }
     });
 
     // Reconnection tracking
@@ -373,10 +412,15 @@ export class StreamManager {
       state.reconnectAttempts = 0;
     });
 
-    // Failed connection
-    connection.on("failed", ({ lastError }) => {
-      config.onError?.(lastError);
+    // Reconnecting gave up
+    connection.on("failed", ({ attempts }) => {
+      report(
+        `the stream \`${config.url}\` closed and didn't reconnect` +
+          (attempts ? ` (${attempts} attempt${attempts === 1 ? "" : "s"})` : "")
+      );
     });
+
+    return { report };
   }
 
   /**

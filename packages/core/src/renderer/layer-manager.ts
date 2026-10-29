@@ -1868,6 +1868,8 @@ export class LayerManager {
     }
     const streamConfig = config.stream!;
     const merge = mergeOptionsOf(config);
+    // A first connection that fails is reported through onError and retried
+    // by the stream (ml-7qa.12): the layer and its data stay.
     await live.streams.connect(layerId, {
       type: streamConfig.type,
       url: streamConfig.url || config.url!,
@@ -1885,7 +1887,7 @@ export class LayerManager {
       },
       eventTypes: streamConfig.eventTypes,
       protocols: streamConfig.protocols,
-    });
+    }).catch(() => {});
   }
 
   /**
@@ -1947,11 +1949,12 @@ export class LayerManager {
       timestampField?: string;
     }
   ): void {
+    // Before the first update: what the source started from (an inline
+    // `data:` collection never passes through `sourceData`, ml-7qa.12).
+    const inline = this.sourceSpecs.get(sourceId)?.data as FeatureCollection | undefined;
     const existing =
-      this.sourceData.get(sourceId) || {
-        type: "FeatureCollection" as const,
-        features: [],
-      };
+      this.sourceData.get(sourceId) ??
+      (Array.isArray(inline?.features) ? inline : emptyCollection());
 
     // Only a running pipeline delivers updates, so the `live` chunk is in
     // (none after `destroy()`).

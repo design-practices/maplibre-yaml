@@ -78,7 +78,9 @@ export interface ConnectionConfig {
  * Provides common functionality for all streaming connection types:
  * - Connection state management
  * - Event emission via EventEmitter
- * - Automatic reconnection with exponential backoff
+ * - Automatic reconnection with exponential backoff: up to
+ *   `reconnectConfig.maxRetries` attempts after a drop, each after a wait of
+ *   `initialDelay`, doubling up to `maxDelay`
  * - State change tracking
  *
  * Subclasses must implement:
@@ -261,46 +263,69 @@ export abstract class BaseConnection extends EventEmitter<ConnectionEvents> {
     // Only attempt reconnection if:
     // 1. Reconnect is enabled
     // 2. Not manually disconnected
-    // 3. Was previously connected (not a failed initial connection)
+    // 3. Was previously connected (a failed first connection retries
+    //    through {@link reconnect})
     if (!this.config.reconnect || this.manualDisconnect || !wasConnected) {
       return;
     }
 
     // Attempt reconnection with exponential backoff
-    await this.attemptReconnection();
+    await this.attemptReconnection(new Error(reason));
   }
 
   /**
-   * Attempt to reconnect with exponential backoff.
+   * Retry a connection whose first {@link connect} failed, with the same
+   * backoff as a dropped one. A no-op when reconnecting is off.
+   *
+   * @remarks
+   * Resolves once connected, or after the attempts ran out (also emitted
+   * as 'failed'); {@link disconnect} stops it.
    */
-  private async attemptReconnection(): Promise<void> {
-    this.setState("reconnecting");
-    this.reconnectAttempts = 0;
+  async reconnect(): Promise<void> {
+    if (!this.config.reconnect || this.manualDisconnect) return;
+    await this.attemptReconnection(new Error(`Couldn't connect to ${this.config.url}`));
+  }
 
-    try {
-      await this.retryManager.execute(
-        async () => {
-          this.reconnectAttempts++;
-          await this.connect();
-        },
-        {
-          onRetry: (attempt, delay) => {
-            this.emit("reconnecting", { attempt, delay });
-          },
-          onSuccess: (attempts) => {
-            this.reconnectAttempts = 0;
-            this.emit("reconnected", { attempts });
-          },
-        }
-      );
-    } catch (err) {
-      const error = err instanceof Error ? err : new Error(String(err));
-      this.setState("failed");
-      this.emit("failed", {
-        attempts: this.reconnectAttempts,
-        lastError: error,
-      });
+  /** How many reconnect attempts one outage gets (`reconnectConfig.maxRetries`, default 10). */
+  protected get maxReconnectAttempts(): number {
+    return this.config.reconnectConfig.maxRetries ?? 10;
+  }
+
+  /**
+   * Reconnect with exponential backoff: attempt k (from `after + 1` up to
+   * {@link maxReconnectAttempts}) waits `initialDelay * backoffFactor^(k-1)`,
+   * capped at `maxDelay` (with jitter), then connects. 'reconnecting' is
+   * emitted before each wait.
+   *
+   * @param lastError - Reported in 'failed' if no attempt runs.
+   * @param after - Attempts this outage already used (an EventSource's own retries).
+   */
+  protected async attemptReconnection(lastError: Error, after = 0): Promise<void> {
+    for (let attempt = after + 1; attempt <= this.maxReconnectAttempts; attempt++) {
+      const delay = this.retryManager.calculateDelay(attempt);
+      this.reconnectAttempts = attempt;
+      this.setState("reconnecting");
+      this.emit("reconnecting", { attempt, delay });
+      await new Promise((resolve) => setTimeout(resolve, delay));
+      // `disconnect()` during the wait: nothing more to do.
+      if (this.manualDisconnect) return;
+      try {
+        await this.connect();
+        this.reconnectAttempts = 0;
+        this.emit("reconnected", { attempts: attempt });
+        return;
+      } catch (err) {
+        if (this.manualDisconnect) return;
+        lastError = err instanceof Error ? err : new Error(String(err));
+      }
     }
+    this.giveUp(lastError);
+  }
+
+  /** Stop reconnecting: state 'failed', and 'failed' emitted with the attempts made. */
+  protected giveUp(lastError: Error): void {
+    this.setState("failed");
+    this.emit("failed", { attempts: this.reconnectAttempts, lastError });
   }
 
   /**
