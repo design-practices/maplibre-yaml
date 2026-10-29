@@ -80,15 +80,22 @@ export const previewCommand = defineCommand({
 
       await server.start();
 
-      // Handle graceful shutdown
+      // Handle graceful shutdown. A server that fails to stop is reported
+      // and the process still exits, rather than an unhandled rejection.
       const shutdown = async () => {
         logger.info('Shutting down preview server...');
         await server.stop();
         process.exit(0);
       };
+      const onSignal = () => {
+        shutdown().catch((err) => {
+          error('Failed to stop preview server', err as Error);
+          process.exit(EXIT_CODES.UNKNOWN_ERROR);
+        });
+      };
 
-      process.on('SIGINT', shutdown);
-      process.on('SIGTERM', shutdown);
+      process.on('SIGINT', onSignal);
+      process.on('SIGTERM', onSignal);
 
     } catch (err) {
       error('Failed to start preview server', err as Error);

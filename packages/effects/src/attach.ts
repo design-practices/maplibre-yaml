@@ -150,7 +150,8 @@ export function attachEffects(
 
   return {
     effects,
-    ready: () => Promise.all(effects.map((e) => e.handle?.ready())).then(() => undefined),
+    // Only drawn effects have a handle to wait on; one not drawn is ready at once.
+    ready: () => Promise.all(effects.flatMap((e) => (e.handle ? [e.handle.ready()] : []))).then(() => undefined),
     detach() {
       for (const e of effects) e.detach();
     },

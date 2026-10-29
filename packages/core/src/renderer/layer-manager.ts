@@ -993,7 +993,8 @@ export class LayerManager {
     this.sourceData.set(sourceId, data);
     this.failed.delete(sourceId);
     const source = this.map.getSource(sourceId) as GeoJSONSource | undefined;
-    source?.setData?.(data);
+    // setData's promise (maplibre-gl 6) never rejects: a worker failure fires the map's `error` event.
+    void source?.setData?.(data);
     for (const target of this.layersForPipeline(sourceId, layerId)) {
       this.callbacks.onDataLoaded?.(target, data.features.length);
     }
@@ -1505,7 +1506,8 @@ export class LayerManager {
 
         const source = this.map.getSource(sourceId) as GeoJSONSource;
         if (source?.setData) {
-          source.setData(data);
+          // setData's promise (maplibre-gl 6) never rejects: a worker failure fires the map's `error` event.
+          void source.setData(data);
         }
 
         this.callbacks.onDataLoaded?.(layerId, data.features.length);
@@ -1659,7 +1661,8 @@ export class LayerManager {
         this.sourceData.set(sourceId, data);
         this.failed.delete(sourceId);
         const source = this.map.getSource(sourceId) as GeoJSONSource | undefined;
-        source?.setData?.(data);
+        // setData's promise (maplibre-gl 6) never rejects: a worker failure fires the map's `error` event.
+        void source?.setData?.(data);
         this.callbacks.onDataLoaded?.(layerId, data.features.length);
       },
       onError: (error) => {
@@ -1954,7 +1957,8 @@ export class LayerManager {
 
     const source = this.map.getSource(sourceId) as GeoJSONSource;
     if (source?.setData) {
-      source.setData(mergeResult.data);
+      // setData's promise (maplibre-gl 6) never rejects: a worker failure fires the map's `error` event.
+      void source.setData(mergeResult.data);
     }
 
     // One pipeline can back several layers. Fire per referencing layer so a
@@ -2126,7 +2130,8 @@ export class LayerManager {
     // visible to every layer over it — documented, not accidental.
     const sourceId = this.layerToSource.get(layerId) ?? `${layerId}-source`;
     const source = this.map.getSource(sourceId) as GeoJSONSource;
-    if (source && source.setData) source.setData(data as any);
+    // setData's promise (maplibre-gl 6) never rejects: a worker failure fires the map's `error` event.
+    if (source && source.setData) void source.setData(data as any);
   }
 
   destroy(): void {

@@ -97,7 +97,7 @@ export interface ConnectionConfig {
  *
  *   disconnect(): void {
  *     // ... disconnection logic
- *     this.handleDisconnect('Manual disconnect');
+ *     void this.handleDisconnect('Manual disconnect');
  *   }
  * }
  * ```
@@ -240,10 +240,13 @@ export abstract class BaseConnection extends EventEmitter<ConnectionEvents> {
    * 2. Attempt reconnection if enabled and not manually disconnected
    * 3. Emit 'reconnecting', 'reconnected', or 'failed' events as appropriate
    *
+   * A reconnection that gives up is reported as 'failed', so callers fire
+   * this with `void`.
+   *
    * @example
    * ```typescript
    * ws.onclose = () => {
-   *   this.handleDisconnect('Connection closed');
+   *   void this.handleDisconnect('Connection closed');
    * };
    * ```
    */

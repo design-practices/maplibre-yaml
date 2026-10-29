@@ -61,6 +61,7 @@ function htmlOf(entries: AuthoredEntry[]): string | undefined {
  * readers above accept). print-yaml.ts and print-toml.ts check the same
  * shape again; the two halves of the converter share no code.
  */
+// eslint-disable-next-line no-control-regex -- a hint with a control character must never reach a comment line
 const HINT = /^[^\s\x00-\x1f\x7f-\x9f]+$/;
 
 /**

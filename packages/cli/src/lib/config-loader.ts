@@ -2,7 +2,7 @@
  * @file Configuration file loader
  */
 
-import { resolve, join } from 'pathe';
+import { join } from 'pathe';
 import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';

@@ -37,7 +37,6 @@ import {
   type EmitAsset,
   type EmitImageRef,
   type CapabilityPolicy,
-  type TrustContext,
   type ClassifyDataLoader,
 } from '@maplibre-yaml/core';
 import { lineColumnSuffix, tomlReaderFailureMessage } from '../lib/formatter.js';

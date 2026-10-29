@@ -469,7 +469,9 @@ export async function createPreviewServer(
         ignoreInitial: true,
         awaitWriteFinish: { stabilityThreshold: 60, pollInterval: 20 },
       });
-      watcher.on('change', async () => {
+      // loadConfig turns every failure into { valid: false }, so the reload
+      // never rejects.
+      const reload = async () => {
         logger.info('Configuration changed, reloading...');
         const result = await loadConfig();
         if (result.valid) {
@@ -482,6 +484,9 @@ export async function createPreviewServer(
           event: 'yaml-update',
           data: { valid: result.valid, error: result.error },
         });
+      };
+      watcher.on('change', () => {
+        void reload();
       });
     },
 

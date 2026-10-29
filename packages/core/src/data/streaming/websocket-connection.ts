@@ -176,7 +176,7 @@ export class WebSocketConnection extends BaseConnection {
   disconnect(): void {
     this.setManualDisconnect();
     this.closeWebSocket();
-    this.handleDisconnect("Manual disconnect");
+    void this.handleDisconnect("Manual disconnect");
   }
 
   /**
@@ -247,7 +247,7 @@ export class WebSocketConnection extends BaseConnection {
     this.closeWebSocket();
 
     const reason = event.reason || `WebSocket closed (code: ${event.code})`;
-    this.handleDisconnect(reason);
+    void this.handleDisconnect(reason);
   }
 
   /**

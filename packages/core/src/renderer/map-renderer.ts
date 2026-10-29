@@ -605,7 +605,7 @@ export class MapRenderer {
   private imageRefs = createImageRefs();
   private controlsManager: ControlsManager;
   private attributionGuard: AttributionGuard;
-  private eventListeners: Map<string, Set<Function>>;
+  private eventListeners: Map<string, Set<(data: any) => void>>;
   private isLoaded: boolean;
   private containerEl: HTMLElement | null;
   private controlsAdded: boolean;
@@ -2577,7 +2577,7 @@ export class MapRenderer {
   /**
    * Unregister an event listener
    */
-  off<K extends keyof MapRendererEvents>(event: K, callback: Function): void {
+  off<K extends keyof MapRendererEvents>(event: K, callback: (data: MapRendererEvents[K]) => void): void {
     const listeners = this.eventListeners.get(event);
     if (listeners) {
       listeners.delete(callback);

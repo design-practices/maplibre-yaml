@@ -114,6 +114,7 @@ function decodeAttr(raw: string): string | null {
 }
 
 /** Characters a browser strips from a URL before it reads the scheme. */
+// eslint-disable-next-line no-control-regex -- matches the control characters browsers strip from URLs
 const URL_STRIPPED = new RegExp("[\u0000-\u001F\u007F-\u009F]", "g");
 
 /**

@@ -168,7 +168,7 @@ export class PollingManager {
 
     // Execute immediately if requested
     if (config.immediate) {
-      this.executeTick(id);
+      void this.executeTick(id);
     } else {
       this.scheduleNextTick(id);
     }
@@ -417,6 +417,10 @@ export class PollingManager {
 
   /**
    * Execute a single tick for a subscription.
+   *
+   * @remarks
+   * A failing `onTick` is counted and reported through `onError`, so timer
+   * and immediate callers fire it with `void`.
    */
   private async executeTick(id: string): Promise<void> {
     const subscription = this.subscriptions.get(id);
@@ -457,7 +461,7 @@ export class PollingManager {
     subscription.state.nextTick = nextTime;
 
     subscription.timerId = setTimeout(() => {
-      this.executeTick(id);
+      void this.executeTick(id);
     }, subscription.config.interval);
   }
 

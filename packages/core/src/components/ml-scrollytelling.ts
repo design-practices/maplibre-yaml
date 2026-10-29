@@ -145,6 +145,7 @@ interface Waiter {
  * @fires ml-scrollytelling:action - A `custom` chapter action ran
  * @fires ml-scrollytelling:error - The story could not be loaded or validated
  */
+// eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging -- the interface below only adds typed addEventListener overloads
 export class MLScrollytelling extends BaseElement {
   static get observedAttributes(): string[] {
     return ["src", "config", "base", "quiet", "debug"];
@@ -1318,6 +1319,7 @@ export class MLScrollytelling extends BaseElement {
 }
 
 /** Typed listener overloads (declaration merging; no runtime code). */
+// eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging -- merges typed addEventListener overloads onto the class; no runtime members
 export interface MLScrollytelling {
   addEventListener<K extends keyof MLScrollytellingEventMap>(
     type: K,

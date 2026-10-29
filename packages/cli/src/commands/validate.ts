@@ -18,7 +18,7 @@ import { logger } from '../lib/logger.js';
 import { resolveTargets, isGlobPattern } from '../lib/glob.js';
 import { relative } from 'pathe';
 import { createProgress } from '../lib/progress.js';
-import { validateWithCache, clearCache } from '../lib/cache.js';
+import { validateWithCache } from '../lib/cache.js';
 import { EXIT_CODES } from '../types.js';
 
 // Get version from package.json (same lazy-read mechanism as cli.ts:
@@ -288,24 +288,32 @@ export const validateCommand = defineCommand({
 
       const watcher = createWatcher({
         patterns: files,
-        onChange: async (path) => {
+        onChange: (path) => {
           console.log(formatWatchEvent('change', path));
-          await runValidation();
+          // runValidation reports its own failures; in watch mode it never rejects.
+          void runValidation();
         },
         onError: (error) => {
           logger.error('Watch error:', error.message);
         },
       });
 
-      // Handle graceful shutdown
+      // Handle graceful shutdown. A watcher that fails to close is reported
+      // and the process still exits, rather than an unhandled rejection.
       const shutdown = async () => {
         logger.info('\nStopping watch mode...');
         await watcher.close();
         process.exit(0);
       };
+      const onSignal = () => {
+        shutdown().catch((error) => {
+          consola.error('Failed to stop watch mode:', error);
+          process.exit(EXIT_CODES.UNKNOWN_ERROR);
+        });
+      };
 
-      process.on('SIGINT', shutdown);
-      process.on('SIGTERM', shutdown);
+      process.on('SIGINT', onSignal);
+      process.on('SIGTERM', onSignal);
 
       // Keep process alive
       await new Promise(() => {});
