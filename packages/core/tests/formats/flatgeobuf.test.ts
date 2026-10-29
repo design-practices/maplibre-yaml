@@ -289,12 +289,14 @@ describe("the whole-file guard without Content-Length (ml-cnv.19)", () => {
 describe("loadModeOf", () => {
   it("normalizes load:", () => {
     const max = VIEWPORT_DEFAULT_MAX_FEATURES;
-    expect(loadModeOf({})).toEqual({ mode: "all", minzoom: VIEWPORT_DEFAULT_MINZOOM, maxFeatures: max });
-    expect(loadModeOf({ load: "viewport" })).toEqual({ mode: "viewport", minzoom: 10, maxFeatures: max });
+    expect(loadModeOf({})).toEqual({ mode: "all", minzoom: VIEWPORT_DEFAULT_MINZOOM, maxFeatures: max, overviews: true });
+    expect(loadModeOf({ load: "viewport" })).toEqual({ mode: "viewport", minzoom: 10, maxFeatures: max, overviews: true });
     expect(loadModeOf({ load: { mode: "viewport", minzoom: 13 } })).toEqual({
       mode: "viewport",
       minzoom: 13,
       maxFeatures: max,
+      overviews: true,
+      authorMinzoom: 13,
     });
     expect(loadModeOf({ load: { mode: "all" } }).mode).toBe("all");
     // The per-view budget (ml-37r.17), flat or under a v2 source's runtime:.
@@ -306,8 +308,30 @@ describe("loadModeOf", () => {
       mode: "all",
       minzoom: 10,
       maxFeatures: 600_000,
+      overviews: true,
       authorMaxFeatures: 600_000,
     });
+  });
+
+  it("records whether the author wrote minzoom, and reads overviews (0.10, ml-cnv.22)", () => {
+    expect(loadModeOf({}).authorMinzoom).toBeUndefined();
+    expect(loadModeOf({ load: "viewport" }).authorMinzoom).toBeUndefined();
+    expect(loadModeOf({ load: { mode: "viewport", maxFeatures: 10 } }).authorMinzoom).toBeUndefined();
+    expect(loadModeOf({ load: { mode: "viewport", minzoom: 10 } }).authorMinzoom).toBe(10);
+    expect(loadModeOf({ load: { minzoom: 0 } }).authorMinzoom).toBe(0);
+    expect(loadModeOf({ runtime: { load: { mode: "viewport", minzoom: 12 } } }).authorMinzoom).toBe(12);
+    // Levels on by default; off only for an explicit false.
+    expect(loadModeOf({ load: "viewport" }).overviews).toBe(true);
+    expect(loadModeOf({ load: { overviews: true } }).overviews).toBe(true);
+    expect(loadModeOf({ load: { overviews: false } }).overviews).toBe(false);
+    expect(loadModeOf({ load: { mode: "viewport", overviews: false } })).toEqual({
+      mode: "viewport",
+      minzoom: VIEWPORT_DEFAULT_MINZOOM,
+      maxFeatures: VIEWPORT_DEFAULT_MAX_FEATURES,
+      overviews: false,
+    });
+    expect(loadModeOf({ runtime: { load: { overviews: false } } }).overviews).toBe(false);
+    expect(loadModeOf({ load: { overviews: "no" } }).overviews).toBe(true);
   });
 });
 

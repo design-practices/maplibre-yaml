@@ -27,6 +27,9 @@ import {
   TAIL_BYTES,
   GeoParquetLoader,
   loadGeoParquetWhole,
+  overviewBand,
+  parseOverviews,
+  type Overviews,
 } from "../../src/formats/lib/geoparquet";
 import { getDecoder, hasDecoder } from "../../src/formats/decoders";
 import { decodeGeoParquet } from "../../src/index";
@@ -948,6 +951,15 @@ describe("GeoParquet decode budget on the row groups a view touches (M2)", () =>
   });
 });
 
+/** The fixture's five levels (row groups of 128, 128 | 128, 128 | 128, 128 | 182, 182 | 200, 200, 200 rows). */
+const FIXTURE_LEVELS = [
+  { groupStart: 0, groupEnd: 1, rowStart: 0, rowEnd: 256, zoom: 10, gsd: 38.21851414680481 },
+  { groupStart: 2, groupEnd: 3, rowStart: 256, rowEnd: 512, zoom: 11, gsd: 19.109257073402404 },
+  { groupStart: 4, groupEnd: 5, rowStart: 512, rowEnd: 768, zoom: 12, gsd: 9.554628536701202 },
+  { groupStart: 6, groupEnd: 7, rowStart: 768, rowEnd: 1132, zoom: 13, gsd: 4.777314268350601 },
+  { groupStart: 8, groupEnd: 10, rowStart: 1132, rowEnd: 1732, zoom: 14, gsd: 2.3886571341753005 },
+];
+
 describe("geo:overviews: only the canonical level is read (ml-cnv.21)", () => {
   // tylertoo 0.8.0 (scripts/fixtures/overviews.py): 600 lots at zoom 14, plus
   // coarser copies at zooms 10–13 — 1,732 rows in 11 row groups.
@@ -961,8 +973,9 @@ describe("geo:overviews: only the canonical level is read (ml-cnv.21)", () => {
     expect(source.info.overviews).toEqual({
       version: "0.2.0",
       mode: "duplicating",
-      levels: 5,
+      levels: FIXTURE_LEVELS,
       known: true,
+      canonicalLevel: 4,
       canonical: { groupStart: 8, groupEnd: 10, rowStart: 1132, rowEnd: 1732 },
     });
     expect(source.info.rows).toBe(600);
@@ -1048,6 +1061,209 @@ describe("geo:overviews: only the canonical level is read (ml-cnv.21)", () => {
     const source = await open("/lots-bad.parquet");
     expect(source.info.overviews).toBeUndefined();
     expect(source.info.rows).toBe(1732);
+  });
+});
+
+describe("geo:overviews levels: the band for a zoom (ml-cnv.22, 0.10 U1)", () => {
+  const ALL: [number, number, number, number] = [9, 41, 11, 43];
+  afterEach(() => overrides.clear());
+
+  /** The fixture with one stretch of its `geo:overviews` text replaced by another of the same length. */
+  function patched(name: string, from: string, to: string): string {
+    expect(to.length).toBe(from.length);
+    const bytes = fixture("lots-overviews.parquet").slice();
+    const text = new TextDecoder("latin1").decode(bytes);
+    const at = text.indexOf(from);
+    expect(at).toBeGreaterThan(0);
+    bytes.set(new TextEncoder().encode(to), at);
+    overrides.set(name, bytes);
+    return `/${name}`;
+  }
+
+  /** Synthetic overviews: one row group of 100 rows per level, at these zooms (the last canonical). */
+  function synthetic(zooms: (number | undefined)[], extra: { gsd?: (number | undefined)[]; mode?: Overviews["mode"] } = {}): Overviews {
+    const mode = extra.mode ?? "duplicating";
+    const levels = zooms.map((zoom, i) => ({
+      groupStart: i,
+      groupEnd: i,
+      rowStart: i * 100,
+      rowEnd: (i + 1) * 100,
+      ...(zoom !== undefined ? { zoom } : {}),
+      ...(extra.gsd?.[i] !== undefined ? { gsd: extra.gsd[i] } : {}),
+    }));
+    const last = levels.length - 1;
+    return {
+      version: "0.2.0",
+      mode,
+      levels,
+      known: true,
+      ...(mode === "duplicating"
+        ? { canonicalLevel: last, canonical: { groupStart: last, groupEnd: last, rowStart: last * 100, rowEnd: (last + 1) * 100 } }
+        : {}),
+    };
+  }
+
+  it("parseOverviews keeps every level, the canonical one included; geo.overviews in the geo JSON parses the same", async () => {
+    vi.stubGlobal("fetch", fixtureFetch());
+    const source = await open("/lots-overviews.parquet");
+    const overviews = parseOverviews(source.metadata, undefined)!;
+    expect(overviews.levels).toEqual(FIXTURE_LEVELS);
+    expect(overviews.levels.map((l) => l.zoom)).toEqual([10, 11, 12, 13, 14]);
+    expect(overviews.canonicalLevel).toBe(4);
+    expect(overviews.canonical).toEqual({ groupStart: 8, groupEnd: 10, rowStart: 1132, rowEnd: 1732 });
+    expect(overviews.canonical!.rowEnd - overviews.canonical!.rowStart).toBe(600);
+    // The key's planned home: the same object under `geo.overviews`.
+    const key = source.metadata.key_value_metadata!.find((kv) => kv.key === "geo:overviews")!.value!;
+    const withoutKey = {
+      ...source.metadata,
+      key_value_metadata: source.metadata.key_value_metadata!.filter((kv) => kv.key !== "geo:overviews"),
+    };
+    expect(parseOverviews(withoutKey, { overviews: JSON.parse(key) })).toEqual(overviews);
+    expect(parseOverviews(withoutKey, undefined)).toBeUndefined();
+  });
+
+  it.each([
+    [11.4, 1, "z11"],
+    [12.0, 2, "z12"],
+    [12.99, 2, "z12"],
+    [13, 3, "z13"],
+    [9.0, 0, "z10 (the coarsest)"],
+    [2, 0, "z10 (the coarsest)"],
+    [14, 4, "canonical"],
+    [15, 4, "canonical"],
+  ])("on the fixture, zoom %s reads level %s (%s)", async (zoom, level) => {
+    vi.stubGlobal("fetch", fixtureFetch());
+    const source = await open("/lots-overviews.parquet");
+    const band = overviewBand(source.info.overviews, zoom)!;
+    const { groupStart, groupEnd, rowStart, rowEnd } = FIXTURE_LEVELS[level]!;
+    expect(band).toMatchObject({ level, groupStart, groupEnd, rowStart, rowEnd });
+    expect(band.fallback).toBeUndefined();
+  });
+
+  it("AE1: levels at z8, z10, z12 and the canonical level at z14 — 11.4 → z10, 12.0 → z12, 15 → canonical", () => {
+    const overviews = synthetic([8, 10, 12, 14]);
+    expect(overviewBand(overviews, 11.4)).toMatchObject({ level: 1, groupStart: 1, groupEnd: 1, rowStart: 100, rowEnd: 200 });
+    expect(overviewBand(overviews, 12.0)).toMatchObject({ level: 2, rowStart: 200, rowEnd: 300 });
+    expect(overviewBand(overviews, 15)).toMatchObject({ level: 3, ...overviews.canonical });
+    expect(overviewBand(overviews, 13.9)).toMatchObject({ level: 2 });
+    expect(overviewBand(overviews, 7.5)).toMatchObject({ level: 0 });
+  });
+
+  it("no band for a file without overviews, or one whose major version this version doesn't know", () => {
+    expect(overviewBand(undefined, 12)).toBeUndefined();
+    expect(overviewBand({ ...synthetic([8, 10, 12, 14]), version: "1.0.0", known: false }, 12)).toBeUndefined();
+  });
+
+  it("a level without zoom gets one from its gsd (the equatorial rule, metres)", () => {
+    // gsd for z10 and z12 at 1024-px tiles: 40075016.69 / 1024 / 2^z.
+    const gsd = (z: number) => 40075016.69 / 1024 / 2 ** z;
+    const overviews = synthetic([8, undefined, undefined, 14], { gsd: [undefined, gsd(10), gsd(12), undefined] });
+    expect(overviewBand(overviews, 10)).toMatchObject({ level: 1 });
+    expect(overviewBand(overviews, 11.4)).toMatchObject({ level: 1 });
+    expect(overviewBand(overviews, 12)).toMatchObject({ level: 2 });
+    expect(overviewBand(overviews, 9)).toMatchObject({ level: 0 });
+    expect(overviewBand(overviews, 9)!.fallback).toBeUndefined();
+  });
+
+  it("the fixture with its zooms removed chooses the same levels from gsd", async () => {
+    const url = patched("lots-gsd.parquet", '"zoom":11}', '"zoo_":11}');
+    vi.stubGlobal("fetch", fixtureFetch());
+    const source = await open(url);
+    expect(source.info.overviews!.levels[1]!.zoom).toBeUndefined();
+    expect(source.info.overviews!.levels[1]!.gsd).toBeCloseTo(19.109, 3);
+    expect(overviewBand(source.info.overviews, 11.4)).toMatchObject({ level: 1 });
+    expect(overviewBand(source.info.overviews, 10.9)).toMatchObject({ level: 0 });
+  });
+
+  it("a level with neither zoom nor gsd: the canonical level, with the reason", async () => {
+    const overviews = synthetic([8, undefined, 12, 14]);
+    expect(overviewBand(overviews, 9)).toEqual({ level: 3, ...overviews.canonical, fallback: "no-zoom" });
+    const url = patched("lots-nozoom.parquet", '"gsd":19.109257073402404,"zoom":11}', '"gs_":19.109257073402404,"zoo_":11}');
+    vi.stubGlobal("fetch", fixtureFetch());
+    const source = await open(url);
+    expect(overviewBand(source.info.overviews, 11)).toEqual({
+      level: 4,
+      groupStart: 8,
+      groupEnd: 10,
+      rowStart: 1132,
+      rowEnd: 1732,
+      fallback: "no-zoom",
+    });
+    // A gsd that isn't a positive number counts as none.
+    expect(overviewBand(synthetic([8, 10, 12, undefined], { gsd: [undefined, undefined, undefined, 0] }), 9)).toMatchObject({ fallback: "no-zoom" });
+  });
+
+  it("partitioning mode reads every level up to the chosen one", () => {
+    const overviews = synthetic([8, 10, 12, 14], { mode: "partitioning" });
+    expect(overviews.canonical).toBeUndefined();
+    expect(overviewBand(overviews, 11.4)).toEqual({ level: 1, groupStart: 0, groupEnd: 1, rowStart: 0, rowEnd: 200 });
+    expect(overviewBand(overviews, 7)).toEqual({ level: 0, groupStart: 0, groupEnd: 0, rowStart: 0, rowEnd: 100 });
+    expect(overviewBand(overviews, 16)).toEqual({ level: 3, groupStart: 0, groupEnd: 3, rowStart: 0, rowEnd: 400 });
+    // Neither zoom nor gsd somewhere: every row (partitioning has no canonical level).
+    expect(overviewBand(synthetic([8, undefined, 12, 14], { mode: "partitioning" }), 9)).toEqual({
+      level: 3,
+      groupStart: 0,
+      groupEnd: 3,
+      rowStart: 0,
+      rowEnd: 400,
+      fallback: "no-zoom",
+    });
+  });
+
+  it("a partitioning file parses its levels with no canonical level", async () => {
+    vi.stubGlobal("fetch", fixtureFetch());
+    const source = await open("/lots-overviews.parquet");
+    const raw = JSON.parse(source.metadata.key_value_metadata!.find((kv) => kv.key === "geo:overviews")!.value!);
+    const metadata = {
+      ...source.metadata,
+      key_value_metadata: [{ key: "geo:overviews", value: JSON.stringify({ ...raw, mode: "partitioning", canonical_level: null }) }],
+    };
+    const overviews = parseOverviews(metadata, undefined)!;
+    expect(overviews).toMatchObject({ mode: "partitioning", levels: FIXTURE_LEVELS });
+    expect(overviews.canonical).toBeUndefined();
+    expect(overviews.canonicalLevel).toBeUndefined();
+    expect(overviewBand(overviews, 12.5)).toEqual({ level: 2, groupStart: 0, groupEnd: 5, rowStart: 0, rowEnd: 768 });
+  });
+
+  it("rowsInView, rowGroupsInView and readBbox with a band touch only that band's row groups", async () => {
+    vi.stubGlobal("fetch", fixtureFetch());
+    const source = await open("/lots-overviews.parquet");
+    const z10 = overviewBand(source.info.overviews, 10)!;
+    const z13 = overviewBand(source.info.overviews, 13.2)!;
+    expect(rowsInView(source, ALL, z10)).toBe(256);
+    expect(rowsInView(source, ALL, z13)).toBe(364);
+    expect(rowGroupsInView(source, ALL, z13)).toEqual({ groups: 2, rows: 364, largest: 182 });
+    const fc = await readBbox(source, ALL, { columns: "all", band: z10 });
+    expect(fc!.features).toHaveLength(256);
+    expect(fc!.features.every((f) => f.properties!["level"] === 0)).toBe(true);
+    const coarse = await readBbox(source, ALL, { columns: "all", band: z13 });
+    expect(coarse!.features.every((f) => f.properties!["level"] === 3)).toBe(true);
+    expect(coarse!.features).toHaveLength(364);
+    // projectedSize by band counts that band's bytes.
+    const [, canonicalDecoded] = projectedSize(source, "all");
+    const [, z10Decoded] = projectedSize(source, "all", z10);
+    expect(z10Decoded).toBeGreaterThan(0);
+    expect(z10Decoded).toBeLessThan(canonicalDecoded);
+    // Judged on the band's own row groups: the canonical level's three are
+    // compact, the z10 level's two each span over half of its extent.
+    expect(canSkipByView(source)).toBe(true);
+    expect(canSkipByView(source, source.info.overviews!.canonical)).toBe(true);
+    expect(canSkipByView(source, z10)).toBe(false);
+  });
+
+  it("without a band, every helper still reads the canonical level (0.9.2)", async () => {
+    vi.stubGlobal("fetch", fixtureFetch());
+    const source = await open("/lots-overviews.parquet");
+    const canonical = source.info.overviews!.canonical!;
+    expect(rowsInView(source, ALL)).toBe(rowsInView(source, ALL, canonical));
+    expect(rowsInView(source, ALL)).toBe(600);
+    expect(rowGroupsInView(source, ALL)).toEqual(rowGroupsInView(source, ALL, canonical));
+    expect(projectedSize(source, "all")).toEqual(projectedSize(source, "all", canonical));
+    const fc = await readBbox(source, ALL, { columns: "all" });
+    expect(fc!.features).toHaveLength(600);
+    // A whole read ignores any band: always the canonical level.
+    const whole = await readAll(source, { columns: "all" });
+    expect(whole!.features).toHaveLength(600);
   });
 });
 

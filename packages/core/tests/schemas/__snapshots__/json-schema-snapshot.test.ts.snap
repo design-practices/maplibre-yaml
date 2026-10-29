@@ -477,6 +477,10 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                                 "type": "integer",
                                 "minimum": 1,
                                 "description": "The most features one read takes: a view holding more isn't read (default 150000; the map asks to zoom in), and above 400000 it also raises the whole-file limit (heavier on memory)"
+                              },
+                              "overviews": {
+                                "type": "boolean",
+                                "description": "Experimental. GeoParquet overview files (geo:overviews) read by view: draw the level that fits the zoom (true, the default) or only the full-detail level (false)"
                               }
                             },
                             "additionalProperties": false,
@@ -5068,6 +5072,10 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                             "type": "integer",
                             "minimum": 1,
                             "description": "The most features one read takes: a view holding more isn't read (default 150000; the map asks to zoom in), and above 400000 it also raises the whole-file limit (heavier on memory)"
+                          },
+                          "overviews": {
+                            "type": "boolean",
+                            "description": "Experimental. GeoParquet overview files (geo:overviews) read by view: draw the level that fits the zoom (true, the default) or only the full-detail level (false)"
                           }
                         },
                         "additionalProperties": false,
@@ -8568,6 +8576,10 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                                         "type": "integer",
                                         "minimum": 1,
                                         "description": "The most features one read takes: a view holding more isn't read (default 150000; the map asks to zoom in), and above 400000 it also raises the whole-file limit (heavier on memory)"
+                                      },
+                                      "overviews": {
+                                        "type": "boolean",
+                                        "description": "Experimental. GeoParquet overview files (geo:overviews) read by view: draw the level that fits the zoom (true, the default) or only the full-detail level (false)"
                                       }
                                     },
                                     "additionalProperties": false,
@@ -13375,6 +13387,10 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                                             "type": "integer",
                                             "minimum": 1,
                                             "description": "The most features one read takes: a view holding more isn't read (default 150000; the map asks to zoom in), and above 400000 it also raises the whole-file limit (heavier on memory)"
+                                          },
+                                          "overviews": {
+                                            "type": "boolean",
+                                            "description": "Experimental. GeoParquet overview files (geo:overviews) read by view: draw the level that fits the zoom (true, the default) or only the full-detail level (false)"
                                           }
                                         },
                                         "additionalProperties": false,

@@ -18,7 +18,7 @@
  * | COG `colorRamp:`, `encoding:`, `tileSize:` | see `cog-checks.ts` |
  * | `format:` disagreeing with the URL | warning: `format:` wins |
  * | `load:` on a source that isn't FlatGeobuf or GeoParquet | warning: no effect |
- * | `columns:` on a source that isn't GeoParquet | warning: no effect |
+ * | `columns:` or `load: { overviews }` on a source that isn't GeoParquet | warning: no effect |
  * | `stream:` without `refresh:` (or `refreshInterval:`) | warning: the stream never connects |
  * | a GeoParquet `columns:` list without a property the document uses | warning: names each one (it would read as missing) |
  *
@@ -181,14 +181,21 @@ export function checkSourceFormats(
       });
     }
 
-    // `columns:` only means something for GeoParquet.
-    if (runtime["columns"] !== undefined && format !== "geoparquet") {
+    // `columns:` and `load: { overviews }` only mean something for
+    // GeoParquet (`load:` itself already warned above on other formats).
+    const load = runtime["load"];
+    const geoparquetOnly: [string, (string | number)[]][] = [];
+    if (runtime["columns"] !== undefined) geoparquetOnly.push(["columns", [...runtimePath, "columns"]]);
+    if (isObject(load) && load["overviews"] !== undefined && FEATURE_FILE_FORMATS.has(format)) {
+      geoparquetOnly.push(["overviews", [...runtimePath, "load", "overviews"]]);
+    }
+    for (const [key, keyPath] of format === "geoparquet" ? [] : geoparquetOnly) {
       warnings.push({
-        path: [...runtimePath, "columns"].join("."),
+        path: keyPath.join("."),
         message:
-          "columns: only applies to GeoParquet sources (a .parquet URL or format: geoparquet); " +
+          `${key}: only applies to GeoParquet sources (a .parquet URL or format: geoparquet); ` +
           "it does nothing here.",
-        ...at([...runtimePath, "columns"]),
+        ...at(keyPath),
       });
     }
 

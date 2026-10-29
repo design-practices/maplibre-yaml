@@ -166,29 +166,51 @@ export interface GeoParquetInfo {
 }
 
 /**
+ * A run of row groups: groups `groupStart`..`groupEnd` (inclusive), rows
+ * `rowStart`..`rowEnd` (exclusive, as hyparquet takes them) — what a read
+ * and the by-view helpers are restricted to.
+ */
+export interface RowBand {
+  groupStart: number;
+  groupEnd: number;
+  rowStart: number;
+  rowEnd: number;
+}
+
+/** One `geo:overviews` level: its row groups and rows, and what it was built for. */
+export interface OverviewLevel extends RowBand {
+  /** The Web Mercator zoom the level was built for, when the footer says. */
+  zoom?: number;
+  /** The level's ground sample distance (metres per pixel), when the footer says. */
+  gsd?: number;
+}
+
+/**
  * A GeoParquet overview file's levels (`geo:overviews`, draft spec 0.2.0,
  * written by tylertoo): each zoom level is a run of row groups, coarse to
  * fine. In `duplicating` mode each level is a complete copy of the data, so
  * a reader that reads every row draws each feature once per level (2,201
- * features for 601 parcels in the spike, ml-cnv.21); core reads only the
- * canonical — full-detail — level. Choosing a coarser level by zoom is 0.10
- * (ml-cnv.22). In `partitioning` mode each feature appears once: every row
- * is the data.
+ * features for 601 parcels in the spike, ml-cnv.21): whole-file reads and
+ * the size guards read only the canonical — full-detail — level, and a read
+ * by view the level that fits the zoom ({@link overviewBand}, ml-cnv.22). In
+ * `partitioning` mode each feature appears once: every row is the data, and
+ * a zoom reads every level up to its own.
  */
 export interface Overviews {
   /** The key's `version`, e.g. "0.2.0". */
   version: string;
   mode: "duplicating" | "partitioning";
-  /** How many levels the file has. */
-  levels: number;
+  /** Every level, coarse to fine, the canonical one included. */
+  levels: OverviewLevel[];
   /** Whether this version knows the key's major version (0). */
   known: boolean;
+  /** The canonical level's index in {@link levels} (`duplicating` mode). */
+  canonicalLevel?: number;
   /**
-   * The canonical level's rows and row groups (`duplicating` mode):
-   * groups `groupStart`..`groupEnd` (inclusive), rows `rowStart`..`rowEnd`
-   * (exclusive) — what every read and size check is restricted to.
+   * The canonical level's rows and row groups (`duplicating` mode) — what
+   * every whole-file read and size check is restricted to.
    */
-  canonical?: { groupStart: number; groupEnd: number; rowStart: number; rowEnd: number };
+  canonical?: RowBand;
 }
 
 /** An opened GeoParquet file: its footer parsed, ready to read. */
@@ -437,12 +459,15 @@ function crsFacts(crs: unknown): { org?: string; code?: number | string; name?: 
   };
 }
 
+/** A finite number, or undefined. */
+const finite = (v: unknown): number | undefined => (typeof v === "number" && Number.isFinite(v) ? v : undefined);
+
 /**
  * The `geo:overviews` key (or its planned home, `geo.overviews`), read into
  * {@link Overviews}; undefined when the file has none, or one whose levels
  * don't tile the row groups (then it is read as plain GeoParquet).
  */
-function parseOverviews(metadata: FileMetaData, geo: Obj | undefined): Overviews | undefined {
+export function parseOverviews(metadata: Pick<FileMetaData, "key_value_metadata" | "row_groups">, geo: Obj | undefined): Overviews | undefined {
   const text = metadata.key_value_metadata?.find((kv) => kv.key === "geo:overviews")?.value;
   let raw: unknown = isObject(geo?.["overviews"]) ? geo!["overviews"] : undefined;
   if (text) {
@@ -457,37 +482,124 @@ function parseOverviews(metadata: FileMetaData, geo: Obj | undefined): Overviews
   const mode = raw["mode"] === "partitioning" ? "partitioning" : "duplicating";
   const groups = metadata.row_groups;
   const levels = raw["levels"] as unknown[];
-  // Each level ends at a row group (inclusive); together they cover every group, in order.
-  const ends: number[] = [];
+  // Each level ends at a row group (inclusive); together they cover every
+  // group, in order. Rows are counted from the footer's `num_rows`.
+  const parsed: OverviewLevel[] = [];
+  let groupStart = 0;
+  let rowStart = 0;
   for (const level of levels) {
     const end = isObject(level) ? Number(level["row_group_end"]) : NaN;
-    if (!Number.isInteger(end) || end < (ends.at(-1) ?? -1) + 1 || end >= groups.length) return undefined;
-    ends.push(end);
+    if (!Number.isInteger(end) || end < groupStart || end >= groups.length) return undefined;
+    let rowEnd = rowStart;
+    for (let i = groupStart; i <= end; i++) rowEnd += Number(groups[i]!.num_rows);
+    const zoom = finite((level as Obj)["zoom"]);
+    const gsd = finite((level as Obj)["gsd"]);
+    parsed.push({
+      groupStart,
+      groupEnd: end,
+      rowStart,
+      rowEnd,
+      ...(zoom !== undefined ? { zoom } : {}),
+      ...(gsd !== undefined ? { gsd } : {}),
+    });
+    groupStart = end + 1;
+    rowStart = rowEnd;
   }
-  if (ends.at(-1) !== groups.length - 1) return undefined;
-  const overviews: Overviews = { version, mode, levels: ends.length, known: version.split(".")[0] === "0" };
+  if (groupStart !== groups.length) return undefined;
+  const overviews: Overviews = { version, mode, levels: parsed, known: version.split(".")[0] === "0" };
   if (mode === "duplicating") {
     const declared = raw["canonical_level"];
-    const index = typeof declared === "number" && Number.isInteger(declared) && declared >= 0 && declared < ends.length
+    const index = typeof declared === "number" && Number.isInteger(declared) && declared >= 0 && declared < parsed.length
       ? declared
-      : ends.length - 1;
-    const groupStart = index === 0 ? 0 : ends[index - 1]! + 1;
-    const groupEnd = ends[index]!;
-    let rowStart = 0;
-    for (let i = 0; i < groupStart; i++) rowStart += Number(groups[i]!.num_rows);
-    let rowEnd = rowStart;
-    for (let i = groupStart; i <= groupEnd; i++) rowEnd += Number(groups[i]!.num_rows);
-    overviews.canonical = { groupStart, groupEnd, rowStart, rowEnd };
+      : parsed.length - 1;
+    overviews.canonicalLevel = index;
+    overviews.canonical = rowBand(parsed[index]!);
   }
   return overviews;
 }
 
+/** Just the rows and row groups of a band (or level). */
+function rowBand({ groupStart, groupEnd, rowStart, rowEnd }: RowBand): RowBand {
+  return { groupStart, groupEnd, rowStart, rowEnd };
+}
+
+/** What {@link overviewBand} chose: the rows to read, and the level they end at. */
+export interface OverviewBand extends RowBand {
+  /** The index (in {@link Overviews.levels}) of the finest level read. */
+  level: number;
+  /**
+   * Set when the zoom couldn't choose: `no-zoom` — a level declares neither
+   * `zoom` nor a usable `gsd`, so the canonical level (every row, in
+   * `partitioning` mode) is read.
+   */
+  fallback?: "no-zoom";
+}
+
+/** Web Mercator's equator, in metres: the spec's `gsd` ↔ zoom mapping (1024-px tiles). */
+const EQUATOR_M = 40075016.69;
+/** Slack when comparing a level's zoom (derived from `gsd`, a float) with the map's. */
+const ZOOM_EPSILON = 1e-6;
+
 /**
- * The row groups that hold the file's data, with their indexes: every one,
- * or an overview file's canonical level (ml-cnv.21).
+ * The zoom a level was built for: its `zoom`, or one from its `gsd` by the
+ * spec's equatorial rule (`log2(40075016.69 / 1024 / gsd)`, metres, no
+ * latitude correction); undefined with neither.
  */
-export function dataRowGroups(source: GeoParquetFile): { group: FileMetaData["row_groups"][number]; index: number }[] {
-  const band = source.info.overviews?.canonical;
+function levelZoom(level: OverviewLevel): number | undefined {
+  if (level.zoom !== undefined) return level.zoom;
+  if (level.gsd === undefined || !(level.gsd > 0)) return undefined;
+  return Math.log2(EQUATOR_M / 1024 / level.gsd);
+}
+
+/**
+ * The rows an overview file's read by view takes at map zoom `zoom`: the
+ * finest level whose zoom is at or below `floor(zoom)` — the coarsest when
+ * the map is below every level — so a GeoParquet view shows the
+ * generalisation a PMTiles export of the same file shows between tile zoom
+ * *k* and *k*+1. `partitioning` mode reads every level up to that one (each
+ * feature sits only at its coarsest level).
+ *
+ * @returns undefined for a file without overviews, or with a major version
+ *   this version doesn't know (it is read at its canonical level, as
+ *   0.9.2); the canonical band, flagged `no-zoom`, when a level declares
+ *   neither `zoom` nor `gsd`.
+ */
+export function overviewBand(overviews: Overviews | undefined, zoom: number): OverviewBand | undefined {
+  if (!overviews?.known || overviews.levels.length === 0) return undefined;
+  const { levels } = overviews;
+  const last = levels.length - 1;
+  const partitioning = overviews.mode === "partitioning";
+  const band = (index: number, fallback?: "no-zoom"): OverviewBand => {
+    const level = levels[index]!;
+    const rows = partitioning ? { ...rowBand(level), groupStart: 0, rowStart: 0 } : rowBand(level);
+    return { ...rows, level: index, ...(fallback ? { fallback } : {}) };
+  };
+  const zooms = levels.map(levelZoom);
+  if (zooms.some((z) => z === undefined)) {
+    return partitioning
+      ? band(last, "no-zoom")
+      : band(overviews.canonicalLevel ?? last, "no-zoom");
+  }
+  const target = Math.floor(zoom) + ZOOM_EPSILON;
+  // The finest level at or below the target; else the coarsest of all.
+  let chosen = -1;
+  let coarsest = 0;
+  zooms.forEach((z, i) => {
+    if (z! <= target && (chosen < 0 || z! >= zooms[chosen]!)) chosen = i;
+    if (z! < zooms[coarsest]!) coarsest = i;
+  });
+  return band(chosen < 0 ? coarsest : chosen);
+}
+
+/**
+ * The row groups that hold the file's data, with their indexes: `band`'s
+ * (an overview level, {@link overviewBand}), else every one, or an overview
+ * file's canonical level (ml-cnv.21).
+ */
+export function dataRowGroups(
+  source: GeoParquetFile,
+  band: RowBand | undefined = source.info.overviews?.canonical
+): { group: FileMetaData["row_groups"][number]; index: number }[] {
   const all = source.metadata.row_groups.map((group, index) => ({ group, index }));
   return band ? all.slice(band.groupStart, band.groupEnd + 1) : all;
 }
@@ -612,13 +724,14 @@ export function projectedBytes(source: GeoParquetFile, columns: ColumnChoice): n
  * What a whole-file read of `columns` costs, from the footer alone:
  * `[compressed bytes transferred, uncompressed bytes decoded]`. The second is
  * what decoding holds in memory (ml-37r.16: a file whose read columns are
- * 47 MB on the wire can be several times that once decompressed).
+ * 47 MB on the wire can be several times that once decompressed). `band`:
+ * an overview level's row groups instead of the canonical level's.
  */
-export function projectedSize(source: GeoParquetFile, columns: ColumnChoice): [number, number] {
+export function projectedSize(source: GeoParquetFile, columns: ColumnChoice, band?: RowBand): [number, number] {
   const read = new Set(columnsToRead(source, columns));
   let total = 0;
   let decoded = 0;
-  for (const { group } of dataRowGroups(source)) {
+  for (const { group } of dataRowGroups(source, band)) {
     for (const chunk of group.columns) {
       const meta = chunk.meta_data;
       if (meta && read.has(meta.path_in_schema[0]!)) {
@@ -634,12 +747,13 @@ export function projectedSize(source: GeoParquetFile, columns: ColumnChoice): [n
  * About how many rows a read of `view` returns, from the footer alone: each
  * row group's rows times the share of its covering extent the view covers
  * (rows spread evenly within a group, which is what spatially sorted groups
- * make roughly true). A group without statistics counts whole.
+ * make roughly true). A group without statistics counts whole. `band`: an
+ * overview level's row groups instead of the canonical level's.
  */
-export function rowsInView(source: GeoParquetFile, view: BBox): number {
-  const extents = rowGroupExtents(source);
+export function rowsInView(source: GeoParquetFile, view: BBox, band?: RowBand): number {
+  const extents = rowGroupExtents(source, band);
   let rows = 0;
-  dataRowGroups(source).forEach(({ group }, i) => {
+  dataRowGroups(source, band).forEach(({ group }, i) => {
     const extent = extents[i];
     rows += Number(group.num_rows) * (extent ? shareInView(extent, view) : 1);
   });
@@ -652,13 +766,18 @@ export function rowsInView(source: GeoParquetFile, view: BBox): number {
  * all their rows — a reader decodes a row group whole and filters its rows
  * afterwards, so a view holding 145,000 features of a file in 100,000-row
  * groups decoded about 600,000 rows. `largest` is the biggest group's rows.
+ * `band`: an overview level's row groups instead of the canonical level's.
  */
-export function rowGroupsInView(source: GeoParquetFile, view: BBox): { groups: number; rows: number; largest: number } {
-  const extents = rowGroupExtents(source);
+export function rowGroupsInView(
+  source: GeoParquetFile,
+  view: BBox,
+  band?: RowBand
+): { groups: number; rows: number; largest: number } {
+  const extents = rowGroupExtents(source, band);
   let groups = 0;
   let rows = 0;
   let largest = 0;
-  dataRowGroups(source).forEach(({ group }, i) => {
+  dataRowGroups(source, band).forEach(({ group }, i) => {
     const n = Number(group.num_rows);
     largest = Math.max(largest, n);
     const extent = extents[i];
@@ -671,12 +790,12 @@ export function rowGroupsInView(source: GeoParquetFile, view: BBox): { groups: n
 
 /**
  * The bbox each data row group's covering statistics describe (undefined
- * without stats), in {@link dataRowGroups} order.
+ * without stats), in {@link dataRowGroups} order (of `band`, else the canonical level).
  */
-function rowGroupExtents(source: GeoParquetFile): (BBox | undefined)[] {
+function rowGroupExtents(source: GeoParquetFile, band?: RowBand): (BBox | undefined)[] {
   const cover = source.info.covering;
   if (!cover) return [];
-  return dataRowGroups(source).map(({ group }) => {
+  return dataRowGroups(source, band).map(({ group }) => {
     const stat = (path: string, which: "min" | "max"): number | undefined => {
       const chunk = group.columns.find((c) => c.meta_data?.path_in_schema.join(".") === path);
       const s = chunk?.meta_data?.statistics;
@@ -697,9 +816,10 @@ function rowGroupExtents(source: GeoParquetFile): (BBox | undefined)[] {
  * are spatially compact (sorted, e.g. by Hilbert curve) — each covering on
  * average at most half the file's extent. An unsorted file's row groups
  * each span nearly everything, so a view would still read almost all of it.
+ * `band`: judged on an overview level's row groups instead of the canonical level's.
  */
-export function canSkipByView(source: GeoParquetFile): boolean {
-  const extents = rowGroupExtents(source);
+export function canSkipByView(source: GeoParquetFile, band?: RowBand): boolean {
+  const extents = rowGroupExtents(source, band);
   if (extents.length < 2 || extents.some((e) => !e)) return false;
   const boxes = extents as BBox[];
   const area = (b: BBox) => Math.max(0, b[2] - b[0]) * Math.max(0, b[3] - b[1]);
@@ -725,11 +845,16 @@ const KNOWN_CODECS = new Set(["UNCOMPRESSED", "SNAPPY", "GZIP", "ZSTD", "LZ4", "
 /**
  * The decompressors for the column chunks a read touches — brotli fetched
  * on demand. A codec this reader lacks (LZO) is refused in plain words.
+ * `band`: the row groups read (default the canonical level, or every one).
  */
-export async function compressorsFor(source: GeoParquetFile, columns: readonly string[]): Promise<Compressors> {
+export async function compressorsFor(
+  source: GeoParquetFile,
+  columns: readonly string[],
+  band?: RowBand
+): Promise<Compressors> {
   const read = new Set(columns);
   const codecs = new Set<string>();
-  for (const { group } of dataRowGroups(source)) {
+  for (const { group } of dataRowGroups(source, band)) {
     for (const chunk of group.columns) {
       const meta = chunk.meta_data;
       if (meta && read.has(meta.path_in_schema[0]!)) codecs.add(meta.codec);
@@ -768,6 +893,12 @@ export interface ReadOptions {
   columns?: ColumnChoice;
   /** Returns false once the read is superseded; the result is then `null`. */
   isCurrent?: () => boolean;
+  /**
+   * {@link readBbox} only: the rows to read — an overview level
+   * ({@link overviewBand}) — instead of the canonical level. A whole-file
+   * read ({@link readAll}) always reads the canonical level.
+   */
+  band?: RowBand;
 }
 
 /** Read rows (optionally filtered) as features. */
@@ -777,15 +908,17 @@ async function read(
   filter?: Record<string, unknown>
 ): Promise<FeatureCollection | null> {
   const columns = columnsToRead(source, options.columns ?? "all");
+  // An overview file: the band's rows only — a level by view, else the
+  // canonical level (hyparquet plans only the row groups in that range,
+  // before any fetch).
+  const band = options.band ?? source.info.overviews?.canonical;
   try {
-    const compressors = await compressorsFor(source, [
-      ...columns,
-      ...(filter && source.info.covering ? [source.info.covering.xmin.split(".")[0]!] : []),
-    ]);
+    const compressors = await compressorsFor(
+      source,
+      [...columns, ...(filter && source.info.covering ? [source.info.covering.xmin.split(".")[0]!] : [])],
+      band
+    );
     if (options.isCurrent && !options.isCurrent()) return null;
-    // An overview file: its canonical level's rows only (hyparquet plans
-    // only the row groups in that range, before any fetch).
-    const band = source.info.overviews?.canonical;
     const rows = (await parquetReadObjects({
       file: source.file,
       metadata: source.metadata,
@@ -807,15 +940,17 @@ async function read(
   }
 }
 
-/** Read every row (the projected columns) as features. */
-export function readAll(source: GeoParquetFile, options: ReadOptions = {}): Promise<FeatureCollection | null> {
-  return read(source, options);
+/** Read every row (the projected columns; an overview file's canonical level) as features. */
+export function readAll(source: GeoParquetFile, options: Omit<ReadOptions, "band"> = {}): Promise<FeatureCollection | null> {
+  const { columns, isCurrent } = options;
+  return read(source, { ...(columns ? { columns } : {}), ...(isCurrent ? { isCurrent } : {}) });
 }
 
 /**
  * Read only the features whose bbox intersects `bbox`: row groups whose
  * covering statistics lie outside it are never fetched, and the rows left
- * are filtered by their own bbox.
+ * are filtered by their own bbox. `options.band` reads an overview level
+ * instead of the canonical level.
  *
  * @throws A `no-index` {@link FormatError} when the file has no bbox covering column.
  */
