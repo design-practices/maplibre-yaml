@@ -207,6 +207,11 @@ test.describe("GeoParquet with no page JavaScript", () => {
       "Layer mercator has no data: /gallery-assets/cloud-native/districts-3857.parquet is in EPSG:3857; MapLibre " +
         "needs longitude/latitude (EPSG:4326). Reproject it: ogr2ogr -t_srs EPSG:4326 out.parquet districts-3857.parquet."
     );
+    // Parquet's native GEOMETRY type, no geo key: the CRS in its schema is checked the same way (ml-37r.8).
+    await expect(notice).toContainText(
+      "Layer stateplane has no data: /gallery-assets/cloud-native/districts-native-2272.parquet is in EPSG:2272; MapLibre " +
+        "needs longitude/latitude (EPSG:4326). Reproject it: ogr2ogr -t_srs EPSG:4326 out.parquet districts-native-2272.parquet."
+    );
     await expect(notice).toContainText(
       "Layer plain has no data: /gallery-assets/cloud-native/plain.parquet is a Parquet file but not GeoParquet"
     );
@@ -238,6 +243,7 @@ test.describe("GeoParquet with no page JavaScript", () => {
     // What must work anyway: a small file on a host without ranges, an unsorted file read by view.
     await waitForFeatures(page, "fallbacks", "norange");
     await waitForFeatures(page, "fallbacks", "unsorted");
+    await waitForFeatures(page, "fallbacks", "native");
     await expect(page.locator("#fallbacks .ml-map-notice")).toHaveCount(0);
     await page.screenshot({ path: "e2e/results/geoparquet_errors.png", fullPage: true });
     expect(errors).toEqual([]);

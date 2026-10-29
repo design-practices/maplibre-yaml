@@ -320,6 +320,21 @@ describe('prepare: the repo’s sample files', () => {
     });
   }
 
+  it('districts-native-2272.parquet (native GEOMETRY, no geo key): its CRS from the logical type, the reprojection command first (ml-37r.8)', async () => {
+    const report = await prepareFile(at('districts-native-2272.parquet'));
+    expect(report.facts).toMatchObject({ format: 'geoparquet', crs: 'EPSG:2272', lonLat: false });
+    expect(report.recommendation.verdict).toBe('change');
+    expect(commandsOf(report)[0]).toBe('ogr2ogr -t_srs EPSG:4326 districts-native-2272-4326.parquet districts-native-2272.parquet');
+    expect(formatPrepare(report)).toMatch(/EPSG:2272/);
+    expectValidSource(report.recommendation.yaml);
+  });
+
+  it('districts-native.parquet (native GEOMETRY, lon/lat): no reprojection', async () => {
+    const report = await prepareFile(at('districts-native.parquet'));
+    expect(report.facts).toMatchObject({ format: 'geoparquet', crs: 'EPSG:4326', lonLat: true });
+    expect(commandsOf(report).some((c) => c.startsWith('ogr2ogr -t_srs'))).toBe(false);
+  });
+
   it('lots-overviews.parquet: its levels, and the experimental note', async () => {
     const report = await prepareFile(at('lots-overviews.parquet'));
     const text = formatPrepare(report);

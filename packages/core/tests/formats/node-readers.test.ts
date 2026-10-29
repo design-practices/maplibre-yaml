@@ -105,6 +105,13 @@ describe("readGeoParquetFacts", () => {
     expect(facts.rows).toBe(48);
   });
 
+  it("names the CRS of a native GEOMETRY column (no geo key) instead of throwing (ml-37r.8)", async () => {
+    const projected = await readGeoParquetFacts(counting("districts-native-2272.parquet"), "districts-native-2272.parquet");
+    expect(projected).toMatchObject({ geometryColumn: "geometry", encoding: "WKB", crs: "EPSG:2272", lonLat: false, rows: 48 });
+    const lonLat = await readGeoParquetFacts(counting("districts-native.parquet"), "districts-native.parquet");
+    expect(lonLat).toMatchObject({ geometryColumn: "geometry", crs: "EPSG:4326", lonLat: true, rows: 48 });
+  });
+
   it("names a GeoArrow encoding instead of throwing", async () => {
     const facts = await readGeoParquetFacts(counting("points-geoarrow.parquet"), "points-geoarrow.parquet");
     expect(facts.encoding).toBe("point");

@@ -443,10 +443,14 @@ function toBBox(value: unknown): BBox | undefined {
 /** The CRS a GeoParquet column declares: PROJJSON, a string, or nothing. */
 function crsFacts(crs: unknown): { org?: string; code?: number | string; name?: string; projected?: boolean } {
   if (typeof crs === "string") {
-    const m = /^(?:projjson:|srid:)?([A-Za-z]+):(\w+)$/.exec(crs.trim());
-    if (m) return { org: m[1]!, code: m[2]!, name: `${m[1]!.toUpperCase()}:${m[2]!}` };
-    const srid = /^srid:(\d+)$/i.exec(crs.trim());
-    return srid ? { org: "EPSG", code: Number(srid[1]), name: `EPSG:${srid[1]}` } : { name: crs };
+    const text = crs.trim();
+    // `srid:<n>` (Parquet's GEOMETRY type) is an EPSG code; `projjson:<key>`
+    // whose key wasn't found names nothing more than itself.
+    const srid = /^srid:(\d+)$/i.exec(text);
+    if (srid) return { org: "EPSG", code: Number(srid[1]), name: `EPSG:${srid[1]}` };
+    const m = /^(?:projjson:|srid:)?([A-Za-z]+):(\w+)$/.exec(text);
+    if (m && !/^(?:projjson|srid)$/i.test(m[1]!)) return { org: m[1]!, code: m[2]!, name: `${m[1]!.toUpperCase()}:${m[2]!}` };
+    return { name: text };
   }
   if (!isObject(crs)) return {};
   const id = (isObject(crs["id"]) ? crs["id"] : Array.isArray(crs["ids"]) ? crs["ids"][0] : undefined) as
@@ -625,6 +629,46 @@ function topLevelColumns(metadata: FileMetaData): { name: string; logical_type?:
   return out;
 }
 
+/**
+ * A native GEOMETRY / GEOGRAPHY column's `crs` (the Parquet spec's forms):
+ * absent or empty is OGC:CRS84 (`undefined`, as a geo column without `crs`);
+ * `projjson:<key>` is the PROJJSON in that footer key; inline PROJJSON is
+ * parsed; anything else (`srid:<n>`, `EPSG:4326`, `OGC:CRS84`) is kept as
+ * the string {@link crsFacts} reads.
+ */
+function nativeCrs(crs: unknown, metadata: FileMetaData): unknown {
+  if (typeof crs !== "string" || crs.trim() === "") return undefined;
+  const text = crs.trim();
+  const key = /^projjson:(.+)$/i.exec(text)?.[1];
+  const json =
+    key !== undefined ? metadata.key_value_metadata?.find((kv) => kv.key === key)?.value : text.startsWith("{") ? text : undefined;
+  if (json) {
+    try {
+      const parsed: unknown = JSON.parse(json);
+      if (isObject(parsed)) return parsed;
+    } catch {
+      // Not JSON after all: the string is all there is.
+    }
+  }
+  return text;
+}
+
+/**
+ * A native geometry column's extent from its row groups' geospatial
+ * statistics (Parquet's GEOMETRY type has no `geo` bbox), or undefined.
+ */
+function statisticsExtent(metadata: FileMetaData, column: string): BBox | undefined {
+  let out: BBox | undefined;
+  for (const group of metadata.row_groups) {
+    const chunk = group.columns.find((c) => c.meta_data?.path_in_schema[0] === column);
+    const b = chunk?.meta_data?.geospatial_statistics?.bbox;
+    const e = b && toBBox([b.xmin, b.ymin, b.xmax, b.ymax]);
+    if (!e) continue;
+    out = out ? [Math.min(out[0], e[0]), Math.min(out[1], e[1]), Math.max(out[2], e[2]), Math.max(out[3], e[3])] : e;
+  }
+  return out;
+}
+
 /** What a footer's GeoParquet metadata says, before anything is refused. */
 interface GeoMetadata {
   info: GeoParquetInfo;
@@ -675,6 +719,7 @@ function geoMetadata(metadata: FileMetaData, url: string): GeoMetadata {
   let geometryColumn =
     typeof geo?.["primary_column"] === "string" ? (geo["primary_column"] as string) : Object.keys(columns ?? {})[0];
   let column: Obj | undefined = geometryColumn && isObject(columns?.[geometryColumn]) ? (columns![geometryColumn] as Obj) : undefined;
+  let statsExtent: BBox | undefined;
 
   if (!column) {
     // No `geo` key: Parquet's own GEOMETRY / GEOGRAPHY logical type (newer
@@ -685,15 +730,17 @@ function geoMetadata(metadata: FileMetaData, url: string): GeoMetadata {
     });
     if (!native) throw host().formatError({ code: "not-geoparquet", format: "geoparquet", url });
     geometryColumn = native.name;
-    const crs = (native.logical_type as { crs?: unknown }).crs;
+    // Its CRS is in the logical type (ml-37r.8): checked like a geo key's.
+    const crs = nativeCrs((native.logical_type as { crs?: unknown }).crs, metadata);
     column = { encoding: "WKB", ...(crs !== undefined ? { crs } : {}) };
+    statsExtent = statisticsExtent(metadata, native.name);
   }
 
   const encoding = String(column["encoding"] ?? "WKB");
   const bbox = toBBox(column["bbox"]);
   // `crs` absent means OGC:CRS84 (the spec's default); `null` means unknown.
   const facts = "crs" in column ? crsFacts(column["crs"]) : { org: "OGC", code: "CRS84" };
-  const lonLat = !facts.projected && isLonLatCrs({ org: facts.org, code: facts.code, envelope: bbox });
+  const lonLat = !facts.projected && isLonLatCrs({ org: facts.org, code: facts.code, envelope: bbox ?? statsExtent });
   const types = column["geometry_types"];
   const geometryTypes = Array.isArray(types) ? types.filter((t): t is string => typeof t === "string") : [];
 
