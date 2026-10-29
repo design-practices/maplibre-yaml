@@ -94,8 +94,9 @@ const LIBRARY_MARKERS: Record<string, string[]> = {
   // loads them, and no element imports it.
   convert: ["and leaving this value out would change the document", "is written out in full", "# yaml-language-server: $schema="],
   // Live data (data/live): the stream connections' and the poll's and the
-  // merge's own errors — a static page downloads none of them.
-  live: ["Failed to connect to SSE stream", "WebSocket connection error", "Interval must be at least 1000ms", "updateKey is required for merge strategy"],
+  // merge's own errors (and the stream outage lines, ml-7qa.12) — a static
+  // page downloads none of them.
+  live: ["Failed to connect to SSE stream", "keeps it closed", "Interval must be at least 1000ms", "updateKey is required for merge strategy"],
 };
 
 /** geotiff's codecs, in chunks/cog-<codec>.js (ml-cnv.11): never in a main bundle either. */

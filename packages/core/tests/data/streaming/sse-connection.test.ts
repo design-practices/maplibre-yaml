@@ -391,34 +391,55 @@ describe("SSEConnection", () => {
       connection.on("error", onError);
 
       const connectPromise = connection.connect();
-      mockEventSource?.triggerOpen();
-      await connectPromise;
-
       mockEventSource?.triggerError();
+      await expect(connectPromise).rejects.toThrow();
 
       expect(onError).toHaveBeenCalledWith({
         error: expect.any(Error),
       });
     });
 
-    it("detects when EventSource is closed", async () => {
+    it("reports a drop the browser reconnects from as a reconnect, not an error (ml-7qa.12)", async () => {
       const onError = vi.fn();
+      const onDisconnect = vi.fn();
+      const onReconnecting = vi.fn();
 
-      connection = new SSEConnection({
-        url: "http://example.com/events",
-      });
+      connection = new SSEConnection({ url: "http://example.com/events" });
       connection.on("error", onError);
+      connection.on("disconnect", onDisconnect);
+      connection.on("reconnecting", onReconnecting);
 
       const connectPromise = connection.connect();
       mockEventSource?.triggerOpen();
       await connectPromise;
 
-      // Simulate connection error while connected
+      // The server ended the stream: the browser is reconnecting (CONNECTING).
+      mockEventSource!.readyState = MockEventSource.CONNECTING;
       mockEventSource?.triggerError();
 
-      expect(onError).toHaveBeenCalledWith({
-        error: expect.any(Error),
-      });
+      expect(onError).not.toHaveBeenCalled();
+      expect(onDisconnect).toHaveBeenCalledTimes(1);
+      expect(onReconnecting).toHaveBeenCalledWith({ attempt: 1, delay: 0 });
+      expect(connection.getState()).toBe("reconnecting");
+      expect(mockEventSource!.readyState).toBe(MockEventSource.CONNECTING);
+
+      mockEventSource?.triggerOpen();
+      expect(connection.getState()).toBe("connected");
+      expect(connection.getReconnectAttempts()).toBe(0);
+    });
+
+    it("closes the EventSource on a drop when reconnect is false", async () => {
+      connection = new SSEConnection({ url: "http://example.com/events", reconnect: false });
+
+      const connectPromise = connection.connect();
+      mockEventSource?.triggerOpen();
+      await connectPromise;
+
+      mockEventSource!.readyState = MockEventSource.CONNECTING;
+      mockEventSource?.triggerError();
+
+      expect(mockEventSource!.readyState).toBe(MockEventSource.CLOSED);
+      expect(connection.getState()).toBe("disconnected");
     });
   });
 

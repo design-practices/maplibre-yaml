@@ -404,9 +404,11 @@ describe("WebSocketConnection", () => {
       expect(onError).toHaveBeenCalled();
     });
 
-    it("emits error event when connected", async () => {
+    it("leaves an error on an open socket to the close that follows it (ml-7qa.12)", async () => {
       const onError = vi.fn();
+      const onDisconnect = vi.fn();
       connection.on("error", onError);
+      connection.on("disconnect", onDisconnect);
 
       const connectPromise = connection.connect();
       await Promise.resolve();
@@ -414,9 +416,11 @@ describe("WebSocketConnection", () => {
       await connectPromise;
 
       mockWebSocket?.triggerError();
+      mockWebSocket?.triggerClose(1006, "Connection lost");
       await Promise.resolve();
 
-      expect(onError).toHaveBeenCalledWith({ error: expect.any(Error) });
+      expect(onError).not.toHaveBeenCalled();
+      expect(onDisconnect).toHaveBeenCalledWith({ reason: "Connection lost" });
     });
 
     it("does not emit error when disconnected", async () => {

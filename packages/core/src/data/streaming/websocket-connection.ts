@@ -220,10 +220,9 @@ export class WebSocketConnection extends BaseConnection {
       this.handleClose(event);
     });
 
-    // Error listener
-    this.ws.addEventListener("error", () => {
-      this.handleError();
-    });
+    // No error listener: an error on an open socket is always followed by
+    // its close, which reports the drop (and reconnects), so the error
+    // itself is not a failure to report (ml-7qa.12).
   }
 
   /**
@@ -248,16 +247,6 @@ export class WebSocketConnection extends BaseConnection {
 
     const reason = event.reason || `WebSocket closed (code: ${event.code})`;
     void this.handleDisconnect(reason);
-  }
-
-  /**
-   * Handle error event from WebSocket.
-   */
-  private handleError(): void {
-    if (this.state === "connecting" || this.state === "connected") {
-      const error = new Error("WebSocket connection error");
-      this.emit("error", { error });
-    }
   }
 
   /**

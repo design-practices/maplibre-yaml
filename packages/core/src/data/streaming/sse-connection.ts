@@ -13,8 +13,10 @@ import type { ConnectionConfig } from "./base-connection";
  * Server-Sent Events (SSE) is a server push technology enabling a client
  * to receive automatic updates from a server via an HTTP connection.
  *
- * SSE is unidirectional (server to client only) and automatically handles
- * reconnection when the connection is lost.
+ * SSE is unidirectional (server to client only). The browser reconnects a
+ * dropped stream itself, resuming with `Last-Event-ID`; the connection
+ * counts those tries against `reconnectConfig.maxRetries` and stops them
+ * when `reconnect` is false.
  */
 export interface SSEConfig extends ConnectionConfig {
   /**
@@ -49,7 +51,8 @@ export interface SSEConfig extends ConnectionConfig {
  * EventSource API for robust, automatic reconnection handling.
  *
  * Features:
- * - Automatic reconnection by the browser
+ * - Automatic reconnection by the browser, within the reconnect budget
+ *   (a drop emits 'disconnect' and 'reconnecting', not 'error')
  * - Event-based message streaming
  * - JSON message parsing with error handling
  * - Multiple event type support
@@ -228,9 +231,12 @@ export class SSEConnection extends BaseConnection {
       });
     }
 
-    // Add error listener for connection issues
+    // The stream ending or dropping, and the browser's reconnects
     this.eventSource.addEventListener("error", () => {
       this.handleError();
+    });
+    this.eventSource.addEventListener("open", () => {
+      this.handleReopen();
     });
   }
 
@@ -257,20 +263,58 @@ export class SSEConnection extends BaseConnection {
   }
 
   /**
-   * Handle error event from EventSource.
+   * Handle error event from EventSource: the stream ended or dropped, or one
+   * of the browser's reconnects failed.
+   *
+   * @remarks
+   * A drop is not an error: the browser reconnects by itself (after the
+   * server's `retry:`), resuming with `Last-Event-ID`, and each of its tries
+   * counts as one of `reconnectConfig.maxRetries` attempts. When those run
+   * out, or reconnecting is off, the EventSource is closed so the browser
+   * stops too. When the browser gives up (`readyState` CLOSED, e.g. an HTTP
+   * error), the remaining attempts go through the base class's backoff.
    */
   private handleError(): void {
-    // Only handle errors when connected (ignore reconnection attempts)
+    const source = this.eventSource;
+    if (!source) return;
+    // CLOSED is 2; read as a number (EventSource.CLOSED isn't on every stub).
+    const browserGaveUp = source.readyState === 2;
     if (this.state === "connected") {
-      const error = new Error("SSE connection error");
-      this.emit("error", { error });
-
-      // Check if EventSource is closed
-      if (this.eventSource?.readyState === EventSource.CLOSED) {
+      if (browserGaveUp || !this.config.reconnect || this.maxReconnectAttempts < 1) {
+        // Reconnects through the backoff, if on (none left: gives up).
         this.closeEventSource();
-        void this.handleDisconnect("Connection closed by server");
+        void this.handleDisconnect("The stream closed");
+        return;
       }
+      this.setState("disconnected");
+      this.emit("disconnect", { reason: "The stream closed" });
+    } else if (this.state !== "reconnecting") {
+      return;
     }
+    // The browser's attempt (the first, or the last one failed).
+    const lastError = new Error("The stream closed");
+    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+      this.closeEventSource();
+      this.giveUp(lastError);
+    } else if (browserGaveUp) {
+      this.closeEventSource();
+      void this.attemptReconnection(lastError, this.reconnectAttempts);
+    } else {
+      const attempt = ++this.reconnectAttempts;
+      this.setState("reconnecting");
+      // The browser picks the wait (the server's `retry:`).
+      this.emit("reconnecting", { attempt, delay: 0 });
+    }
+  }
+
+  /** The browser's reconnect opened: the stream is live again. */
+  private handleReopen(): void {
+    if (this.state !== "reconnecting") return;
+    const attempts = this.reconnectAttempts;
+    this.reconnectAttempts = 0;
+    this.setState("connected");
+    this.emit("connect", undefined);
+    this.emit("reconnected", { attempts });
   }
 
   /**

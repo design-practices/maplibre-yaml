@@ -49,8 +49,8 @@
  * `chunks/pmtiles.js` the same way: a PMTiles or COG page requests only its
  * own chunk, a COG `fitTo` page still asks for the file's header before its
  * chunk has arrived, and with either chunk blocked the format's notice
- * appears and the other layers draw. (`reload()` does not yet retry a tile
- * protocol's source: see the `fixme` below.)
+ * appears and the other layers draw, and `reload()` asks for the chunk
+ * again and the source draws.
  * Requires `pnpm build` (core's dist/).
  */
 import { test, expect, type Page } from "@playwright/test";
@@ -785,12 +785,11 @@ test.describe("cloud adapters ride in their reader chunks (bundle headroom U5)",
       expect(errors).toEqual([]);
     });
 
-    // Not yet: a tile protocol's source whose reader chunk failed isn't among
-    // the renderer's failed sources (only LayerManager's own loads are), so
-    // `reload()` sees an unchanged document, clears the notice and asks for
-    // nothing — the source stays blank. As before bundle headroom U5 (the
-    // same at 2b843dc); FlatGeobuf's retry is the first describe's.
-    test.fixme(`chunks/${name}.js blocked, then back: reload() asks again and the source draws`, async ({ page }) => {
+    // A tile protocol's source whose reader chunk failed is among the
+    // renderer's failed sources (its TileJSON request failed, ml-7qa.13), so
+    // `reload()` sets its url again and the handler asks for the chunk anew.
+    // FlatGeobuf's retry is the first describe's.
+    test(`chunks/${name}.js blocked, then back: reload() asks again and the source draws`, async ({ page }) => {
       const errors = await guard(page);
       const asked: string[] = [];
       let offline = true;

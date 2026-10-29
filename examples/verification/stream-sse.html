@@ -21,8 +21,21 @@
          connects (ml-aot.134, a documented rule, not a bug): it keeps its
          seed point, and the validation warning ("stream: connects only when
          the source also has a refresh: block") is shown under the map.
-    FAIL = a count stays put, the reconnect map stops at 2 points, or the
-    third map's point count changes or it shows no warning.
+      4. "Inline start, merge" (ml-7qa.12): an inline `data:` point s0
+         that the feed never sends, then the three events merge in: 5
+         points, s0 kept (it was dropped on the first event before).
+      5. "reconnect: false" (ml-7qa.12): the feed hangs up after event 1
+         and the stream stays closed: 2 points, one request, and one notice
+         line saying `reconnect: false` keeps it closed.
+      6. "Unreachable feed" (ml-7qa.12): the stream's URL answers 404. The
+         layer stays and draws its inline point, one notice line says the
+         stream couldn't connect, and it retries reconnectMaxAttempts (2)
+         times, reconnectDelay (200 ms) apart and doubling, then stops: 3
+         requests in all.
+    FAIL = a count stays put, the reconnect map stops at 2 points or shows
+    a notice, the third map's point count changes or it shows no warning,
+    map 4 loses s0, map 5 reconnects, or map 6 loses its layer, shows more
+    than one line, or keeps retrying.
 
     Each status line carries data-count / data-seq / data-conn attributes
     (set from ml-map:layer-data-loaded), which e2e/stream.spec.ts waits on.
@@ -61,7 +74,7 @@
   </script>
 </head>
 <body>
-  <header>PASS = 1 and 2 reach 4 points (seq 3); 3 keeps its 1 point and shows the stream warning.</header>
+  <header>PASS = 1 and 2 reach 4 points (seq 3), 2 with no notice; 3 keeps its 1 point and shows the stream warning; 4 reaches 5 points; 5 stops at 2 points with one notice line; 6 draws its 1 point with one notice line.</header>
   <div class="maps">
     <section>
       <h2>1. Stream</h2>
@@ -152,6 +165,96 @@ layers:
       </ml-map>
       <output data-for="stream-only" data-count="" data-seq="" data-conn="">waiting…</output>
       <p class="warning" data-capture>(no stream warning yet)</p>
+    </section>
+    <section>
+      <h2>4. Inline start, merge</h2>
+      <ml-map id="inline-merge">
+        <script type="text/yaml">
+type: map
+id: stream-sse-inline-merge
+config:
+  center: [-73.975, 40.75]
+  zoom: 12
+  mapStyle: "/examples/verification/configs/local-style.json"
+layers:
+  - id: inline-dots
+    type: circle
+    source:
+      type: geojson
+      data: { type: FeatureCollection, features: [{ type: Feature, id: s0, geometry: { type: Point, coordinates: [-73.96, 40.76] }, properties: { id: s0, seq: 0, conn: seed } }] }
+      stream:
+        type: sse
+        url: "/sse/points?n=3&case=inline-merge"
+      refresh:
+        updateStrategy: merge
+        updateKey: id
+    paint:
+      circle-radius: 8
+      circle-color: "#2a9d8f"
+        </script>
+      </ml-map>
+      <output data-for="inline-merge" data-count="" data-seq="" data-conn="">waiting…</output>
+    </section>
+    <section>
+      <h2>5. reconnect: false</h2>
+      <ml-map id="no-reconnect">
+        <script type="text/yaml">
+type: map
+id: stream-sse-no-reconnect
+config:
+  center: [-73.975, 40.75]
+  zoom: 12
+  mapStyle: "/examples/verification/configs/local-style.json"
+layers:
+  - id: no-reconnect-dots
+    type: circle
+    source:
+      type: geojson
+      data: { type: FeatureCollection, features: [] }
+      stream:
+        type: sse
+        url: "/sse/points?n=3&dropAfter=1&case=no-reconnect"
+        reconnect: false
+      refresh:
+        updateStrategy: merge
+        updateKey: id
+    paint:
+      circle-radius: 8
+      circle-color: "#e9c46a"
+        </script>
+      </ml-map>
+      <output data-for="no-reconnect" data-count="" data-seq="" data-conn="">waiting…</output>
+    </section>
+    <section>
+      <h2>6. Unreachable feed</h2>
+      <ml-map id="unreachable">
+        <script type="text/yaml">
+type: map
+id: stream-sse-unreachable
+config:
+  center: [-73.975, 40.75]
+  zoom: 12
+  mapStyle: "/examples/verification/configs/local-style.json"
+layers:
+  - id: unreachable-dots
+    type: circle
+    source:
+      type: geojson
+      data: { type: FeatureCollection, features: [{ type: Feature, id: s0, geometry: { type: Point, coordinates: [-73.96, 40.76] }, properties: { id: s0, seq: 0, conn: seed } }] }
+      stream:
+        type: sse
+        url: "/sse/missing?case=unreachable"
+        reconnectMaxAttempts: 2
+        reconnectDelay: 200
+      refresh:
+        updateStrategy: merge
+        updateKey: id
+    paint:
+      circle-radius: 8
+      circle-color: "#8338ec"
+        </script>
+      </ml-map>
+      <output data-for="unreachable" data-count="" data-seq="" data-conn="">waiting…</output>
     </section>
   </div>
   <script type="module">

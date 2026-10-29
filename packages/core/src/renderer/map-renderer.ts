@@ -507,6 +507,8 @@ export interface MapRendererEvents {
   'layer:data-loading': { layerId: string };
   'layer:data-loaded': { layerId: string; featureCount: number };
   'layer:data-error': { layerId: string; error: Error };
+  /** A tile or image source whose TileJSON or image request failed loaded on a later try (a `reload()`). */
+  'source:retried': { sourceId: string };
   'layer:click': { layerId: string; feature: any; lngLat: LngLat };
   'layer:hover': { layerId: string; feature: any; lngLat: LngLat };
   'markers:added': { count: number };
@@ -1450,6 +1452,13 @@ export class MapRenderer {
       const hinted = withWorkerUrlHint(error.message, runtimeVersion());
       if (hinted !== error.message) error = Object.assign(new Error(hinted), { cause: raw });
       const context = classify(e as never, error.message);
+      // A document tile or image source whose TileJSON or image request
+      // failed (no `tile` on the event: not a tile's 404) — a `pmtiles://` or
+      // `cog://` reader chunk that didn't download, say: `reload()` retries it.
+      const ours = context?.kind === 'source' && !context.basemap ? context.sourceId : undefined;
+      if (ours && !(e as { tile?: unknown }).tile && typeof (this.map.getSource(ours) as { url?: unknown } | undefined)?.url === 'string') {
+        this.layerManager.tileJsonFailed.add(ours);
+      }
       // A basemap style that never loads is fatal: without it no layer can
       // draw and `load` never fires.
       options.onError?.(error, context?.kind === 'style', context);
@@ -2245,6 +2254,7 @@ export class MapRenderer {
     const hinted = new Set<string>();
     this.map.on('sourcedata', (e: { sourceId?: string; sourceDataType?: string }) => {
       if (this.destroyed || e.sourceDataType !== 'metadata' || !e.sourceId) return;
+      if (this.layerManager.tileJsonFailed.delete(e.sourceId)) this.emit('source:retried', { sourceId: e.sourceId });
       const source = this.map.getSource(e.sourceId) as { url?: unknown; bounds?: unknown } | undefined;
       if (!source) return;
       this.fitTileBounds(e.sourceId, source);

@@ -382,3 +382,53 @@ describe("MapRenderer.update(): the review sweep", () => {
     await expect(pending).resolves.toEqual({ outcome: "superseded" });
   });
 });
+
+describe("MapRenderer: a tile source whose TileJSON request failed is a failed source (ml-7qa.13)", () => {
+  const tiled = { type: "vector", url: "pmtiles://https://example.com/districts.pmtiles" };
+  const lines = { id: "d", type: "line", source: "tiled", "source-layer": "districts" } as Layer;
+  const chunkFailure = () =>
+    Object.assign(new Error("The PMTiles reader (`chunks/pmtiles.js`) couldn't be downloaded."), {
+      failure: { code: "chunk", format: "pmtiles", url: "chunks/pmtiles.js" },
+    });
+
+  it("its reader chunk failing is listed, reload() re-sets its url, and its metadata loading clears it", async () => {
+    const renderer = await loaded(doc([lines], {}, { tiled: tiled as never }));
+    const map = renderer.getMap() as any;
+    const setUrl = vi.fn();
+    map.getSource("tiled").setUrl = setUrl;
+    map.emit("error", { error: chunkFailure(), sourceId: "tiled" });
+    expect([...renderer.failedSources()]).toEqual(["tiled"]);
+
+    const result = await renderer.update(doc([lines], {}, { tiled: tiled as never }), {
+      failedSources: renderer.failedSources(),
+      urlsRebased: false,
+      reload: true,
+    });
+    expect(result.outcome).toBe("applied");
+    expect(result.summary?.failures).toEqual([]);
+    expect(setUrl).toHaveBeenCalledTimes(1);
+    expect(setUrl).toHaveBeenCalledWith(tiled.url);
+
+    const retried = vi.fn();
+    renderer.on("source:retried", retried);
+    map.emit("sourcedata", { sourceId: "tiled", sourceDataType: "metadata" });
+    expect(renderer.failedSources().size).toBe(0);
+    // Once: the notice's line for it goes (ml-map), and a later metadata event says nothing.
+    map.emit("sourcedata", { sourceId: "tiled", sourceDataType: "metadata" });
+    expect(retried.mock.calls).toEqual([[{ sourceId: "tiled" }]]);
+  });
+
+  it("a failed tile (an ordinary 404) is not a failed source", async () => {
+    const renderer = await loaded(doc([lines], {}, { tiled: tiled as never }));
+    const map = renderer.getMap() as any;
+    map.emit("error", { error: new Error("404"), sourceId: "tiled", tile: { tileID: {} } });
+    expect(renderer.failedSources().size).toBe(0);
+  });
+
+  it("a basemap's source failing is not the document's", async () => {
+    const renderer = await loaded(doc([lines], {}, { tiled: tiled as never }));
+    const map = renderer.getMap() as any;
+    map.emit("error", { error: chunkFailure(), sourceId: "basemap" });
+    expect(renderer.failedSources().size).toBe(0);
+  });
+});

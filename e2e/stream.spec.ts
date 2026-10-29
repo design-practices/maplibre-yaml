@@ -13,6 +13,11 @@
  *   `Last-Event-ID` and the feed resumes; the map ends with all four points.
  * - `#stream-only`: `stream:` with no `refresh:` block never connects and
  *   validation warns (ml-aot.134; a documented rule this pins, not a bug).
+ * - ml-7qa.12, the fixes: the `#reconnect` hang-up reaches the page as no
+ *   error at all; `#inline-merge` keeps its inline starting point under
+ *   `merge`; `#no-reconnect` (`reconnect: false`) stays closed after the
+ *   hang-up and says so once; `#unreachable` (a 404 feed) keeps its layer
+ *   and data, says so once, and retries `reconnectMaxAttempts` times.
  *
  * The page's status lines carry `data-count` / `data-seq` / `data-conn`, set
  * from `ml-map:layer-data-loaded`, so the spec waits on attributes rather
@@ -24,35 +29,36 @@ const PAGE = "/examples/verification/stream-sse.html";
 const STREAM_WARNING = "stream: connects only when the source also has a refresh: block";
 
 /**
- * Today, the hang-up in `#reconnect` reaches the page as a data error: the
- * browser's EventSource fires `error` while it reconnects, SSEConnection
- * reports it, and `<ml-map>` logs "The data for layer … didn't load (SSE
- * connection error)" and shows a notice line until the resumed feed's next
- * message withdraws it. The spec tolerates that line (and only that one) so
- * it neither requires the noise nor fails if it goes away.
+ * The data errors the fixtures expect, one each (ml-7qa.12): `#no-reconnect`
+ * ending, and `#unreachable` not connecting. `<ml-map>` logs each as it shows
+ * it on the notice (the console writes the notice's code spans in quotes). Anything else on the console fails the spec — before the
+ * fix the `#reconnect` hang-up logged "The data for layer … didn't load (SSE
+ * connection error)" while the browser reconnected.
  */
-const RECONNECT_NOISE = /layer "reconnect-dots" didn't load \(SSE connection error\)/;
+const EXPECTED_STREAM_ERRORS = /"(no-reconnect|unreachable)-dots" shows the data it has, but isn't getting live updates/;
 
 interface Seen {
   errors: string[];
   warnings: string[];
-  reconnectNoise: string[];
+  streamErrors: string[];
   streams: Request[];
 }
 
 /** Record page errors, console output and every request to the SSE feed; refuse off-origin requests. */
 async function guard(page: Page): Promise<Seen> {
-  const seen: Seen = { errors: [], warnings: [], reconnectNoise: [], streams: [] };
+  const seen: Seen = { errors: [], warnings: [], streamErrors: [], streams: [] };
   page.on("pageerror", (e) => seen.errors.push(e.message));
   page.on("console", (m) => {
     if (m.type() === "error") {
-      if (RECONNECT_NOISE.test(m.text())) seen.reconnectNoise.push(m.text());
+      if (EXPECTED_STREAM_ERRORS.test(m.text())) seen.streamErrors.push(m.text());
+      // The browser's own line for each request to `#unreachable`'s 404 feed.
+      else if (m.text().startsWith("Failed to load resource") && m.location().url.includes("/sse/missing")) return;
       else seen.errors.push(`console: ${m.text()}`);
     }
     if (m.type() === "warning") seen.warnings.push(m.text());
   });
   page.on("request", (r) => {
-    if (new URL(r.url()).pathname === "/sse/points") seen.streams.push(r);
+    if (new URL(r.url()).pathname.startsWith("/sse/")) seen.streams.push(r);
   });
   await page.route("**/*", (route) => {
     const url = route.request().url();
@@ -97,6 +103,20 @@ async function loadCounts(page: Page, mapId: string): Promise<number[]> {
   );
   return counts.filter((c, i) => c !== counts[i - 1]);
 }
+
+/** The `ml-map:layer-data-error` messages one map fired. */
+async function dataErrors(page: Page, mapId: string): Promise<string[]> {
+  return page.evaluate(
+    (mapId) =>
+      ((window as any).streamDemo.dataErrors as string[])
+        .filter((e) => e.startsWith(`${mapId}: `))
+        .map((e) => e.slice(mapId.length + 2)),
+    mapId
+  );
+}
+
+/** The notice lines on one map. */
+const noticeLines = (page: Page, mapId: string) => page.locator(`#${mapId} .ml-map-notice li`);
 
 const status = (page: Page, mapId: string) => page.locator(`output[data-for="${mapId}"]`);
 
@@ -154,11 +174,12 @@ test("the stream reconnects after the server drops it and resumes where it left 
   // feed resumed at event 2 (p2 is `resumed`, p1 `first`), so the reconnect
   // carried `Last-Event-ID: 1` (the header itself is added below the layer
   // Playwright can see).
-  const mine = seen.streams.filter((r) => r.url().includes("dropAfter=1"));
+  const mine = seen.streams.filter((r) => r.url().includes("dropAfter=1&event=update"));
   expect(mine).toHaveLength(2);
 
-  // Once the resumed feed delivered, nothing is left on the page saying the
-  // layer has no data (see RECONNECT_NOISE for what shows in between).
+  // A hang-up the stream reconnects from is not a failure (ml-7qa.12): no
+  // data error at any point, so no notice and nothing on the console.
+  expect(await dataErrors(page, "reconnect")).toEqual([]);
   await expect(page.locator("#reconnect .ml-map-notice")).toHaveCount(0);
   expect(seen.errors, seen.errors.join("\n")).toEqual([]);
 });
@@ -186,5 +207,79 @@ test("a stream with no refresh block stays unconnected and validation warns", as
   expect(await sourceFeatures(page, "stream-only", "ghost-dots")).toEqual(["p0:0:seed"]);
   // The other two maps' documents are valid: the warning is this one's only.
   expect(seen.warnings.filter((w) => w.includes("stream:"))).toHaveLength(1);
+  expect(seen.errors, seen.errors.join("\n")).toEqual([]);
+});
+
+test("merge onto an inline data: block keeps its starting features (ml-7qa.12)", async ({ page }) => {
+  const seen = await open(page);
+  const out = status(page, "inline-merge");
+
+  // s0 is only in the inline `data:`; the feed's three events merge in
+  // beside it (before the fix the first event replaced it: 2, 3, 4).
+  await expect(out).toHaveAttribute("data-count", "5", { timeout: 30_000 });
+  expect(await loadCounts(page, "inline-merge")).toEqual([3, 4, 5]);
+  expect(await sourceFeatures(page, "inline-merge", "inline-dots")).toEqual([
+    "p0:3:first",
+    "p1:1:first",
+    "p2:2:first",
+    "p3:3:first",
+    "s0:0:seed",
+  ]);
+  expect(await dataErrors(page, "inline-merge")).toEqual([]);
+  expect(seen.errors, seen.errors.join("\n")).toEqual([]);
+});
+
+test("reconnect: false keeps a dropped SSE stream closed and says so once (ml-7qa.12)", async ({ page }) => {
+  const seen = await open(page);
+  const out = status(page, "no-reconnect");
+
+  // Event 1, then the hang-up.
+  await expect(out).toHaveAttribute("data-count", "2", { timeout: 30_000 });
+  await expect(noticeLines(page, "no-reconnect")).toHaveCount(1, { timeout: 10_000 });
+  await expect(noticeLines(page, "no-reconnect")).toContainText("and reconnect: false keeps it closed");
+
+  // The feed's `retry:` is 300 ms: well past it, the browser hasn't
+  // reconnected (before the fix it did, and the map reached 4 points).
+  await page.waitForTimeout(1_500);
+  expect(seen.streams.filter((r) => r.url().includes("case=no-reconnect"))).toHaveLength(1);
+  await expect(out).toHaveAttribute("data-count", "2");
+  expect(await sourceFeatures(page, "no-reconnect", "no-reconnect-dots")).toEqual(["p0:1:first", "p1:1:first"]);
+  expect(await dataErrors(page, "no-reconnect")).toEqual([
+    "the stream `/sse/points?n=3&dropAfter=1&case=no-reconnect` closed, and `reconnect: false` keeps it closed",
+  ]);
+  expect(seen.streamErrors.filter((e) => e.includes('"no-reconnect-dots"'))).toHaveLength(1);
+  expect(seen.errors, seen.errors.join("\n")).toEqual([]);
+});
+
+test("a stream that can't connect keeps its layer and data, says so once, and retries reconnectMaxAttempts times (ml-7qa.12)", async ({ page }) => {
+  const seen = await open(page);
+  const unreachable = () => seen.streams.filter((r) => r.url().includes("case=unreachable"));
+
+  // The first request and reconnectMaxAttempts (2) retries, 200 ms then
+  // 400 ms apart (±25%); then no more.
+  await expect.poll(() => unreachable().length, { timeout: 20_000 }).toBe(3);
+  await page.waitForTimeout(2_000);
+  expect(unreachable()).toHaveLength(3);
+
+  // The layer is on the map (before the fix it was removed: "Layer
+  // `unreachable-dots` didn't draw") and draws its inline point.
+  await page.waitForFunction(
+    () => {
+      const map = (document.getElementById("unreachable") as any)?.getMap?.();
+      if (!map?.getLayer?.("unreachable-dots")) return false;
+      return (map.queryRenderedFeatures?.(undefined, { layers: ["unreachable-dots"] }) ?? []).length === 1;
+    },
+    undefined,
+    { timeout: 20_000 }
+  );
+  expect(await sourceFeatures(page, "unreachable", "unreachable-dots")).toEqual(["s0:0:seed"]);
+
+  // One line, for the stream; the retries and giving up add none.
+  await expect(noticeLines(page, "unreachable")).toHaveCount(1);
+  await expect(noticeLines(page, "unreachable")).toContainText(
+    "unreachable-dots shows the data it has, but isn't getting live updates: the stream /sse/missing?case=unreachable couldn't connect."
+  );
+  expect(await dataErrors(page, "unreachable")).toEqual(["the stream `/sse/missing?case=unreachable` couldn't connect"]);
+  expect(seen.streamErrors.filter((e) => e.includes('"unreachable-dots"'))).toHaveLength(1);
   expect(seen.errors, seen.errors.join("\n")).toEqual([]);
 });
