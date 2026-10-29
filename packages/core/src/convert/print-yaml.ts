@@ -56,6 +56,7 @@ function retyped(s: string): boolean {
 /** Whether `s` can be written plain (unquoted) and read back as the same string. */
 function plain(s: string, flow: boolean): boolean {
   if (s === "" || s !== s.trim()) return false;
+  // eslint-disable-next-line no-control-regex -- control characters cannot be written as a plain YAML scalar
   if (/[\x00-\x1f\x7f-\x9f\u2028\u2029\ufeff]/.test(s)) return false;
   if (/^[-?:,[\]{}#&*!|>'"%@`]/.test(s)) return false;
   if (/:(?:\s|$)|\s#/.test(s)) return false;
@@ -129,6 +130,7 @@ function flowLines(node: AuthoredNode, indent: number, lead: string): string[] {
 /** Multi-line text that a literal block scalar holds exactly. */
 function literal(s: string): boolean {
   if (!s.includes("\n") || s.trim() === "") return false;
+  // eslint-disable-next-line no-control-regex -- control characters cannot be held by a YAML literal block
   if (/[\r\x00-\x08\x0b-\x1f\x7f-\x9f\u2028\u2029\ufeff]/.test(s)) return false;
   // Indentation is read from the first line with text; whitespace-only lines confuse it.
   if (/^[ \t]+$/m.test(s) || /^[ \t]/.test(s.replace(/^\n+/, ""))) return false;
@@ -183,6 +185,7 @@ function seqLines(node: Extract<AuthoredNode, { kind: "seq" }>, indent: number):
  * the second check, so a line break can never reach a comment line.
  */
 export const commentableHint = (schema: string | undefined): schema is string =>
+  // eslint-disable-next-line no-control-regex -- a hint with a control character must never reach a comment line
   schema !== undefined && /^[^\s\x00-\x1f\x7f-\x9f]+$/.test(schema);
 
 /** The document as YAML text, ending in a newline. */

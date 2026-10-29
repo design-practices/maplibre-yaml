@@ -30,6 +30,9 @@ e2e/                # Playwright browser checks (`pnpm verify:browser`)
 3. Add tests for new functionality
 4. Run the full check: `pnpm presubmit` (build, typecheck, lint, test, docs
    snippet check)
+   - Lint on its own: `pnpm lint` (ESLint 9, root `eslint.config.mjs`).
+     Its promise rules are type-aware and read workspace packages through
+     their built types, so run `pnpm build` first.
 5. If a published package changes in a way users can see, add a changeset:
    `pnpm changeset`
 6. Commit with conventional commits: `feat: add new feature`

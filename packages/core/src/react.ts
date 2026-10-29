@@ -108,6 +108,7 @@ export type MLMapProps = DetailedHTMLProps<HTMLAttributes<MLMap>, MLMap> & {
 } &(IsReact19Types extends true ? MLMapEventProps : unknown);
 
 declare module "react" {
+  // eslint-disable-next-line @typescript-eslint/no-namespace -- augmenting React's JSX namespace requires namespace syntax
   namespace JSX {
     interface IntrinsicElements {
       "ml-map": MLMapProps;

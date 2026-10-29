@@ -25,7 +25,7 @@ export { escapeHtml };
  * as an object may never have been validated, so the sink still checks.
  */
 export function safeMediaSrc(value: unknown): string | null {
-  // eslint-disable-next-line no-control-regex
+  // eslint-disable-next-line no-control-regex -- strips the control characters browsers drop from URLs
   const cleaned = String(value).replace(/[\u0000-\u001F\u007F-\u009F]/g, "").trim();
   if (/^(\/|\.\.?\/|#|\?)/.test(cleaned)) return cleaned;
   if (/^https?:\/\//i.test(cleaned)) return cleaned;

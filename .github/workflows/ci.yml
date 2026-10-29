@@ -62,8 +62,10 @@ jobs:
             - name: Validate doc YAML snippets
               run: pnpm docs:validate-snippets
 
-    # No linter is configured in this repo (yet) -- this job builds and
-    # typechecks on a single Node version, so it is named for what it does.
+    # Builds, typechecks and lints (ESLint 9, eslint.config.mjs) on a single
+    # Node version. The job id stays `typecheck` so the check name is stable.
+    # Lint runs after Build: its type-aware promise rules resolve workspace
+    # imports (@maplibre-yaml/core) through the built dist/*.d.ts.
     typecheck:
         runs-on: ubuntu-latest
         steps:
@@ -86,6 +88,9 @@ jobs:
 
             - name: Type check
               run: pnpm typecheck
+
+            - name: Lint
+              run: pnpm lint
 
     # A "chore: version packages" PR must consume EVERY changeset on main, not
     # just the ones that existed when it was cut. changesets/action only takes

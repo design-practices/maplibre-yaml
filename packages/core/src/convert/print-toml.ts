@@ -42,9 +42,11 @@ const ESCAPES: Record<string, string> = { "\b": "\\b", "\t": "\\t", "\n": "\\n",
 const escape = (c: string) => ESCAPES[c] ?? `\\u${c.charCodeAt(0).toString(16).padStart(4, "0")}`;
 
 /** A one-line basic string. */
+// eslint-disable-next-line no-control-regex -- TOML basic strings must escape C0 controls and DEL
 const basic = (s: string) => `"${s.replace(/[\\"\x00-\x1f\x7f]/g, escape)}"`;
 
 /** A multi-line basic string (`"""`), for text with line breaks directly under a table. */
+// eslint-disable-next-line no-control-regex -- TOML multi-line strings must escape C0 controls (bar tab/LF) and DEL
 const multiline = (s: string) => `"""\n${s.replace(/[\\"\x00-\x08\x0b-\x1f\x7f]/g, escape)}"""`;
 
 const key = (k: string) => (/^[A-Za-z0-9_-]+$/.test(k) ? k : basic(k));

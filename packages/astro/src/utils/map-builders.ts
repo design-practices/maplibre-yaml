@@ -28,7 +28,7 @@
  * ```
  */
 
-import type { MapBlock, MapConfig, GlobalConfig, ProtomapsBasemap } from "@maplibre-yaml/core";
+import type { MapBlock, GlobalConfig, ProtomapsBasemap } from "@maplibre-yaml/core";
 import { resolveMapConfig } from "@maplibre-yaml/core";
 import type {
   LocationPoint,

@@ -63,6 +63,7 @@ script:alert(1)` navigates as `javascript:`. The guard has to parse
  * legitimate `/my file.png` into a different path. Leading and trailing
  * whitespace — which does affect scheme sniffing — is handled by `trim()`.
  */
+// eslint-disable-next-line no-control-regex -- matches the control characters browsers strip from URLs
 const URL_CONTROL_CHARS = new RegExp("[\u0000-\u001F\u007F-\u009F]", "g");
 
 /**

@@ -44,4 +44,5 @@ const main = defineCommand({
   },
 });
 
-runMain(main);
+// runMain catches a failing command itself (logs it, exits 1).
+void runMain(main);

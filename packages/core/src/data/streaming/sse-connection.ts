@@ -190,7 +190,7 @@ export class SSEConnection extends BaseConnection {
   disconnect(): void {
     this.setManualDisconnect();
     this.closeEventSource();
-    this.handleDisconnect("Manual disconnect");
+    void this.handleDisconnect("Manual disconnect");
   }
 
   /**
@@ -268,7 +268,7 @@ export class SSEConnection extends BaseConnection {
       // Check if EventSource is closed
       if (this.eventSource?.readyState === EventSource.CLOSED) {
         this.closeEventSource();
-        this.handleDisconnect("Connection closed by server");
+        void this.handleDisconnect("Connection closed by server");
       }
     }
   }

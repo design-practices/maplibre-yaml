@@ -424,6 +424,7 @@ function startCogFitPrefetch(sourceId: string, source: { url: string }): FitPref
  * @fires ml-map:update-rejected - A changed document was refused and the running map kept (detail: kind, errors)
  * @fires ml-map:state-change - The document's `state:` values changed (detail: values, changed)
  */
+// eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging -- the interface below only adds typed addEventListener overloads
 export class MLMap extends BaseElement {
   /** Internal MapRenderer instance */
   private renderer: MapRenderer | null = null;
@@ -828,8 +829,9 @@ export class MLMap extends BaseElement {
     // A quiet "Loading map…" if the map takes a while (ml-aot.121).
     this.loading.start();
 
-    // Initialize configuration loading
-    this.initialize();
+    // Initialize configuration loading. Every read reports its own failure
+    // (error card or update-rejected), so the promise never rejects.
+    void this.initialize();
   }
 
   /**
@@ -908,7 +910,7 @@ export class MLMap extends BaseElement {
     if (name === "src" && newValue) {
       void this.loadFromURL(newValue);
     } else if (name === "config" && newValue) {
-      this.readText(newValue);
+      void this.readText(newValue);
     }
   }
 
@@ -925,7 +927,7 @@ export class MLMap extends BaseElement {
     const text = this.textBeforeConnect;
     if (text !== null) {
       this.textBeforeConnect = null;
-      this.readText(text);
+      void this.readText(text);
       return;
     }
     if (this._config) {
@@ -950,7 +952,7 @@ export class MLMap extends BaseElement {
     // Priority 4: the config attribute (document text in any format)
     const configAttr = this.getAttribute("config");
     if (configAttr) {
-      this.readText(configAttr);
+      void this.readText(configAttr);
       return;
     }
 
@@ -2804,6 +2806,7 @@ export class MLMap extends BaseElement {
  * e.detail.layerId)` type-checks without a cast. Declaration merging adds
  * overloads only; there is no runtime code.
  */
+// eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging -- merges typed addEventListener overloads onto the class; no runtime members
 export interface MLMap {
   addEventListener<K extends keyof MLMapEventMap>(
     type: K,
