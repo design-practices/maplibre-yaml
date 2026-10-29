@@ -1316,6 +1316,22 @@ describe("MLT tiles from a PMTiles archive (U4)", () => {
       renderer.destroy();
     });
 
+    it("a source re-pointed at another archive (a live url: change) gets that archive's notice, once", async () => {
+      const { renderer, map, onError } = render();
+      map.emit("error", { sourceId: "lots", tile: {}, error: new Error("Do not know how to serialize a BigInt") });
+      await until(() => onError.mock.calls.length > 0);
+      map.getSource.mockImplementation((id: string) =>
+        id === "lots" ? { type: "vector", url: "pmtiles://https://h.org/lots-2.pmtiles" } : undefined
+      );
+      for (let i = 0; i < 3; i++) map.emit("error", { sourceId: "lots", tile: { i }, error: new Error("Do not know how to serialize a BigInt") });
+      await until(() => onError.mock.calls.length > 1);
+      await new Promise((r) => setTimeout(r, 20));
+      expect(onError).toHaveBeenCalledTimes(2);
+      expect(onError.mock.calls[0]![0].message).toContain("`https://h.org/lots.pmtiles` holds MLT tiles with 64-bit integer columns");
+      expect(onError.mock.calls[1]![0].message).toContain("`https://h.org/lots-2.pmtiles` holds MLT tiles with 64-bit integer columns");
+      renderer.destroy();
+    });
+
     it("an unrelated MLT decode error on the same source is reported as it comes", async () => {
       const { renderer, map, onError } = render();
       map.emit("error", { sourceId: "lots", tile: {}, error: new Error("Unsupported MLT stream: 9") });
@@ -1357,6 +1373,24 @@ describe("MLT tiles from a PMTiles archive (U4)", () => {
       }
       expect(runtime.tileType).toHaveBeenCalledWith("pmtiles://https://h.org/lots.pmtiles");
       expect(console.warn).toHaveBeenCalledTimes(2);
+    });
+
+    it("a source re-pointed at another MLT archive (a live url: change) hints again, naming it, once", async () => {
+      runtime.version = "5.24.0";
+      vi.spyOn(console, "warn").mockImplementation(() => {});
+      const { renderer, map, onError } = render();
+      map.emit("sourcedata", { sourceId: "lots", sourceDataType: "metadata" });
+      await until(() => onError.mock.calls.length > 0);
+      map.getSource.mockImplementation((id: string) =>
+        id === "lots" ? { type: "vector", url: "pmtiles://https://h.org/lots-2.pmtiles" } : undefined
+      );
+      for (let i = 0; i < 3; i++) map.emit("sourcedata", { sourceId: "lots", sourceDataType: "metadata" });
+      await until(() => onError.mock.calls.length > 1);
+      await new Promise((r) => setTimeout(r, 20));
+      expect(onError).toHaveBeenCalledTimes(2);
+      expect(onError.mock.calls[1]![0].message).toContain("`https://h.org/lots-2.pmtiles` holds MLT tiles, which maplibre-gl draws from version 6");
+      expect(runtime.tileType).toHaveBeenCalledTimes(2);
+      renderer.destroy();
     });
 
     it("no hint for an MVT archive, a source that is not an archive, or a runtime that draws MLT", async () => {

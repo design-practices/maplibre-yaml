@@ -360,7 +360,10 @@ export class LayerManager {
    * layer that gains it has claimed it. `null` outside a settlement window.
    */
   private pendingReleases: Map<string, number> | null = null;
-  /** `layer\0anchor` pairs already hinted about, so an update does not repeat a `before:` hint (KTD3). */
+  /**
+   * `layer\0anchor` pairs already hinted about, so an update does not repeat a
+   * `before:` hint (KTD3); and `\0source\0url\0key` for a reader's `once` hints (KTD14).
+   */
   private hintedAnchors = new Set<string>();
   /** First loads a host already started, by source id (consumed once). */
   private pendingData: Map<string, Promise<FeatureCollection>>;
@@ -368,6 +371,8 @@ export class LayerManager {
   private keylessWarned = new Set<string>();
   /** FlatGeobuf / GeoParquet readers by source id (ml-cnv.3/.4), stopped with their source. */
   private formatLoaders = new Map<string, FormatLoader>();
+  /** Whole-column scans by reader and column set (see `wholeColumns`); they go with their reader. */
+  private columnScans = new WeakMap<FormatLoader, Map<string, Promise<FeatureCollection>>>();
   /** Whether the page registered a URL protocol itself (see LayerManagerDataOptions). */
   private isProtocolRegistered: (scheme: string) => boolean;
   /** The GeoParquet columns the document reads (see LayerManagerDataOptions). */
@@ -1156,10 +1161,14 @@ export class LayerManager {
    * re-places layers, and the same hint on every update is noise (KTD3).
    */
   hintOnce(layerId: string, anchor: string, message: string): void {
-    const key = `${layerId}\0${anchor}`;
-    if (this.hintedAnchors.has(key)) return;
+    if (this.firstHint(`${layerId}\0${anchor}`)) this.callbacks.onLayerHint?.(layerId, message);
+  }
+
+  /** Whether `key` is new to {@link hintedAnchors} (recording it): a hint shown once for this manager's life. */
+  private firstHint(key: string): boolean {
+    if (this.hintedAnchors.has(key)) return false;
     this.hintedAnchors.add(key);
-    this.callbacks.onLayerHint?.(layerId, message);
+    return true;
   }
 
   /** `beforeId` when the map has it, else the layer's own `before:` handling. */
@@ -1535,7 +1544,7 @@ export class LayerManager {
     const got = "then" in ready ? await ready : ready;
     if (!got) return;
     const { readers, opening } = got;
-    const loader = new readers.FlatGeobufLoader(this.map, config.url!, load, this.readerCallbacks(sourceId, layerId));
+    const loader = new readers.FlatGeobufLoader(this.map, config.url!, load, this.readerCallbacks(sourceId, layerId, config.url!));
     this.formatLoaders.set(sourceId, loader);
     if (suspended || this.paused || this.undrawnSince(sourceId, mark)) loader.suspend();
     await loader.start(pending, opening);
@@ -1631,7 +1640,7 @@ export class LayerManager {
     if (!got) return;
     const { readers, opening } = got;
     const columns = declaredColumns(config) ?? this.columnsFor(sourceId) ?? "all";
-    const loader = new readers.GeoParquetLoader(this.map, config.url!, load, columns, this.readerCallbacks(sourceId, layerId));
+    const loader = new readers.GeoParquetLoader(this.map, config.url!, load, columns, this.readerCallbacks(sourceId, layerId, config.url!));
     this.formatLoaders.set(sourceId, loader);
     if (suspended || this.paused || this.undrawnSince(sourceId, mark)) loader.suspend();
     await loader.start(pending, opening);
@@ -1642,7 +1651,7 @@ export class LayerManager {
    * the source's current generation (a reader replaced meanwhile delivers
    * nothing, KTD5), author hints and "too dense" reports.
    */
-  private readerCallbacks(sourceId: string, layerId: string): FlatGeobufCallbacks {
+  private readerCallbacks(sourceId: string, layerId: string, url = ""): FlatGeobufCallbacks {
     const generation = this.sourceGenerations.get(sourceId) ?? 0;
     return {
       onData: (data) => {
@@ -1658,11 +1667,10 @@ export class LayerManager {
         this.failed.add(sourceId);
         this.callbacks.onDataError?.(layerId, error);
       },
-      // A `once` hint is shown once per source, across the readers a live update recreates (KTD14).
+      // A `once` hint is shown once per source and file, across the readers a
+      // live update recreates (KTD14); another file (a `url:` change) hints anew.
       onHint: (message, once) => {
-        const key = `\0${sourceId}\0${once}`;
-        if (once && this.hintedAnchors.has(key)) return;
-        if (once) this.hintedAnchors.add(key);
+        if (once && !this.firstHint(`\0${sourceId}\0${url}\0${once}`)) return;
         this.callbacks.onSourceHint?.(sourceId, message);
       },
       onTooDense: (dense) => this.callbacks.onViewTooDense?.(sourceId, dense),
@@ -1726,7 +1734,24 @@ export class LayerManager {
    */
   wholeColumns(sourceId: string, names: readonly string[]): Promise<FeatureCollection> | undefined {
     const loader = this.formatLoaders.get(sourceId);
-    return loader?.readsByView ? loader.readColumns?.(names) : undefined;
+    if (!loader?.readsByView || !loader.readColumns) return undefined;
+    // One read per reader and column set: every classified layer over the
+    // source shares it (a column can be 32 MB). A new reader reads anew.
+    let scans = this.columnScans.get(loader);
+    if (!scans) this.columnScans.set(loader, (scans = new Map()));
+    const key = [...names].sort().join("\0");
+    let scan = scans.get(key);
+    if (!scan) scans.set(key, (scan = loader.readColumns(names)));
+    return scan;
+  }
+
+  /**
+   * The identity of a source's current reader: a new one each time a live
+   * update (a changed `url:`, a reload) recreates it, so classify knows a
+   * whole-column scan of the old reader's file no longer stands.
+   */
+  readerToken(sourceId: string): object | undefined {
+    return this.formatLoaders.get(sourceId);
   }
 
   /** Whether a source's data comes from a cloud-native reader (no live refresh in 0.9). */

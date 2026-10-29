@@ -206,4 +206,6 @@ export interface PmtilesHost {
   formatError(failure: FormatFailure): FormatError;
   /** Whether an archive's host serves its range replies from a compressed copy (asked once per archive). */
   rangeRepliesUnreadable: typeof http.rangeRepliesUnreadable;
+  /** The Large data guide's MLT section, which the MLT notices link (LARGE_DATA_DOCS.mlt). */
+  mltDocs: string;
 }

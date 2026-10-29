@@ -182,8 +182,7 @@ export function mltNotice(archive: string, runtime?: string): string {
         "Use maplibre-gl 6 or later, or build the archive with MVT tiles."
       : `${file} holds MLT tiles with 64-bit integer columns, which this MapLibre version can't draw. ` +
         "Write those columns as doubles or strings, or build MVT tiles.") +
-    // The Large data guide's MLT section (core's LARGE_DATA_DOCS.mlt; worded
-    // here, in the chunk, as the notice is).
-    " More: https://docs.maplibre-yaml.org/guides/large-data/#mlt-tiles"
+    // The Large data guide's MLT section (core's LARGE_DATA_DOCS.mlt, through the host).
+    ` More: ${host().mltDocs}`
   );
 }

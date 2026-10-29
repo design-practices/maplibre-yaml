@@ -36,6 +36,7 @@ import type { PmtilesHost } from "../renderer/cloud-host";
 import { getDecoder, type Decoders } from "./decoders";
 import { FormatError, formatError, isAbortError, isFormatError } from "./errors";
 import { rangeRepliesUnreadable } from "./http";
+import { LARGE_DATA_DOCS } from "../components/student-messages";
 
 /** The slice of the maplibre-gl module this decoder needs (injected). */
 export interface ProtocolHost {
@@ -124,6 +125,7 @@ export function mltNotice(url: string, runtime?: string): Promise<string | undef
 export const pmtilesHost: PmtilesHost = {
   formatError,
   rangeRepliesUnreadable,
+  mltDocs: LARGE_DATA_DOCS.mlt,
 };
 
 /** The reader chunk once it has loaded and been given the host. */

@@ -31,7 +31,8 @@
  * never computed from the view. A GeoParquet source's breaks come from its
  * `field` (and `normalize`) column read whole instead — the canonical
  * level's rows, once, when the source loads ({@link ClassifyByView.wholeColumn};
- * 0.10 U3) — so they hold at every zoom and pan. Anything else (FlatGeobuf, a
+ * 0.10 U3), and again when a live `url:` change gives it a new reader — so
+ * they hold at every zoom and pan. Anything else (FlatGeobuf, a
  * column over the scan cap, a failed read) keeps the layer on its no-data
  * colour with one notice that names `mlym breaks`. A layer with explicit
  * `breaks:` keeps drawing them; its legend shows the classes without
@@ -126,6 +127,13 @@ export interface ClassifyByView {
    */
   wholeColumn?: (sourceId: string, fields: string[]) => Promise<unknown> | undefined;
   /**
+   * The identity of a source's current reader (LayerManager.readerToken): a
+   * live `url:` change (or reload) replaces it, so the breaks — and a
+   * refusal — from the old file's scan no longer stand, and a scan of the
+   * old file still in flight is dropped.
+   */
+  readerToken?: (sourceId: string) => unknown;
+  /**
    * The loaded data has no usable value for a layer's `field:` (or
    * `normalize:`): a misspelt or wrong-case name, or text under numeric
    * classes (ml-aot.95). Called once per layer, with an author hint.
@@ -156,14 +164,14 @@ export class ClassifyRuntime {
   /** The record each layer was compiled with — always recompute from it. */
   private readonly templates = new Map<string, ClassifyRecord>();
   private readonly layers = new Map<string, RuntimeLayer>();
-  /** Layers already reported as unable to compute (one notice each). */
-  private readonly refused = new Set<string>();
+  /** Layers already reported as unable to compute (one notice each), with the reader it was for. */
+  private readonly refused = new Map<string, unknown>();
   /** Layers whose field was already checked against loaded data. */
   private readonly diagnosed = new Set<string>();
   /** Layers classified from data with features at least once. */
   private readonly classified = new Set<string>();
-  /** Layers whose whole-column scan started (by view), with the template it was for. */
-  private readonly scans = new Map<string, ClassifyRecord>();
+  /** Layers whose whole-column scan started (by view), with the template and reader it was for. */
+  private readonly scans = new Map<string, { template: ClassifyRecord; reader: unknown }>();
   private destroyed = false;
 
   /**
@@ -298,19 +306,30 @@ export class ClassifyRuntime {
       // Only the part in view: never classify from it. A GeoParquet source's
       // whole column is read once instead; else a computed-break layer stays
       // on its no-data colour, with one notice.
-      if (!isPending(template) || this.refused.has(layer.id) || this.scans.has(layer.id)) return;
+      if (!isPending(template)) return;
+      // Done for this reader; a new one (a live url: change) is another file.
+      const reader = byView.readerToken?.(sourceId);
+      if (this.refused.has(layer.id) && this.refused.get(layer.id) === reader) return;
+      const scanned = this.scans.get(layer.id);
+      if (scanned && scanned.reader === reader) return;
+      this.refused.delete(layer.id);
       const fields = [template.field, ...(template.normalize !== undefined ? [template.normalize] : [])];
       const scan = byView.wholeColumn?.(sourceId, fields);
       if (!scan) return this.refuse(layer, template, sourceId);
-      this.scans.set(layer.id, template);
-      // A reseed (or destroy) meanwhile: this scan is stale.
-      const stale = () => this.destroyed || this.scans.get(layer.id) !== template || this.layers.get(layer.id) !== layer;
+      const started = { template, reader };
+      this.scans.set(layer.id, started);
+      // A reseed, a new reader (or destroy) meanwhile: this scan is stale.
+      const stale = () =>
+        this.destroyed ||
+        this.scans.get(layer.id) !== started ||
+        this.layers.get(layer.id) !== layer ||
+        byView.readerToken?.(sourceId) !== reader;
       scan.then(
         (data) => {
           if (stale()) return;
           const problems = classifyFieldProblems(data, template);
           if (problems.length > 0) {
-            this.refused.add(layer.id);
+            this.refused.set(layer.id, reader);
             for (const problem of problems) {
               const message = classifyFieldMessage(layer.id, problem);
               if (byView.onFieldProblem) byView.onFieldProblem(layer.id, message);
@@ -342,7 +361,7 @@ export class ClassifyRuntime {
 
   /** One notice: the layer's classes can't be computed (it stays on, or goes back to, its no-data colour). */
   private refuse(layer: RuntimeLayer, template: ClassifyRecord, sourceId: string, reason?: string): void {
-    this.refused.add(layer.id);
+    this.refused.set(layer.id, this.byView?.readerToken?.(sourceId));
     // Back to the template's paint if anything was drawn from earlier data.
     const current = classifyRecordOf(layer);
     if (current && !isPending(current)) this.apply(layer, template);

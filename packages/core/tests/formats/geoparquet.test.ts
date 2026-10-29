@@ -1746,6 +1746,17 @@ describe("LayerManager and an overview GeoParquet read by view (0.10 U2)", () =>
       await manager.retargetPipeline("pts", spec({ mode: "viewport", maxFeatures: 150 }));
       await vi.waitFor(() => expect(denseHints()).toHaveLength(2));
       expect(String(denseHints()[1]![1])).toContain("(`maxFeatures`: 150)");
+
+      // Another file, the same budget: its own hint, naming it — and only once.
+      const other = { ...spec({ mode: "viewport", maxFeatures: 150 }), url: "https://cdn.example/points.parquet" };
+      await manager.retargetPipeline("pts", other);
+      await vi.waitFor(() => expect(denseHints()).toHaveLength(3));
+      expect(String(denseHints()[2]![1])).toContain("`https://cdn.example/points.parquet`");
+      await manager.retargetPipeline("pts", { ...other, load: { mode: "viewport", maxFeatures: 150, minzoom: 11 } });
+      await vi.advanceTimersByTimeAsync(300);
+      await vi.waitFor(() => expect(manager.readsByView("pts")).toBe(true));
+      for (let i = 0; i < 20; i++) await Promise.resolve();
+      expect(denseHints()).toHaveLength(3);
       manager.destroy();
     } finally {
       vi.useRealTimers();
@@ -1853,6 +1864,97 @@ describe("whole columns for classify breaks on a source read by view (0.10 U3, K
     // A column columns: leaves out is not read (the view's features don't carry it either).
     const unread = await loader.readColumns(["level"]);
     expect(unread.features[0]!.properties).toEqual({});
+  });
+
+  /** A LayerManager over `spec` (source `lots`) with a ClassifyRuntime wired as the renderer wires it. */
+  async function classifiedLots(spec: Record<string, unknown>, layers: Array<{ id: string; type: string }>) {
+    const { LayerManager } = await import("../../src/renderer/layer-manager");
+    const sources = new Map<string, { setData: ReturnType<typeof vi.fn> }>();
+    const added = new Set<string>();
+    const map = {
+      addSource: vi.fn((id: string) => sources.set(id, { setData: vi.fn() })),
+      getSource: vi.fn((id: string) => sources.get(id)),
+      addLayer: vi.fn((l: { id: string }) => added.add(l.id)),
+      getLayer: vi.fn((id: string) => (added.has(id) ? { id } : undefined)),
+      getStyle: vi.fn(() => ({ sources: {} })),
+      removeLayer: vi.fn(),
+      removeSource: vi.fn(),
+      removeFeatureState: vi.fn(),
+      setPaintProperty: vi.fn(),
+      getZoom: () => 12,
+      getBounds: () => ({ getWest: () => AREA[0], getSouth: () => AREA[1], getEast: () => AREA[2], getNorth: () => AREA[3] }),
+      on: vi.fn(),
+      off: vi.fn(),
+    };
+    let runtime: ClassifyRuntime | undefined;
+    const callbacks = {
+      onDataLoading: vi.fn(),
+      onDataLoaded: vi.fn((id: string) => runtime?.dataLoaded(id)),
+      onDataError: vi.fn(),
+    };
+    const manager = new LayerManager(map as never, callbacks);
+    manager.registerSources({ lots: spec } as never);
+    const record = resolveClassify({ field: "floors", method: "quantile", classes: 4, palette: "Blues" } as never, "fill");
+    const classified = layers.map((l) => applyClassifyToSpec({ ...l, source: "lots" }, record) as never);
+    const onRefused = vi.fn();
+    const changed = vi.fn();
+    runtime = new ClassifyRuntime(map as never, classified, { lots: spec }, (id) => manager.getSourceData(id), changed, {
+      readsByView: (id) => manager.readsByView(id),
+      readerToken: (id) => manager.readerToken(id),
+      wholeColumn: (id, fields) => manager.wholeColumns(id, fields),
+      onRefused,
+    });
+    for (const layer of classified) await manager.addLayer(layer);
+    return { manager, runtime, classified, record, changed, onRefused, callbacks };
+  }
+
+  it("a live url: change scans the new file: its breaks replace the old file's", async () => {
+    // Another file read by view: lots-overviews with its `lot` and `floors` columns swapped (footer
+    // names only), so its `floors` holds the lot numbers.
+    const bytes = fixture("lots-overviews.parquet").slice();
+    const footer = new DataView(bytes.buffer).getUint32(bytes.length - 8, true);
+    const at = bytes.length - 8 - footer;
+    const text = String.fromCharCode(...bytes.subarray(at, bytes.length - 8));
+    const swapped = text.replace(/\x03lot|\x06floors/g, (m) => (m === "\x03lot" ? "\x06floors" : "\x03lot"));
+    expect(swapped).not.toBe(text);
+    bytes.set(Uint8Array.from(swapped, (c) => c.charCodeAt(0)), at);
+    overrides.set("lots-swapped.parquet", bytes);
+    vi.stubGlobal("fetch", fixtureFetch());
+    const spec = { type: "geojson", url: "/lots-overviews.parquet", columns: ["lot", "level", "floors"], load: "viewport" };
+    const { manager, classified, record, changed, onRefused } = await classifiedLots(spec, [{ id: "lots", type: "fill" }]);
+    const layer = classified[0]!;
+    await vi.waitFor(() => expect(changed).toHaveBeenCalledTimes(1));
+    const first = classifyRecordOf(layer)!;
+
+    await manager.retargetPipeline("lots", { ...spec, url: "/lots-swapped.parquet" });
+    await vi.waitFor(() => expect(changed).toHaveBeenCalledTimes(2));
+    expect(manager.readsByView("lots")).toBe(true);
+    const next = await decodeBytes(fixture("lots-swapped.parquet"), "lots-swapped.parquet", { columns: ["floors"] });
+    expect(next.features).toHaveLength(600);
+    const expected = withData(record, next);
+    expect(expected.breaks).not.toEqual(first.breaks);
+    expect(classifyRecordOf(layer)!.breaks).toEqual(expected.breaks);
+    expect(classifyRecordOf(layer)!.stats).toEqual(expected.stats);
+    expect(onRefused).not.toHaveBeenCalled();
+    manager.destroy();
+  });
+
+  it("two classified layers on one source with the same field share one column read", async () => {
+    vi.stubGlobal("fetch", fixtureFetch());
+    const readColumns = vi.spyOn(GeoParquetLoader.prototype, "readColumns");
+    const spec = { type: "geojson", url: "/lots-overviews.parquet", columns: ["lot", "level", "floors"], load: "viewport" };
+    const { manager, classified, changed } = await classifiedLots(spec, [
+      { id: "lots-fill", type: "fill" },
+      { id: "lots-line", type: "line" },
+    ]);
+    await vi.waitFor(() => expect(changed).toHaveBeenCalledTimes(2));
+    expect(readColumns).toHaveBeenCalledTimes(1);
+    expect(classifyRecordOf(classified[0]!)!.breaks).toEqual(classifyRecordOf(classified[1]!)!.breaks);
+    // Another reader (a reload of the source): its own read.
+    await manager.retargetPipeline("lots", spec, { reload: true });
+    await vi.waitFor(() => expect(readColumns).toHaveBeenCalledTimes(2));
+    readColumns.mockRestore();
+    manager.destroy();
   });
 
   it("AE4: by view across zooms, pans and a level switch, quantile breaks stay those of the whole canonical column", async () => {

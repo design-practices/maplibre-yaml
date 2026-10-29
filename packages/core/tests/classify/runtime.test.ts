@@ -536,6 +536,100 @@ describe("ClassifyRuntime", () => {
       expect(classifyRecordOf(next)!.field).toBe("w");
     });
 
+    it("without onFieldProblem, a scan's missing or text field is reported through onRefused, once", async () => {
+      const onRefused = vi.fn();
+      const l = computed("m", "lots", { field: "Floors" });
+      const runtime = new ClassifyRuntime(fakeMap(new Set(["m"])) as never, [l], SOURCES, () => fc([1]), () => {}, {
+        readsByView: () => true,
+        wholeColumn: async () => rows([{ floors: 1 }, { floors: 2 }]),
+        onRefused,
+      });
+      runtime.dataLoaded("lots");
+      await vi.waitFor(() => expect(onRefused).toHaveBeenCalledTimes(1));
+      const [layerId, sourceId, error] = onRefused.mock.calls[0]!;
+      expect(layerId).toBe("m");
+      expect(sourceId).toBe("lots");
+      expect((error as Error).message).toContain('classify field: "Floors" is not a property of any feature');
+      expect((error as Error).message).toContain('Did you mean "floors"?');
+      runtime.dataLoaded("lots");
+      await Promise.resolve();
+      expect(onRefused).toHaveBeenCalledTimes(1);
+      expect(classifyRecordOf(l)!.breaks).toBeUndefined();
+    });
+
+    it("a new reader for the source (a live url: change) scans again: breaks from the new file", async () => {
+      let reader = { file: "a" };
+      const files: Record<string, unknown> = { a: fc([0, 10, 20, 30]), b: fc([100, 200, 300, 400]) };
+      const wholeColumn = vi.fn(async () => files[reader.file]);
+      const changed = vi.fn();
+      const l = computed("lots", "lots");
+      const runtime = new ClassifyRuntime(fakeMap(new Set(["lots"])) as never, [l], SOURCES, () => fc([1]), changed, {
+        readsByView: () => true,
+        readerToken: () => reader,
+        wholeColumn,
+        onRefused: vi.fn(),
+      });
+      runtime.dataLoaded("lots");
+      await vi.waitFor(() => expect(changed).toHaveBeenCalledTimes(1));
+      expect(classifyRecordOf(l)!.stats).toMatchObject({ min: 0, max: 30 });
+      // The same reader's next view: no second scan.
+      runtime.dataLoaded("lots");
+      await Promise.resolve();
+      expect(wholeColumn).toHaveBeenCalledTimes(1);
+      // The url changes; the new reader's first view lands.
+      reader = { file: "b" };
+      runtime.dataLoaded("lots");
+      await vi.waitFor(() => expect(changed).toHaveBeenCalledTimes(2));
+      expect(wholeColumn).toHaveBeenCalledTimes(2);
+      expect(classifyRecordOf(l)!.stats).toMatchObject({ min: 100, max: 400 });
+    });
+
+    it("a new reader clears a refusal its old file's scan gave", async () => {
+      let reader = { file: "a" };
+      const onRefused = vi.fn();
+      const changed = vi.fn();
+      const scan = vi.fn(() =>
+        reader.file === "a" ? Promise.reject(new Error("HTTP 500 for a.parquet")) : Promise.resolve(fc([1, 2, 3, 4]))
+      );
+      const l = computed("lots", "lots");
+      const runtime = new ClassifyRuntime(fakeMap(new Set(["lots"])) as never, [l], SOURCES, () => fc([1]), changed, {
+        readsByView: () => true,
+        readerToken: () => reader,
+        wholeColumn: scan,
+        onRefused,
+      });
+      runtime.dataLoaded("lots");
+      await vi.waitFor(() => expect(onRefused).toHaveBeenCalledTimes(1));
+      reader = { file: "b" };
+      runtime.dataLoaded("lots");
+      await vi.waitFor(() => expect(changed).toHaveBeenCalledTimes(1));
+      expect(classifyRecordOf(l)!.breaks).toBeDefined();
+      expect(onRefused).toHaveBeenCalledTimes(1);
+    });
+
+    it("a scan in flight when the source's reader is replaced never applies", async () => {
+      const d = deferred<unknown>();
+      let reader: object = { file: "a" };
+      const changed = vi.fn();
+      const onRefused = vi.fn();
+      const l = computed("lots", "lots");
+      const runtime = new ClassifyRuntime(fakeMap(new Set(["lots"])) as never, [l], SOURCES, () => fc([1]), changed, {
+        readsByView: () => true,
+        readerToken: () => reader,
+        wholeColumn: () => d.promise as never,
+        onRefused,
+      });
+      runtime.dataLoaded("lots");
+      // Re-targeted before the old file's column lands (no delivery from the new reader yet).
+      reader = { file: "b" };
+      d.resolve(fc([0, 10, 20]));
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(changed).not.toHaveBeenCalled();
+      expect(classifyRecordOf(l)!.breaks).toBeUndefined();
+      expect(onRefused).not.toHaveBeenCalled();
+    });
+
     it("a scan landing after destroy is dropped", async () => {
       const d = deferred<unknown>();
       const changed = vi.fn();

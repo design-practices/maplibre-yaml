@@ -1371,7 +1371,8 @@ export class MapRenderer {
         typeof sourceId === 'string' ? (this.map.getSource?.(sourceId) as { type?: unknown; url?: unknown } | undefined) : undefined;
       return source?.type === 'vector' && typeof source.url === 'string' && schemeFormat(source.url) === 'pmtiles' ? source.url : undefined;
     };
-    // Sources told about their MLT tiles, once each for this map (U4).
+    // Sources told about their MLT tiles, once per source and archive for this
+    // map (U4): a live `url:` change to another archive is told anew.
     const int64Told = new Set<string>();
     const mltHinted = new Set<string>();
     // A maplibre-gl below 6 draws no MLT (KTD11), and the shared protocol
@@ -1383,8 +1384,9 @@ export class MapRenderer {
       this.map.on('sourcedata', (e: { sourceId?: unknown; sourceDataType?: unknown }) => {
         const archive = e.sourceDataType === 'metadata' ? pmtilesArchive(e.sourceId) : undefined;
         const sourceId = e.sourceId as string;
-        if (!archive || mltHinted.has(sourceId) || !documentSourceIds().has(sourceId)) return;
-        mltHinted.add(sourceId);
+        const told = `${sourceId}\0${archive}`;
+        if (!archive || mltHinted.has(told) || !documentSourceIds().has(sourceId)) return;
+        mltHinted.add(told);
         void archiveTileType(archive).then(async (tileType) => {
           const hint = tileType === 6 ? await mltNotice(archive, runtime) : undefined;
           if (!hint || this.destroyed) return;
@@ -1434,8 +1436,9 @@ export class MapRenderer {
       const failed = (e as { sourceId?: unknown }).sourceId;
       const archive = BIGINT_FAILURE.test(error.message) ? pmtilesArchive(failed) : undefined;
       if (archive && typeof failed === 'string') {
-        if (!int64Told.has(failed)) {
-          int64Told.add(failed);
+        const told = `${failed}\0${archive}`;
+        if (!int64Told.has(told)) {
+          int64Told.add(told);
           void mltNotice(archive).then((notice) => {
             if (this.destroyed) return;
             const reported = notice ? Object.assign(new Error(notice), { cause: raw }) : error;
@@ -2080,6 +2083,8 @@ export class MapRenderer {
         readsByView: (sourceId) => this.layerManager.readsByView?.(sourceId) ?? false,
         // A GeoParquet source read by view: its breaks from the whole column (0.10 U3).
         wholeColumn: (sourceId, fields) => this.layerManager.wholeColumns?.(sourceId, fields),
+        // A live url: change gives the source a new reader: its breaks come from the new file.
+        readerToken: (sourceId) => this.layerManager.readerToken?.(sourceId),
         onRefused: (layerId, sourceId, error) => {
           console.warn(`[maplibre-yaml] ${consoleText(error.message)}`);
           this.options.onError?.(error, false, { kind: 'classify', layerId, sourceId });
