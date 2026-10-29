@@ -1309,7 +1309,7 @@ describe("MLT tiles from a PMTiles archive (U4)", () => {
       const [error, fatal, context] = onError.mock.calls[0]!;
       expect(error.message).toBe(
         "`https://h.org/lots.pmtiles` holds MLT tiles with 64-bit integer columns, which this MapLibre version can't draw. " +
-          "Write those columns as doubles or strings, or build MVT tiles."
+          "Write those columns as doubles or strings, or build MVT tiles. More: https://docs.maplibre-yaml.org/guides/large-data/#mlt-tiles"
       );
       expect(fatal).toBe(false);
       expect(context).toEqual({ kind: "source", sourceId: "lots" });
@@ -1349,7 +1349,7 @@ describe("MLT tiles from a PMTiles archive (U4)", () => {
         const [error, fatal, context] = onError.mock.calls[0]!;
         expect(error.message).toBe(
           "`https://h.org/lots.pmtiles` holds MLT tiles, which maplibre-gl draws from version 6; this page runs 5.24.0. " +
-            "Use maplibre-gl 6 or later, or build the archive with MVT tiles."
+            "Use maplibre-gl 6 or later, or build the archive with MVT tiles. More: https://docs.maplibre-yaml.org/guides/large-data/#mlt-tiles"
         );
         expect(fatal).toBe(false);
         expect(context).toEqual({ kind: "source-hint", sourceId: "lots" });

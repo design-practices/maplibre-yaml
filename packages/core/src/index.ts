@@ -182,6 +182,7 @@ export {
   LARGE_DATA_DOCS,
   commandStem,
   indexedFlatGeobufCommand,
+  overviewsCommand,
   pmtilesCommand,
   sortedParquetCommand,
 } from "./components/student-messages";

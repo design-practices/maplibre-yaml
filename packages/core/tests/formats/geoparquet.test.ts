@@ -868,7 +868,17 @@ describe("GeoParquet per-view budget (ml-37r.17)", () => {
       expect(onData.mock.calls.at(-1)![0].features).toHaveLength(0);
       expect(onTooDense).toHaveBeenLastCalledWith(true);
       expect(onHint).toHaveBeenCalledTimes(1);
-      expect(onHint.mock.calls[0]![0]).toContain("more than one read takes (`maxFeatures`: 100)");
+      const dense = onHint.mock.calls[0]![0] as string;
+      expect(dense).toContain("more than one read takes (`maxFeatures`: 100)");
+      // Both routes to every zoom (U5, R12): PMTiles, and an overview file.
+      expect(dense).toContain("convert it to PMTiles: `uv run --with tylertoo==0.8.0");
+      expect(dense).toContain(
+        "write an overview file (experimental), read at the level that fits the zoom: " +
+          "`uv run --with tylertoo==0.8.0 python -c \"import tylertoo as t; t.overview('points.parquet', 'points-ov.parquet', " +
+          "min_zoom=0, max_zoom=14, collapse_square=True)\"`"
+      );
+      expect(dense).toContain("https://docs.maplibre-yaml.org/guides/large-data/#which-format");
+      expect(onHint.mock.calls[0]![1]).toBeTruthy();
       // The footer only.
       expect(log).toHaveLength(1);
 
@@ -1051,8 +1061,27 @@ describe("geo:overviews: only the canonical level is read (ml-cnv.21)", () => {
     }).start();
     expect(onData.mock.calls.at(-1)![0].features).toHaveLength(600);
     expect(onHint).toHaveBeenCalledTimes(1);
-    expect(onHint.mock.calls[0]![0]).toContain("has overviews in a newer format (geo:overviews 1.0.0)");
-    expect(onHint.mock.calls[0]![0]).toContain("drawing its full-detail level only");
+    const note = onHint.mock.calls[0]![0] as string;
+    expect(note).toContain("has overviews in a newer format (geo:overviews 1.0.0)");
+    expect(note).toContain("drawing its full-detail level only");
+    // What to run, and where it is explained (U5, R12).
+    expect(note).toContain(
+      "rebuild the overviews with tylertoo 0.8.0 from the data they were made from (`source.parquet` here): " +
+        "`uv run --with tylertoo==0.8.0 python -c \"import tylertoo as t; t.overview('source.parquet', 'source-ov.parquet', " +
+        "min_zoom=0, max_zoom=14, collapse_square=True)\"`"
+    );
+    expect(note).toContain("add `overviews: false` under `load:`");
+    expect(note).toContain("https://docs.maplibre-yaml.org/guides/large-data/#overview-geoparquet");
+    expect(onHint.mock.calls[0]![1]).toBe("overviews");
+
+    // `load: { overviews: false }` says so: no note.
+    const quiet = vi.fn();
+    await new GeoParquetLoader(fakeMap(14, AREA) as never, "/lots-v1.parquet", loadModeOf({ load: { mode: "viewport", overviews: false } }), "all", {
+      onData: vi.fn(),
+      onError: vi.fn(),
+      onHint: quiet,
+    }).start();
+    expect(quiet).not.toHaveBeenCalled();
   });
 
   it("a key whose levels don't cover the row groups is ignored (plain GeoParquet)", async () => {
@@ -1447,7 +1476,15 @@ describe("geo:overviews by view: the level for the zoom (ml-cnv.22, 0.10 U2)", (
       expect(hint).toContain("its zoom-13 level still has about 364 features in view");
       expect(hint).toContain("(`maxFeatures`: 300)");
       expect(hint).toContain("a coarser level isn't drawn instead (its coarsest, zoom 10, has about 256 here)");
-      expect(hint).toContain("t.overview('source.parquet', 'lots-overviews.parquet', min_zoom=10, max_zoom=14, drop_rate=2.5)");
+      // The shared overviews command (U5), with a higher drop_rate; its input named from the file's own name.
+      expect(hint).toContain("from the data they were made from (`lots.parquet` here)");
+      expect(hint).toContain(
+        "`uv run --with tylertoo==0.8.0 python -c \"import tylertoo as t; t.overview('lots.parquet', 'lots-ov.parquet', " +
+          "min_zoom=0, max_zoom=14, collapse_square=True, drop_rate=2.5)\"`"
+      );
+      expect(hint).toContain("https://docs.maplibre-yaml.org/guides/large-data/#overview-geoparquet");
+      // An overview file is not told to write an overview file.
+      expect(hint).not.toContain("write an overview file");
       // Not the plain dense-view hint (which starts "`…` has about").
       expect(hint).not.toMatch(/^`\/lots-overviews\.parquet` has about/);
       expect(once).toBeTruthy();
@@ -1476,8 +1513,8 @@ describe("geo:overviews by view: the level for the zoom (ml-cnv.22, 0.10 U2)", (
     const hint = onHint.mock.calls[0]![0] as string;
     expect(hint).toContain("its zoom-10 level, its coarsest, still has about 256 features in view");
     expect(hint).not.toContain("a coarser level isn't drawn instead");
-    expect(hint).toContain(", and levels from zoom 5: ");
-    expect(hint).toContain("min_zoom=5, max_zoom=14, drop_rate=2.5");
+    expect(hint).toContain(", and levels from zoom 0 (its own start at zoom 10): ");
+    expect(hint).toContain("min_zoom=0, max_zoom=14, collapse_square=True, drop_rate=2.5");
   });
 
   it("KTD3: under the whole-file limits with no load: key it is read whole at its canonical level; load: viewport uses levels", async () => {
@@ -1502,6 +1539,12 @@ describe("geo:overviews by view: the level for the zoom (ml-cnv.22, 0.10 U2)", (
     expect(auto.onError).not.toHaveBeenCalled();
     expect(auto.loader.readsByView).toBe(true);
     expect(last(auto.onData)).toEqual({ n: 256, levels: [0] });
+    // The note says how an overview file is read, not "from zoom 0" (U5).
+    const note = auto.onHint.mock.calls[0]![0] as string;
+    expect(note).toContain("so only the part in view is read, at the overview level that fits the zoom.");
+    expect(note).not.toContain("from zoom 0");
+    expect(note).not.toContain("write an overview file");
+    expect(auto.onHint.mock.calls[0]![1]).toBe("auto");
     // …and 700 is enough to read it whole (the canonical level only).
     const fits = loader(fakeMap(10, AREA), loadModeOf({}), { warn: 1e6, max: 50e6, maxFeatures: 700 });
     await fits.loader.start();
@@ -1668,6 +1711,41 @@ describe("LayerManager and an overview GeoParquet read by view (0.10 U2)", () =>
       await manager.retargetPipeline("lots", spec(true));
       expect(destroy).toHaveBeenCalledTimes(2);
       expect(callbacks.onDataError).not.toHaveBeenCalled();
+      manager.destroy();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("KTD14: the dense-view hint is shown once per source across the readers a live update recreates; a new budget hints anew", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      const { LayerManager } = await import("../../src/renderer/layer-manager");
+      vi.stubGlobal("fetch", fixtureFetch());
+      const map = overviewMap(12);
+      const onSourceHint = vi.fn();
+      const callbacks = { onDataLoading: vi.fn(), onDataLoaded: vi.fn(), onDataError: vi.fn(), onSourceHint };
+      const manager = new LayerManager(map as never, callbacks);
+      // points.parquet: 400 points in view, over a budget of 100.
+      const spec = (load: Record<string, unknown>) => ({ type: "geojson", url: "/points.parquet", columns: ["kind"], load });
+      manager.registerSources({ pts: spec({ mode: "viewport", maxFeatures: 100 }) });
+      await manager.addLayer({ id: "pts", type: "circle", source: "pts" } as never);
+      const denseHints = () => onSourceHint.mock.calls.filter(([, m]) => String(m).includes("more than one read takes"));
+      await vi.waitFor(() => expect(denseHints()).toHaveLength(1));
+      const destroy = vi.spyOn(GeoParquetLoader.prototype, "destroy");
+
+      // Another `load:` with the same budget: a new reader, the same hint — not shown again.
+      await manager.retargetPipeline("pts", spec({ mode: "viewport", maxFeatures: 100, minzoom: 11 }));
+      expect(destroy).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(300);
+      await vi.waitFor(() => expect(manager.readsByView("pts")).toBe(true));
+      for (let i = 0; i < 20; i++) await Promise.resolve();
+      expect(denseHints()).toHaveLength(1);
+
+      // A new budget, still too small: its own hint.
+      await manager.retargetPipeline("pts", spec({ mode: "viewport", maxFeatures: 150 }));
+      await vi.waitFor(() => expect(denseHints()).toHaveLength(2));
+      expect(String(denseHints()[1]![1])).toContain("(`maxFeatures`: 150)");
       manager.destroy();
     } finally {
       vi.useRealTimers();

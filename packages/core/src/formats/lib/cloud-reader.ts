@@ -345,6 +345,20 @@ export abstract class ViewLoader<Opening extends { abort: AbortController } = { 
     return undefined;
   }
 
+  /**
+   * The routes to drawing the file at every zoom, as hints end with them
+   * (the Large data guide's table, 0.10 U5): PMTiles — a FlatGeobuf through
+   * GeoParquet, in the command itself. GeoParquet adds an overview file.
+   */
+  protected everyZoom(): string {
+    return `To draw it at every zoom (a citywide view too), convert it to PMTiles: ${host().messages.pmtilesCommand(this.url, this.format)}. `;
+  }
+
+  /** Whether a by-view read picks a level by zoom (a GeoParquet overview file), rather than reading from `minzoom`. */
+  protected get readsLevels(): boolean {
+    return false;
+  }
+
   /** Read the features in `view` at map zoom `zoom` (`null` when superseded). */
   protected abstract readView(view: BBox, isCurrent: () => boolean, zoom: number): Promise<FeatureCollection | null>;
 
@@ -378,13 +392,17 @@ export abstract class ViewLoader<Opening extends { abort: AbortController } = { 
       ...tooLarge?.cost,
     });
     this.hint(
-      `\`${this.url}\` ${cause.text}, so only the part in view is read, from zoom ${this.minzoom}. ` +
+      `\`${this.url}\` ${cause.text}, so only the part in view is read, ` +
+        // An overview file is read from zoom 0 because its coarsest level
+        // serves the widest views: say that, not "from zoom 0" (U5).
+        (this.readsLevels ? "at the overview level that fits the zoom. " : `from zoom ${this.minzoom}. `) +
         "Add `load: viewport` to the source to say so (this note then goes). " +
         (cause.raise !== undefined
           ? `To load it whole anyway, raise \`load: { maxFeatures: ${cause.raise} }\` (${host().messages.raiseCost(cause.raise, false)}). `
           : "") +
-        `To draw it at every zoom (a citywide view too), convert it to PMTiles: ${host().messages.pmtilesCommand(this.url, this.format)}. ` +
-        host().messages.largeDataLinks(this.format)
+        this.everyZoom() +
+        host().messages.largeDataLinks(this.format),
+      "auto"
     );
   }
 
@@ -446,7 +464,9 @@ export abstract class ViewLoader<Opening extends { abort: AbortController } = { 
         // A raise only while the view stays usable (formats/large-data):
         // 800,000 parcels by view ran at 6 fps on 5.1 GB.
         const raise = roundedRaise(estimate);
-        if (own !== undefined) this.hint(own, "dense-level");
+        // Once per source and budget, across the readers a live update
+        // recreates (KTD14): a changed `maxFeatures` is worth a new hint.
+        if (own !== undefined) this.hint(own, `dense-level:${max}`);
         else this.hint(
           `\`${this.url}\` has about ${host().messages.formatCount(estimate)} features in view, more than one read ` +
             `takes (\`maxFeatures\`: ${host().messages.formatCount(max)}), so nothing of it is drawn until the map is ` +
@@ -454,8 +474,9 @@ export abstract class ViewLoader<Opening extends { abort: AbortController } = { 
             (raise <= SAFE_VIEW_FEATURES
               ? `To draw this view, raise \`maxFeatures\` to ${raise} under \`load:\` (${host().messages.raiseCost(raise, true)}). `
               : "That is too many to draw at once in a browser. ") +
-            `To draw it at every zoom (a citywide view too), convert it to PMTiles: ${host().messages.pmtilesCommand(this.url, this.format)}. ` +
-            host().messages.largeDataLinks(this.format)
+            this.everyZoom() +
+            host().messages.largeDataLinks(this.format),
+          `dense:${max}`
         );
       }
       return;
@@ -465,7 +486,7 @@ export abstract class ViewLoader<Opening extends { abort: AbortController } = { 
       this.skip("dense");
       if (!this.hintedDecode) {
         this.hintedDecode = true;
-        this.hint(costly);
+        this.hint(costly, `decode:${max}`);
       }
       return;
     }

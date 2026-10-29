@@ -136,6 +136,7 @@ export type CloudMessages = Pick<
   | "formatCount"
   | "indexedFlatGeobufCommand"
   | "largeDataLinks"
+  | "overviewsCommand"
   | "pmtilesCommand"
   | "raiseCost"
   | "sortedParquetCommand"

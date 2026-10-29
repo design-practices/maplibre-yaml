@@ -22,7 +22,8 @@
  *   indexed FlatGeobuf; above 250,000, PMTiles via tylertoo for polygons,
  *   an overview GeoParquet file (experimental) for points and lines. A
  *   projected CRS or a GeoArrow encoding is fixed first. The commands are
- *   the ones the browser's hints print (lib/producer-commands).
+ *   the ones the browser's hints print (core's builders: `pmtilesCommand`,
+ *   `overviewsCommand`, `sortedParquetCommand`, `indexedFlatGeobufCommand`).
  * - `-f json` prints one JSON object instead.
  * - Exit 0 with the report; 2 (FILE_NOT_FOUND) for a path or URL that cannot
  *   be read (missing, a folder, no permission, HTTP 4xx, unreachable); 1
@@ -39,18 +40,18 @@ import {
   readFlatGeobufFacts,
   readGeoParquetFacts,
   isFormatError,
+  LARGE_DATA_DOCS,
+  commandStem,
+  indexedFlatGeobufCommand,
+  overviewsCommand,
+  pmtilesCommand,
+  sortedParquetCommand,
   type AsyncBuffer,
   type FlatGeobufFacts,
   type GeoParquetFacts,
 } from '@maplibre-yaml/core';
 import { FileBufferError, openFileBuffer, openUrlBuffer, type FileBuffer } from '../lib/file-buffer.js';
-import {
-  commandStem,
-  indexedFlatGeobufCommand,
-  pmtilesCommand,
-  shellCommands,
-  sortedParquetCommand,
-} from '../lib/producer-commands.js';
+import { shellCommands } from '../lib/producer-commands.js';
 import { logger } from '../lib/logger.js';
 import { EXIT_CODES, type ExitCode } from '../types.js';
 
@@ -148,7 +149,6 @@ export const AS_IS_FEATURES = 50_000;
 export const BY_VIEW_FEATURES = 250_000;
 /** Row groups larger than this make reading by view decode too much (the guide says about 10,000). */
 const LARGE_ROW_GROUP = 25_000;
-const GUIDE = 'https://docs.maplibre-yaml.org/guides/large-data/';
 
 const isUrl = (file: string) => /^https?:\/\//i.test(file);
 const count = (n: number) => Math.round(n).toLocaleString('en-US');
@@ -577,29 +577,14 @@ function shapeOf(facts: Exclude<FileFacts, PmtilesFacts>): Shape {
 const EXT: Record<Shape['format'], string> = { geoparquet: 'parquet', flatgeobuf: 'fgb', geojson: 'geojson' };
 const stemOf = (file: string, shape: Shape) => commandStem(file, EXT[shape.format]);
 
-/** tylertoo's overview levels for a GeoParquet file: the first half of core's PMTiles recipe. */
-function overviewCommand(file: string): string {
-  const stem = commandStem(file, 'parquet');
-  return (
-    `uv run --with tylertoo==0.8.0 python -c "import tylertoo as t; t.overview('${fileNameOf(file)}', ` +
-    `'${stem}-ov.parquet', min_zoom=0, max_zoom=14, collapse_square=True)"`
-  );
+/** GeoJSON or FlatGeobuf to GeoParquet, Hilbert-sorted with a bbox column (the guide's mid-size command). */
+function toParquetCommand(file: string): string {
+  return `uvx --from geoparquet-io==1.7.0 gpio convert geoparquet ${fileNameOf(file)} ${commandStem(file, 'fgb')}.parquet --row-group-size 10000`;
 }
 
-/** GeoJSON or FlatGeobuf to GeoParquet, Hilbert-sorted with a bbox column (the GeoParquet guide's command). */
-function toParquetCommand(file: string, rowGroups = true): string {
-  return (
-    `uvx --from geoparquet-io==1.7.0 gpio convert geoparquet ${fileNameOf(file)} ${commandStem(file, 'fgb')}.parquet` +
-    (rowGroups ? ' --row-group-size 10000' : '')
-  );
-}
-
-/** The overview-file route from `file`: convert to GeoParquet first unless it is one. */
+/** The overview-file route from `file` (core's command: converted to GeoParquet first unless it is one). */
 function overviewRoute(file: string, shape: Shape): { commands: string[]; output: string } {
-  const stem = stemOf(file, shape);
-  if (shape.format === 'geoparquet') return { commands: [overviewCommand(file)], output: `${stem}-ov.parquet` };
-  const parquet = sibling(file, `${stem}.parquet`);
-  return { commands: [toParquetCommand(file, false), overviewCommand(parquet)], output: `${stem}-ov.parquet` };
+  return { commands: shellCommands(overviewsCommand(file, shape.format)), output: `${stemOf(file, shape)}-ov.parquet` };
 }
 
 function pmtilesRoute(file: string, shape: Shape): { commands: string[]; output: string; layer: string } {
@@ -924,6 +909,14 @@ function factLines(facts: FileFacts): [string, string][] {
   }
 }
 
+/** The Large data guide's section for the route `prepare` recommends (the anchors core's hints link). */
+function guideSection({ facts, recommendation: rec }: PrepareReport): string {
+  if (rec.route === 'pmtiles') return LARGE_DATA_DOCS.pmtiles;
+  if (rec.route === 'overviews') return LARGE_DATA_DOCS.overviews;
+  if (rec.route === 'tiles') return facts.format === 'pmtiles' && facts.tileType === 'MLT' ? LARGE_DATA_DOCS.mlt : LARGE_DATA_DOCS.guide;
+  return LARGE_DATA_DOCS.whichFormat;
+}
+
 /** The report as text: facts, the recommendation and its commands, the YAML to paste. */
 export function formatPrepare(report: PrepareReport): string {
   const { facts, recommendation: rec } = report;
@@ -950,7 +943,7 @@ export function formatPrepare(report: PrepareReport): string {
     out.push('', rec.alternative.yaml.trimEnd(), '');
   }
   for (const note of rec.notes) out.push(`Note: ${note}`);
-  out.push(`More: ${GUIDE}`);
+  out.push(`More: ${guideSection(report)}`);
   return out.join('\n') + '\n';
 }
 

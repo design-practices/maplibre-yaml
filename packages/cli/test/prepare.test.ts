@@ -26,10 +26,13 @@ import {
 import { shellCommands } from '../src/lib/producer-commands';
 // Core's own builders (the browser's hints), to prove the CLI prints the same commands.
 import {
+  overviewsCommand,
   pmtilesCommand,
   sortedParquetCommand,
   indexedFlatGeobufCommand,
 } from '../../core/src/components/student-messages';
+// …and what the CLI imports: the built core's exports (U5 removed the CLI's copies).
+import * as core from '@maplibre-yaml/core';
 import { EXIT_CODES } from '../src/types';
 
 const execAsync = promisify(exec);
@@ -146,6 +149,23 @@ describe('prepare: the commands are the browser hints’ commands', () => {
     ]);
     expect(shellCommands(pmtilesCommand('parcels.geojson', 'geojson'))).toHaveLength(2);
   });
+
+  it('the CLI uses core’s exported builders, and they are core’s source (a stale core build fails here)', () => {
+    const cases: [string, string][] = [
+      ['data/pluto.parquet', 'geoparquet'],
+      ['lots.fgb', 'flatgeobuf'],
+      ['parcels.geojson', 'geojson'],
+    ];
+    for (const [file, format] of cases) {
+      expect(core.pmtilesCommand(file, format)).toBe(pmtilesCommand(file, format));
+      expect(core.overviewsCommand(file, format)).toBe(overviewsCommand(file, format));
+    }
+    expect(core.sortedParquetCommand('data/pluto.parquet')).toBe(sortedParquetCommand('data/pluto.parquet'));
+    expect(core.indexedFlatGeobufCommand('trees.fgb')).toBe(indexedFlatGeobufCommand('trees.fgb'));
+    expect(core.commandStem('data/pluto.parquet', 'parquet')).toBe('pluto');
+    const source = readFileSync(join(HERE, '../src/lib/producer-commands.ts'), 'utf8');
+    expect(source).not.toMatch(/tylertoo|gpio|ogr2ogr/);
+  });
 });
 
 describe('prepare: the size-to-format table', () => {
@@ -215,7 +235,7 @@ describe('prepare: the size-to-format table', () => {
     const rec = recommend(parquetFacts({ rows: 856_687, geometryTypes: ['MultiPolygon'] }), 'pluto.parquet');
     expect(rec.route).toBe('pmtiles');
     expect(commandsOf({ recommendation: rec })).toEqual(shellCommands(pmtilesCommand('pluto.parquet', 'geoparquet')));
-    expect(rec.alternative?.commands.join('\n')).toMatch(/t\.overview\('pluto\.parquet', 'pluto-ov\.parquet'/);
+    expect(rec.alternative?.commands).toEqual(shellCommands(overviewsCommand('pluto.parquet')));
     expect(rec.notes.join('\n')).toMatch(/experimental/);
     expectValidSource(rec.yaml);
     expectValidSource(rec.alternative!.yaml);
@@ -224,11 +244,23 @@ describe('prepare: the size-to-format table', () => {
   it('above 250,000 points or lines → an overview GeoParquet file (experimental), PMTiles as the alternative', () => {
     const rec = recommend(parquetFacts({ rows: 900_000, geometryTypes: ['Point'] }), 'calls.parquet');
     expect(rec.route).toBe('overviews');
-    expect(commandsOf({ recommendation: rec }).join('\n')).toMatch(/t\.overview\('calls\.parquet', 'calls-ov\.parquet'/);
+    expect(commandsOf({ recommendation: rec })).toEqual(shellCommands(overviewsCommand('calls.parquet')));
     expect(rec.yaml).toMatch(/url: calls-ov\.parquet\n {4}load: viewport/);
     expect(rec.notes.join('\n')).toMatch(/experimental/);
     expect(rec.alternative?.commands).toEqual(shellCommands(pmtilesCommand('calls.parquet', 'geoparquet')));
     expectValidSource(rec.yaml);
+  });
+
+  it('the report links the Large data guide’s section for its route (the anchors core’s hints link)', () => {
+    const report = (facts: FileFacts, file: string): PrepareReport => ({ file, facts, recommendation: recommend(facts, file) });
+    const more = (text: string) => text.trimEnd().split('\n').at(-1);
+    expect(more(formatPrepare(report(geojsonFacts(), 'parcels.geojson')))).toBe(`More: ${core.LARGE_DATA_DOCS.pmtiles}`);
+    expect(more(formatPrepare(report(parquetFacts({ rows: 900_000 }), 'calls.parquet')))).toBe(`More: ${core.LARGE_DATA_DOCS.overviews}`);
+    expect(more(formatPrepare(report(parquetFacts(), 'trees.parquet')))).toBe(`More: ${core.LARGE_DATA_DOCS.whichFormat}`);
+    // From GeoJSON points: converted to GeoParquet first, then the overview file — core's two commands.
+    const points = recommend(geojsonFacts({ geometryTypes: ['Point'] }), 'calls.geojson');
+    expect(points.route).toBe('overviews');
+    expect(commandsOf({ recommendation: points })).toEqual(shellCommands(overviewsCommand('calls.geojson', 'geojson')));
   });
 
   it('a FlatGeobuf above 250,000 polygons → PMTiles by way of GeoParquet (core’s command)', () => {

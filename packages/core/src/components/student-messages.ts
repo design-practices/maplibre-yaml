@@ -479,11 +479,26 @@ function megabytes(bytes: number): string {
 // apply, each with a command to run — written once here so they agree.
 // ---------------------------------------------------------------------------
 
-/** The docs pages that explain large files, per format. */
+/** The docs site's guides. */
+const GUIDES = "https://docs.maplibre-yaml.org/guides/";
+/** The Large data guide: which format for how many features, one command per route (0.10 U5, KTD14). */
+const LARGE_DATA = `${GUIDES}large-data/`;
+
+/**
+ * The docs pages large-data hints link: the Large data guide and the
+ * sections they point at (anchors pinned in docs/scripts/check-stable-urls),
+ * and each by-view format's own "Large files" section (its limits).
+ */
 export const LARGE_DATA_DOCS = {
-  geoparquet: "https://docs.maplibre-yaml.org/guides/geoparquet/#large-files",
-  flatgeobuf: "https://docs.maplibre-yaml.org/guides/flatgeobuf/#large-files",
-  pmtiles: "https://docs.maplibre-yaml.org/guides/pmtiles/#from-a-large-file",
+  guide: LARGE_DATA,
+  whichFormat: `${LARGE_DATA}#which-format`,
+  prepare: `${LARGE_DATA}#mlym-prepare`,
+  pmtiles: `${LARGE_DATA}#parcel-fabrics-pmtiles`,
+  overviews: `${LARGE_DATA}#overview-geoparquet`,
+  classBreaks: `${LARGE_DATA}#class-breaks`,
+  mlt: `${LARGE_DATA}#mlt-tiles`,
+  geoparquet: `${GUIDES}geoparquet/#large-files`,
+  flatgeobuf: `${GUIDES}flatgeobuf/#large-files`,
 } as const;
 
 /** A count as "856,687" (English grouping: author hints are English). */
@@ -556,24 +571,44 @@ export function indexedFlatGeobufCommand(url: string): string {
  * FlatGeobuf file is converted first, with geoparquet-io (no GDAL needed).
  */
 export function pmtilesCommand(url: string, format: string): string {
-  const gp = format === "geoparquet";
-  const stem = commandStem(url, gp ? "parquet" : "fgb");
-  const input = gp ? commandFileName(url, "parquet") : `${stem}.parquet`;
-  const first = gp
-    ? ""
-    : `\`uvx --from geoparquet-io==1.7.0 gpio convert geoparquet ${commandFileName(url, "fgb")} ${stem}.parquet\`, then `;
+  const stem = commandStem(url, format === "geoparquet" ? "parquet" : "fgb");
   return (
-    first +
-    `\`uv run --with tylertoo==0.8.0 python -c "import tylertoo as t; t.overview('${input}', '${stem}-ov.parquet', ` +
-    `min_zoom=0, max_zoom=14, collapse_square=True); t.export_pmtiles('${stem}-ov.parquet', '${stem}.pmtiles', ` +
-    `layer_name='${stem}', tile_size_limit=None)"\` (the parcel recipe; MapLibre draws zoom 14's tiles further in)`
+    tylertoo(url, format, "", `; t.export_pmtiles('${stem}-ov.parquet', '${stem}.pmtiles', layer_name='${stem}', tile_size_limit=None)`) +
+    " (the parcel recipe; MapLibre draws zoom 14's tiles further in)"
   );
 }
 
-/** The docs links for a large file of `format`. */
-export function largeDataLinks(format: string): string {
-  const page = format === "flatgeobuf" ? LARGE_DATA_DOCS.flatgeobuf : LARGE_DATA_DOCS.geoparquet;
-  return `More: ${page} and ${LARGE_DATA_DOCS.pmtiles}`;
+/**
+ * Write an overview GeoParquet file with tylertoo 0.8.0 (the Large data
+ * guide's `#overview-geoparquet` route): simplified copies of the data for
+ * coarser zooms as extra row groups of one file (`geo:overviews`), from zoom
+ * 0, `collapse_square=True` as in the PMTiles recipe, which starts with the
+ * same call. Any other `format` (FlatGeobuf, GeoJSON) is converted to
+ * GeoParquet first.
+ *
+ * @param tune - More `overview()` keyword arguments (`"drop_rate=2.5"`).
+ */
+export function overviewsCommand(url: string, format = "geoparquet", tune = ""): string {
+  return tylertoo(url, format, tune ? `, ${tune}` : "", "");
+}
+
+/** tylertoo's `overview()` on a file (converted to GeoParquet first unless it is one), then `after`. */
+function tylertoo(url: string, format: string, tune: string, after: string): string {
+  const gp = format === "geoparquet";
+  const stem = commandStem(url, gp ? "parquet" : "fgb");
+  return (
+    (gp ? "" : `\`uvx --from geoparquet-io==1.7.0 gpio convert geoparquet ${commandFileName(url, "fgb")} ${stem}.parquet\`, then `) +
+    `\`uv run --with tylertoo==0.8.0 python -c "import tylertoo as t; t.overview('${gp ? commandFileName(url, "parquet") : `${stem}.parquet`}', ` +
+    `'${stem}-ov.parquet', min_zoom=0, max_zoom=14, collapse_square=True${tune})${after}"\``
+  );
+}
+
+/**
+ * The docs links for a large file of `format`: its own "Large files" section
+ * and the Large data guide's section for the hint's route.
+ */
+export function largeDataLinks(format: string, route: "whichFormat" | "overviews" = "whichFormat"): string {
+  return `More: ${LARGE_DATA_DOCS[format === "flatgeobuf" ? "flatgeobuf" : "geoparquet"]} and ${LARGE_DATA_DOCS[route]}`;
 }
 
 /** What a whole-file read of a file would cost, and the limits it was measured against. */

@@ -665,7 +665,17 @@ describe("per-view budget (ml-37r.17)", () => {
       expect(onHint).toHaveBeenCalledTimes(1);
       expect(onHint.mock.calls[0]![0]).toMatch(/has about 4\d\d features in view, more than one read takes \(`maxFeatures`: 50\)/);
       expect(onHint.mock.calls[0]![0]).toContain("raise `maxFeatures` to 10000 under `load:` (about 2.5 GB of browser memory");
-      expect(onHint.mock.calls[0]![0]).toContain("gpio convert geoparquet points.fgb points.parquet");
+      // The PMTiles route, through GeoParquet; no overview file for a FlatGeobuf (U5, R12).
+      const dense = onHint.mock.calls[0]![0] as string;
+      expect(dense).toContain(
+        "convert it to PMTiles: `uvx --from geoparquet-io==1.7.0 gpio convert geoparquet points.fgb points.parquet`, then " +
+          "`uv run --with tylertoo==0.8.0 python -c \"import tylertoo as t; t.overview('points.parquet', 'points-ov.parquet'"
+      );
+      expect(dense).not.toContain("overview file");
+      expect(dense).toContain(
+        "More: https://docs.maplibre-yaml.org/guides/flatgeobuf/#large-files and https://docs.maplibre-yaml.org/guides/large-data/#which-format"
+      );
+      expect(onHint.mock.calls[0]![1]).toBeTruthy();
       // Only the probe, the header and the index were fetched: no features.
       const fetched = log.reduce((sum, r) => {
         const m = /bytes=(\d+)-(\d+)/.exec(r.range ?? "");

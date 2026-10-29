@@ -50,7 +50,7 @@ import {
 } from "../classify/compile";
 import { classifyFieldProblems, isFeatureData, type ClassifyFieldProblem } from "../classify/breaks";
 import { DataFetcher } from "../data/data-fetcher";
-import { breaksCommand } from "../components/student-messages";
+import { breaksCommand, LARGE_DATA_DOCS } from "../components/student-messages";
 import { classifiedHighlightProperty, withHighlight } from "./highlight-paint";
 
 /** A renderer layer (loosely: the v1 layer shape, after `toModel`). */
@@ -147,7 +147,7 @@ export function byViewClassifyError(layerId: string, sourceId: string, command: 
         : "(only the features in view are loaded — load: viewport, or a file too large to load whole), " +
           "and computed classes need the whole file. ") +
       `Compute them over the whole file with ${command} and paste the breaks: line it prints, or write ` +
-      "the class thresholds yourself with breaks:, for example breaks: [10, 25, 50]."
+      `the class thresholds yourself with breaks:, for example breaks: [10, 25, 50]. More: ${LARGE_DATA_DOCS.classBreaks}`
   );
 }
 

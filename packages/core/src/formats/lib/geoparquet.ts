@@ -1406,14 +1406,44 @@ export class GeoParquetLoader extends ViewLoader<StartedTail> {
    */
   private noteOverviews(source: GeoParquetFile | undefined): void {
     const overviews = source?.info.overviews;
-    if (!overviews || overviews.known || this.overviewsNoted) return;
+    // `load: { overviews: false }` already says the levels aren't wanted.
+    if (!overviews || overviews.known || this.overviewsNoted || !this.load.overviews) return;
     this.overviewsNoted = true;
+    const rebuild = this.rebuild();
     this.hint(
       `\`${this.url}\` has overviews in a newer format (geo:overviews ${overviews.version || "?"}) than this ` +
         `version of maplibre-yaml reads: ${overviews.canonical ? "drawing its full-detail level only" : "reading every row"}. ` +
-        "Update maplibre-yaml, or write the file without overviews.",
+        `Update maplibre-yaml, or rebuild the overviews with tylertoo 0.8.0 from the data they were made from ` +
+        `(\`${rebuild.input}\` here): ${host().messages.overviewsCommand(rebuild.input)}. To read it at full detail ` +
+        `without this note, add \`overviews: false\` under \`load:\`. ${host().messages.largeDataLinks("geoparquet", "overviews")}`,
       "overviews"
     );
+  }
+
+  /**
+   * The file an overview file was built from, for a rebuild command: the
+   * name without the `-ov` the guide's command adds (`lots-ov.parquet` →
+   * `lots.parquet`), else a placeholder.
+   */
+  private rebuild(): { input: string } {
+    const stem = host().messages.commandStem(this.url, "parquet");
+    const base = stem.replace(/[-_]ov(erviews?)?$/, "");
+    return { input: base && base !== stem ? `${base}.parquet` : "source.parquet" };
+  }
+
+  /** GeoParquet's routes: PMTiles, and an overview file — unless the file is one already. */
+  protected everyZoom(): string {
+    return (
+      super.everyZoom() +
+      (this.opened?.info.overviews
+        ? ""
+        : "Or, for points and lines, or to keep one GeoParquet file, write an overview file (experimental), read at " +
+          `the level that fits the zoom: ${host().messages.overviewsCommand(this.url)}. `)
+    );
+  }
+
+  protected get readsLevels(): boolean {
+    return this.levels;
   }
 
   /**
@@ -1575,8 +1605,7 @@ export class GeoParquetLoader extends ViewLoader<StartedTail> {
     const lowest = zoomOf(coarsest.level);
     // A map below every level: levels from its zoom too.
     const from = Math.max(0, Math.min(Math.floor(zoom), lowest));
-    const to = zoomOf(overviews.canonicalLevel ?? overviews.levels.length - 1);
-    const stem = host().messages.commandStem(this.url, "parquet");
+    const { input } = this.rebuild();
     const raise = roundedRaise(estimate);
     return (
       `\`${this.url}\` is an overview file, and its zoom-${zoomOf(band.level)} level` +
@@ -1586,16 +1615,16 @@ export class GeoParquetLoader extends ViewLoader<StartedTail> {
       (band.level === coarsest.level
         ? ". "
         : `; a coarser level isn't drawn instead (its coarsest, zoom ${lowest}, has about ${n(Math.round(rowsInView(this.opened!, view, coarsest)))} here). `) +
-      "To draw this view, rebuild the overviews from the data they were made from (`source.parquet` here) with fewer " +
+      `To draw this view, rebuild the overviews from the data they were made from (\`${input}\` here) with fewer ` +
       "features per level — a higher `drop_rate` (tylertoo's default is 1.65)" +
-      (from < lowest ? `, and levels from zoom ${from}` : "") +
-      `: \`uv run --with tylertoo==0.8.0 python -c "import tylertoo as t; t.overview('source.parquet', ` +
-      `'${stem}.parquet', min_zoom=${from}, max_zoom=${to}, drop_rate=2.5)"\`. ` +
+      (from < lowest ? `, and levels from zoom 0 (its own start at zoom ${lowest})` : "") +
+      `: ${host().messages.overviewsCommand(input, "geoparquet", "drop_rate=2.5")}. ` +
       (raise <= SAFE_VIEW_FEATURES
         ? `Or raise \`maxFeatures\` to ${raise} under \`load:\` (${host().messages.raiseCost(raise, true)}). `
         : "") +
-      `To draw it at every zoom, convert it to PMTiles: ${host().messages.pmtilesCommand(this.url, "geoparquet")}. ` +
-      host().messages.largeDataLinks("geoparquet")
+      // A dense polygon fabric seen citywide: the guide's PMTiles route.
+      `To draw it at every zoom, convert it to PMTiles: ${host().messages.pmtilesCommand(input, "geoparquet")}. ` +
+      host().messages.largeDataLinks("geoparquet", "overviews")
     );
   }
 
@@ -1632,7 +1661,7 @@ export class GeoParquetLoader extends ViewLoader<StartedTail> {
       `${n(touched.rows)} rows, over this map's decode limit of ${n(budget)} rows (${VIEW_DECODE_FACTOR} × \`maxFeatures\`), ` +
       "so nothing is read until the map is zoomed in. " +
       rewrite +
-      `To draw it at every zoom (a citywide view too), convert it to PMTiles: ${host().messages.pmtilesCommand(this.url, "geoparquet")}. ` +
+      this.everyZoom() +
       (offer ? `Or raise \`maxFeatures\` to ${raise} under \`load:\` (${host().messages.raiseCost(raise, true)}). ` : "") +
       host().messages.largeDataLinks("geoparquet")
     );
