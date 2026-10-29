@@ -665,6 +665,11 @@ export type GeoJSONSource = z.infer<typeof GeoJSONSourceSchema>;
  *   maxzoom: 14
  * ```
  *
+ * `encoding` (0.10): the tiles' format, `mvt` (Mapbox Vector Tiles, the
+ * default) or `mlt` (MapLibre Tiles, drawn by maplibre-gl 6 and later). A
+ * PMTiles archive whose header says MLT gets `mlt` without it; a value
+ * written here wins.
+ *
  * @see {@link https://maplibre.org/maplibre-style-spec/sources/#vector | MapLibre Vector Source}
  */
 export const VectorSourceSchema = z
@@ -710,6 +715,12 @@ export const VectorSourceSchema = z
       .boolean()
       .optional()
       .describe("Skip the tile cache (MapLibre `volatile`); for frequently changing tiles"),
+    encoding: z
+      .enum(["mvt", "mlt"])
+      .optional()
+      .describe(
+        "The tiles' format: mvt (Mapbox Vector Tiles, the default) or mlt (MapLibre Tiles, maplibre-gl 6+). A PMTiles archive whose header says MLT gets mlt without it; a value written here wins"
+      ),
   })
   .passthrough()
   .refine((data) => data.url || data.tiles, {

@@ -12,7 +12,9 @@
  *
  * **The host wins.** A page that already registered `pmtiles` (the 0.7
  * page-JS route, a custom `Source`, auth headers) keeps its handler: core
- * neither replaces nor wraps it. Same rule as `setWorkerModuleUrl`.
+ * neither replaces nor wraps it. Same rule as `setWorkerModuleUrl`. Such a
+ * page's MLT archives get no `encoding: "mlt"` from their header (0.10):
+ * its sources say `encoding: mlt` themselves.
  *
  * This module never imports maplibre-gl: the module is injected
  * ({@link install}).
@@ -81,6 +83,40 @@ export async function archiveMetadata(url: string): Promise<Record<string, unkno
 }
 
 /**
+ * An archive's header tile type (`1` MVT, `2`-`5` images, `6` MLT), read as
+ * {@link archiveMetadata} reads (the header core's handler holds is cached:
+ * no request). For the renderer's hint on a runtime that draws no MLT
+ * (0.10, U4; KTD11): the protocol handler is shared by every map on the
+ * page and can't report.
+ *
+ * @param url - The archive URL, `pmtiles://` scheme or not.
+ * @returns `undefined` when it can't be read.
+ */
+export async function archiveTileType(url: string): Promise<number | undefined> {
+  const archive = url.replace(/^pmtiles:\/\//i, "");
+  try {
+    const held = (latestReader ? await latestReader : undefined)?.tiles.get(archive);
+    return (await (held ?? new (await pmtilesReader()).PMTiles(archive)).getHeader()).tileType;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * What core says about an archive's MLT tiles, worded in the reader chunk
+ * (0.10, U4): their 64-bit integer columns failed (KTD10), or, given the
+ * running version, this maplibre-gl draws no MLT (KTD11).
+ *
+ * @returns `undefined` when the reader can't be loaded.
+ */
+export function mltNotice(url: string, runtime?: string): Promise<string | undefined> {
+  return pmtilesReader().then(
+    (lib) => lib.mltNotice?.(url, runtime),
+    () => undefined
+  );
+}
+
+/**
  * What the reader chunk's failure path uses of core (see ../renderer/cloud-host).
  *
  * @internal
@@ -137,6 +173,10 @@ export function install(host: ProtocolHost): InstallResult {
     });
   }
 
+  // maplibre-gl draws MLT from 6.0 (KTD11): below it an MLT archive's
+  // TileJSON is left as it is. An unknown version is not a claim.
+  const drawsMlt = !(major < 6);
+
   // One reader per registration, created when the first request arrives.
   // `metadata: true`: the TileJSON MapLibre receives carries the archive's
   // vector_layers, bounds, min/max zoom and attribution.
@@ -146,7 +186,7 @@ export function install(host: ProtocolHost): InstallResult {
   let lib: Decoders["pmtiles"] | undefined;
   /** Per archive: whether its range replies can't be read (asked on a failure). */
   const encoded: Record<string, Promise<boolean>> = {};
-  const handler = async (params: { url: string }, abortController: AbortController) => {
+  const handler = async (params: { url: string; type?: string }, abortController: AbortController) => {
     const current = (reader ??= pmtilesReader().then((m) => {
       lib = m;
       return new m.Protocol({ metadata: true });
@@ -157,7 +197,9 @@ export function install(host: ProtocolHost): InstallResult {
         if (reader === current) reader = undefined;
         throw error;
       });
-      return await protocol.tile(params as never, abortController);
+      const reply = await protocol.tile(params as never, abortController);
+      // An MLT archive's TileJSON gets `encoding: "mlt"` (U4), in the chunk.
+      return params.type === "json" && lib?.withEncoding ? await lib.withEncoding(protocol, params.url, reply, drawsMlt) : reply;
     } catch (error) {
       // The reader's own download failed (the seam's notice), or a superseded
       // request: as is. Anything the library threw: in plain words, by the chunk.

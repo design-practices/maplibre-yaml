@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Cloud-native data: PMTiles archives of MLT tiles</title>
+  <!--
+    0.10 (U4): MLT (MapLibre Tiles) in a PMTiles archive, YAML only.
+      - lots-mlt.pmtiles        50 points as MLT tiles; the source has no
+                                `encoding:` — core reads the archive header
+                                (tile type 6) and sets `encoding: mlt` itself
+      - lots-mlt-int64.pmtiles  the same with `lot_id` written as int64,
+                                which MapLibre decodes as BigInt: here the
+                                source's `promoteId: lot_id` (what hover
+                                highlight needs) makes every tile fail with
+                                "Cannot convert a BigInt value to a number"
+                                (other archives fail with "Do not know how to
+                                serialize a BigInt"; same notice)
+    Fixtures: node scripts/fixtures/mlt.mjs (synthetic, CC0).
+    PASS on maplibre-gl 6+ = orange dots on the left map, no notice; the right
+    map shows one notice naming 64-bit integer columns and both fixes (write
+    them as doubles or strings, or build MVT tiles), and the console carries
+    one map error for it, not one per tile. Below maplibre-gl 6 (which draws
+    no MLT) the left map's author note says so instead.
+    Serve from the repo root:  pnpm verify:serve
+    Then open: http://localhost:4174/examples/verification/cloud-native/mlt.html
+  -->
+  <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; }
+    header { padding: 8px 16px; background: #1d3557; color: white; font-size: 13px; }
+    main { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 8px; }
+    h2 { font-size: 13px; margin: 0 0 4px; }
+    ml-map { display: block; height: 420px; }
+  </style>
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }
+  </script>
+</head>
+<body>
+  <header>PASS (maplibre-gl 6+) = orange dots on the left, no notice; on the right one notice about 64-bit integer columns.</header>
+  <main>
+    <section>
+      <h2>MLT archive, no <code>encoding:</code></h2>
+      <ml-map id="mlt">
+        <script type="text/yaml">
+type: map
+id: mlt
+config:
+  center: [10.2, 42.15]
+  zoom: 9
+  mapStyle: "/examples/verification/configs/local-style.json"
+sources:
+  lots:
+    type: vector
+    url: /gallery-assets/cloud-native/lots-mlt.pmtiles
+layers:
+  - id: lots
+    type: circle
+    source: lots
+    source-layer: lots
+    paint: { circle-color: "#e76f51", circle-radius: 6, circle-stroke-color: "#fff", circle-stroke-width: 1 }
+        </script>
+      </ml-map>
+    </section>
+    <section>
+      <h2>MLT archive with an int64 column</h2>
+      <ml-map id="mlt-int64">
+        <script type="text/yaml">
+type: map
+id: mlt-int64
+config:
+  center: [10.2, 42.15]
+  zoom: 9
+  mapStyle: "/examples/verification/configs/local-style.json"
+sources:
+  lots:
+    type: vector
+    url: /gallery-assets/cloud-native/lots-mlt-int64.pmtiles
+    promoteId: lot_id
+layers:
+  - id: lots
+    type: circle
+    source: lots
+    source-layer: lots
+    paint: { circle-color: "#e76f51", circle-radius: 6 }
+        </script>
+      </ml-map>
+    </section>
+  </main>
+  <script type="module" src="../../../packages/core/register.js"></script>
+</body>
+</html>
