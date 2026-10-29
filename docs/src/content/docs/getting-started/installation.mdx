@@ -51,7 +51,7 @@ bundling its own, so without the import map the page stays blank with
     <!-- Register the <ml-map> element -->
     <script
       type="module"
-      src="https://unpkg.com/@maplibre-yaml/core@0.9/register.js"
+      src="https://unpkg.com/@maplibre-yaml/core@0.10/register.js"
     ></script>
   </head>
   <body>
@@ -88,7 +88,7 @@ requests, which `npx serve` does and `python -m http.server` doesn't.
 
 ### Versions in CDN URLs
 
-The version in `@maplibre-yaml/core@0.9` names a release line: the address
+The version in `@maplibre-yaml/core@0.10` names a release line: the address
 loads the newest release in that line, so bug fixes arrive by themselves,
 while the next line, which may change behaviour, never arrives by surprise.
 Change the number on purpose when you upgrade
@@ -207,7 +207,7 @@ maplibre-gl you pinned, not a second copy chosen by esm.sh:
   import {
     YAMLParser,
     MapRenderer,
-  } from "https://esm.sh/@maplibre-yaml/core@0.9?external=maplibre-gl";
+  } from "https://esm.sh/@maplibre-yaml/core@0.10?external=maplibre-gl";
 
   // Your map code here
 </script>

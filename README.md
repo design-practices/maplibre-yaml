@@ -42,7 +42,7 @@ developers prototyping a map, and people learning web mapping.
     <!-- Register the <ml-map> web component -->
     <script
       type="module"
-      src="https://unpkg.com/@maplibre-yaml/core@0.9/register.js"
+      src="https://unpkg.com/@maplibre-yaml/core@0.10/register.js"
     ></script>
   </head>
   <body>

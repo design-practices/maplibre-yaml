@@ -1,5 +1,14 @@
 # maplibre-yaml
 
+## 0.2.2
+
+### Patch Changes
+
+- Updated dependencies [a944a09]
+- Updated dependencies [ffca12d]
+- Updated dependencies [dae438d]
+  - @maplibre-yaml/cli@0.7.0
+
 ## 0.2.1
 
 ### Patch Changes

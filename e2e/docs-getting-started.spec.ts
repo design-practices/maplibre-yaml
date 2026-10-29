@@ -139,9 +139,9 @@ function cdnTable(baseURL: string): Record<string, string | { js: string } | obj
     // Core is pinned to the 0.8 line (the release that ships <ml-scrollytelling>
     // and `base`) in every beginner snippet, the npm READMEs and the CLI's
     // templates; an unpinned or stale (`@0.7`) core URL is not here.
-    "https://unpkg.com/@maplibre-yaml/core@0.9/register.js": `${baseURL}/packages/core/register.js`,
-    "https://unpkg.com/@maplibre-yaml/core@0.9/dist/register.browser.js": `${baseURL}/packages/core/dist/register.browser.js`,
-    "https://esm.sh/@maplibre-yaml/core@0.9?external=maplibre-gl": `${baseURL}/packages/core/dist/index.browser.js`,
+    "https://unpkg.com/@maplibre-yaml/core@0.10/register.js": `${baseURL}/packages/core/register.js`,
+    "https://unpkg.com/@maplibre-yaml/core@0.10/dist/register.browser.js": `${baseURL}/packages/core/dist/register.browser.js`,
+    "https://esm.sh/@maplibre-yaml/core@0.10?external=maplibre-gl": `${baseURL}/packages/core/dist/index.browser.js`,
     // The beginner basemap (streets + labels, no key) and the world-map one.
     "https://tiles.openfreemap.org/styles/liberty": `${baseURL}/examples/verification/configs/local-style.json`,
     "https://demotiles.maplibre.org/style.json": `${baseURL}/examples/verification/configs/local-style.json`,
