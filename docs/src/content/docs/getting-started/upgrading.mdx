@@ -96,7 +96,8 @@ below use: `mlym validate` is `npx maplibre-yaml@latest validate`.
 0.10 makes a map follow its document: a changed document updates the running
 map in place instead of rebuilding it, a page script reads and writes the
 document's `state:` values, and the camera no longer resets when the
-document changes.
+document changes. Documents can also be written in JSON or TOML, and large
+files draw at more zooms with less preparation.
 
 ### What behaves differently
 
@@ -182,6 +183,29 @@ and what to do about each, if anything.
   notice names the file while you develop); copy the whole `dist/` folder,
   as for the format readers in 0.9.
   ([Hosting the files yourself](/getting-started/installation/#hosting-the-files-yourself))
+  Refreshing and streaming sources (`refreshInterval`, `stream:`) load
+  their code the same way, from `dist/chunks/live.js`, after the first data
+  draws; a copy without it keeps the first data and shows one notice.
+- **GeoParquet overview files read by view draw coarse levels.** A file
+  with `geo:overviews` levels (tylertoo writes them) read by view now draws
+  the level that fits the zoom, where 0.9 drew only its full-detail level;
+  with no `minzoom` of yours it is drawn from zoom 0. A file small enough
+  to read whole is still read whole, at full detail. Reading levels is
+  experimental: add `overviews: false` under `load:` to keep 0.9's
+  behaviour. ([Overview files](/guides/geoparquet/#overview-files))
+- **Computed class breaks work on GeoParquet read by view.** A `classify:`
+  with `method:` on such a source was refused; now its breaks come from one
+  column of the full-detail rows, read once. FlatGeobuf and PMTiles sources
+  read by view still refuse, and the notice prints the
+  [`mlym breaks`](/cli/reference/#breaks) command whose `breaks:` line you
+  paste instead. ([Class breaks on large data](/guides/large-data/#class-breaks))
+- **MLT PMTiles archives draw without `encoding: mlt`** on maplibre-gl 6
+  and later, which reads the tile type from the archive's header; below 6,
+  one note says the archive needs 6. An `encoding:` you write still wins.
+  ([MLT tiles](/guides/large-data/#mlt-tiles))
+- **A source key of the wrong type is reported at that key**, such as
+  `sources.lots.load.maxFeatures`, not at the source. A script that matched
+  the error's `path` for these errors sees the longer path.
 
 ### What's new in 0.10
 
@@ -202,6 +226,26 @@ and what to do about each, if anything.
   `getState`, the `camera` option and the `update:applied`,
   `update:rejected` and `state:change` events
   ([JavaScript API](/integrations/vanilla-js/)).
+- **JSON and TOML documents.** Every place that reads a YAML document
+  (`<ml-map>`, `<ml-scrollytelling>`, the Astro loaders, the CLI) reads
+  JSON and TOML too, and [`mlym convert`](/cli/reference/#convert) turns a
+  document from one format into another, reporting anything that doesn't
+  carry over. ([JSON and TOML](/guides/json-and-toml/))
+- **A [Large data](/guides/large-data/) guide**: which format to use for
+  which size, one command per route and the YAML to paste. The hints for a
+  file too large or too dense link it and name the same command.
+- **[`mlym prepare <file>`](/cli/reference/#prepare)** reads a data file's
+  header or footer (a local path or an `http(s)` URL) and prints its
+  facts, the one command that prepares it, and the source block to paste.
+- **[`mlym breaks <file>`](/cli/reference/#breaks)** computes class breaks
+  over a whole GeoParquet, FlatGeobuf or GeoJSON file and prints a
+  `breaks:` line for `classify:`.
+- **`load: { overviews: false }`** on a GeoParquet source, and
+  **`encoding: mvt | mlt`** on a vector source, are documented schema keys.
+- **For tools**, `readGeoParquetFacts` and `readFlatGeobufFacts` read a
+  file's footer or header through any `AsyncBuffer`, and the command
+  builders the hints use (`overviewsCommand`, `pmtilesCommand` and others)
+  are exported.
 
 ### Something broke?
 
