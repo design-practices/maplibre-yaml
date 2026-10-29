@@ -1,6 +1,6 @@
 {
   "name": "@maplibre-yaml/astro",
-  "version": "0.7.1",
+  "version": "0.8.0",
   "description": "Astro components for maplibre-yaml: YAML-defined MapLibre maps and scrollytelling story maps, with build-time loaders and content-collection helpers",
   "type": "module",
   "exports": {

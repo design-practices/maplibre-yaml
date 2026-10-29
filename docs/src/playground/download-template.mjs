@@ -30,7 +30,7 @@ export const mapPage = (file) => `<!DOCTYPE html>
     <!-- Register the <ml-map> element -->
     <script
       type="module"
-      src="https://unpkg.com/@maplibre-yaml/core@0.9/register.js"
+      src="https://unpkg.com/@maplibre-yaml/core@0.10/register.js"
     ></script>
     <style>
       body {
@@ -68,7 +68,7 @@ export const storyPage = (file) => `<!DOCTYPE html>
     <!-- Registers <ml-scrollytelling> (and <ml-map>) -->
     <script
       type="module"
-      src="https://unpkg.com/@maplibre-yaml/core@0.9/register.js"
+      src="https://unpkg.com/@maplibre-yaml/core@0.10/register.js"
     ></script>
     <style>
       body {

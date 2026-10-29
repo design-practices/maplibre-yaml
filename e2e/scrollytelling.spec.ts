@@ -1329,8 +1329,8 @@ function cdn(baseURL: string): Record<string, string | { js: string }> {
     "https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.mjs": {
       js: `export * from "${vendor}";\nexport { default } from "${vendor}";\n`,
     },
-    "https://unpkg.com/@maplibre-yaml/core@0.9/register.js": `${baseURL}/packages/core/register.js`,
-    "https://unpkg.com/@maplibre-yaml/core@0.9/dist/register.browser.js": `${baseURL}/packages/core/dist/register.browser.js`,
+    "https://unpkg.com/@maplibre-yaml/core@0.10/register.js": `${baseURL}/packages/core/register.js`,
+    "https://unpkg.com/@maplibre-yaml/core@0.10/dist/register.browser.js": `${baseURL}/packages/core/dist/register.browser.js`,
     "https://demotiles.maplibre.org/style.json": `${baseURL}${LOCAL_STYLE}`,
     "https://tiles.openfreemap.org/styles/liberty": `${baseURL}${LOCAL_STYLE}`,
   };

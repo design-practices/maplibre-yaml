@@ -1,5 +1,28 @@
 # @maplibre-yaml/cli
 
+## 0.7.0
+
+### Minor Changes
+
+- a944a09: Two new CLI commands for large data files. `mlym prepare <file>` takes a GeoParquet, FlatGeobuf, GeoJSON or PMTiles file (a local path or an `http(s)` URL, read by range requests) and reports its features, size, CRS, geometry, sort order, bbox column, row groups and overview levels. It then prints the one command that makes the file draw well, following the Large data guide's size-to-format table, and the YAML source block to paste. It reads only the footer or header (GeoJSON is counted in full up to 200 MB and estimated above that), writes no data and runs nothing; each range request gives up after 30 seconds, and a FlatGeobuf whose header records no feature count is routed by its size. `mlym breaks <file> --field <name>` computes `classify:` breaks from a whole local file with core's classify math, for sources the browser reads by view. With `-f json`, both commands report failures in `mlym convert`'s shape, `errors: [{ path, message, code }]`. Core now exports the producer-command builders its large-file notices use (`sortedParquetCommand`, `indexedFlatGeobufCommand`, `pmtilesCommand`, `overviewsCommand` for an overview GeoParquet file, `commandStem`, and `LARGE_DATA_DOCS` with the Large data guide's sections), so a map's notices, `mlym prepare` and the guide print the same command for each route; `prepare` ends with a link to the guide's section for the route it recommends.
+- dae438d: Map and story documents can now be written in JSON or TOML as well as YAML, with the same validation and the same line-and-column diagnostics in every format. `<ml-map>` and `<ml-scrollytelling>` read all three from `src` (by extension or content type), inline `<script type="application/toml">` (and the YAML and JSON types), the `config` attribute and property, and `update(text)`. The format comes from the label when there is one and is sniffed otherwise. The TOML reader is a separate chunk downloaded the first time a page meets a TOML document, so YAML and JSON pages download nothing new. Errors name their format ("JSON syntax error", "TOML syntax error"), carry a new `format` field, and TOML syntax errors use the new `toml-syntax` code; TOML gets hints for unquoted colours, `null` (omit the key) and dotted keys. Changed: the `config` attribute and `update(string)` now read text through the same parser as `src`, so they accept YAML and TOML too, and a duplicate key in JSON there is an error instead of the last value winning. New in core: `parseDocumentText(text, options)`, `convertDocument(text, { to })` (converts the authored document between the three formats, keeping key order and inline expressions, and reports comments, expanded anchors and dropped nulls), `normalizeDocumentValue(value)`, `looksLikeDocumentText(text, format)` (whether JSON or TOML text is a map or story document, by the rule `mlym validate` picks a folder's files with), `readDocumentValue(text, options)` (a document's raw value in any of the three formats, unvalidated, with the same guards and error wording), `stripBom(text)` and `UNREADABLE_CODES` (the error codes that mean the text could not be read at all). In every format a root `$schema` key is accepted (and removed before rendering), nested tables under `locale` flatten to dotted keys, and date values become text; the published JSON Schemas accept both. An inline script of an unsupported type is named in the error card instead of "No configuration provided".
+
+  The CLI's `validate`, `preview` and `emit` read all three formats; `mlym validate <folder>` also finds JSON and TOML documents by their content (a broken one still joins the run and fails), skipping other JSON and TOML files, with `--verbose` listing what it skipped and a clear message for a folder with no documents. New: `mlym convert <file> --to yaml|json|toml [--out] [--strict] [-f json]`, whose `-f json` prints the result and its losses as one JSON object. Folder discovery also checks the end of a large JSON file (sorted keys put `type` last), and a file it cannot read joins the run and fails instead of being skipped. Astro's `loadMapConfig`, `loadScrollytellingConfig`, `loadYAML` and `loadFromGlob` pick the format by extension, dev reload watches `.toml`, and content-collection schemas normalize entries first, so TOML collection entries with nested locale tables or dates validate.
+
+### Patch Changes
+
+- ffca12d: `mlym preview` and `mlym validate --watch` no longer crash with an unhandled rejection when stopping the dev server or file watcher fails on Ctrl-C: the error is logged and the command exits 4. In core, `MapRenderer.off(event, callback)` now takes the same typed callback as `on()` instead of any `Function`; passing `off()` the callback you gave `on()` compiles as before.
+- Updated dependencies [d341a28]
+- Updated dependencies [a944a09]
+- Updated dependencies [ffca12d]
+- Updated dependencies [dae438d]
+- Updated dependencies [daa117d]
+- Updated dependencies [0e89a73]
+- Updated dependencies [85ee765]
+- Updated dependencies [2807025]
+- Updated dependencies [7d4b481]
+  - @maplibre-yaml/core@0.10.0
+
 ## 0.6.2
 
 ### Patch Changes
