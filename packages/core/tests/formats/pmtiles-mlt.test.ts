@@ -97,9 +97,10 @@ describe("MLT tiles: encoding from the archive header (U4, KTD9, KTD11)", () => 
     const read = ranges.length;
     expect(await archiveTileType("pmtiles://http://h.org/held.pmtiles")).toBe(6);
     expect(ranges).toHaveLength(read);
-    // An archive core's handler hasn't opened: its own header read.
-    expect(await archiveTileType("http://h.org/other.pmtiles")).toBe(6);
-    expect(ranges.length).toBeGreaterThan(read);
+    // An archive core's handler hasn't opened (a page that registered its own
+    // pmtiles protocol serves it): unknown, and no request of core's own.
+    expect(await archiveTileType("http://h.org/other.pmtiles")).toBeUndefined();
+    expect(ranges).toHaveLength(read);
   });
 
   it("an archive that can't be read: undefined, never a throw", async () => {

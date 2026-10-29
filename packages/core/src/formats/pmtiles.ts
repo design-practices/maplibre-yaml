@@ -84,20 +84,23 @@ export async function archiveMetadata(url: string): Promise<Record<string, unkno
 }
 
 /**
- * An archive's header tile type (`1` MVT, `2`-`5` images, `6` MLT), read as
- * {@link archiveMetadata} reads (the header core's handler holds is cached:
- * no request). For the renderer's hint on a runtime that draws no MLT
+ * An archive's header tile type (`1` MVT, `2`-`5` images, `6` MLT), from
+ * the header core's protocol handler already read for the archive's TileJSON
+ * (no request). For the renderer's hint on a runtime that draws no MLT
  * (0.10, U4; KTD11): the protocol handler is shared by every map on the
  * page and can't report.
  *
  * @param url - The archive URL, `pmtiles://` scheme or not.
- * @returns `undefined` when it can't be read.
+ * @returns `undefined` when core's handler hasn't read it (a page that
+ *   registered its own pmtiles protocol serves it) or it can't be read.
  */
 export async function archiveTileType(url: string): Promise<number | undefined> {
   const archive = url.replace(/^pmtiles:\/\//i, "");
   try {
+    // Only a header core's own handler already read: a page that registered
+    // its own pmtiles protocol serves the archive, and core fetches nothing.
     const held = (latestReader ? await latestReader : undefined)?.tiles.get(archive);
-    return (await (held ?? new (await pmtilesReader()).PMTiles(archive)).getHeader()).tileType;
+    return held ? (await held.getHeader()).tileType : undefined;
   } catch {
     return undefined;
   }
