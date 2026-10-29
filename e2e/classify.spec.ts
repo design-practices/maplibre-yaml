@@ -352,3 +352,72 @@ for (const doc of ["choropleth", "rate"]) {
     await context.close();
   });
 }
+
+test("by-view GeoParquet: quantile breaks from the whole column match a whole read and hold across zooms and a level switch; FlatGeobuf by view names mlym breaks (0.10 U3, AE4/AE5)", async ({
+  page,
+}) => {
+  const errors = await guard(page);
+  await page.addInitScript(() => {
+    (window as any).__classifiedBy = {};
+    document.addEventListener("ml-map:layer-classified", (e: Event) => {
+      const id = (e.target as HTMLElement).id;
+      ((window as any).__classifiedBy[id] ||= []).push((e as CustomEvent).detail.classify);
+    });
+  });
+  await page.goto("/examples/verification/26-classify-by-view.html", { waitUntil: "domcontentloaded" });
+  const classified = (id: string) =>
+    page.evaluate((id) => ((window as any).__classifiedBy[id] ?? []).filter((r: any) => r.breaks), id);
+  await expect.poll(async () => (await classified("view")).length, { timeout: 60_000 }).toBeGreaterThan(0);
+  await expect.poll(async () => (await classified("whole")).length, { timeout: 60_000 }).toBeGreaterThan(0);
+  const view = (await classified("view"))[0];
+  const whole = (await classified("whole")).at(-1);
+  expect(view.breaks).toHaveLength(3);
+  expect(view.breaks).toEqual(whole.breaks);
+  expect(view.stats).toEqual(whole.stats);
+  expect(view.stats.noData).toBe(0); // floors is INT64: numbers, not no data
+  // "whole" really is a whole read; "auto" switched itself to by view, and scans too.
+  await expect(page.locator("#whole .ml-map-notice")).toHaveCount(0);
+  await expect.poll(async () => (await classified("auto")).length, { timeout: 60_000 }).toBeGreaterThan(0);
+  expect((await classified("auto"))[0].breaks).toEqual(whole.breaks);
+  await expect(page.locator("#auto .ml-map-notice")).toContainText("so only the part in view is read");
+
+  const legend = (id: string) => page.locator(`#${id} .ml-map-legend .legend-label`).allTextContents();
+  await expect.poll(() => legend("view")).toEqual(await legend("whole"));
+  const before = await legend("view");
+  const paint = () =>
+    page.evaluate(() => JSON.stringify((document.getElementById("view") as any).getMap().getPaintProperty("floors", "fill-color")));
+  const paintBefore = await paint();
+
+  // Zoom across the overview levels (10 → 12 → 14, the full detail) and pan.
+  const levels = () =>
+    page.evaluate(() => {
+      const map = (document.getElementById("view") as any).getMap();
+      return [...new Set(map.querySourceFeatures("lots").map((f: any) => f.properties.level))];
+    });
+  for (const [zoom, center, level] of [
+    [12, [10.117, 42.058], 2],
+    [14, [10.117, 42.058], 4],
+    [14, [10.11, 42.06], 4],
+  ] as const) {
+    await page.evaluate(
+      ({ zoom, center }) => (document.getElementById("view") as any).getMap().jumpTo({ zoom, center }),
+      { zoom, center: center as unknown as [number, number] }
+    );
+    await expect.poll(levels, { timeout: 30_000 }).toEqual([level]);
+    expect(await legend("view")).toEqual(before);
+    expect(await paint()).toBe(paintBefore);
+  }
+  // One computation, ever.
+  expect(await classified("view")).toHaveLength(1);
+  mkdirSync("e2e/screenshots", { recursive: true });
+  await page.screenshot({ path: "e2e/screenshots/classify-by-view.png", fullPage: true });
+
+  // AE5: a FlatGeobuf read by view keeps the refusal, naming mlym breaks.
+  const notice = page.locator("#fgb .ml-map-notice");
+  await expect(notice).toContainText("can't compute its classes", { timeout: 60_000 });
+  await expect(notice).toContainText("mlym breaks points.fgb --field value --method jenks --classes 5");
+  // The refusal is reported as a map error on the console too; nothing else is.
+  const others = errors.filter((e) => !/Layer `value` can't compute its classes: source `points` is read by view/.test(e));
+  expect(errors.length - others.length).toBe(1);
+  expect(others, `page errors:\n${others.join("\n")}`).toEqual([]);
+});

@@ -522,6 +522,24 @@ export function sortedParquetCommand(url: string): string {
   );
 }
 
+/**
+ * The `mlym breaks` command for a computed `classify:` the browser can't
+ * compute (a source read by view, vector tiles): it prints a `breaks:` line
+ * to paste (0.10 U3, U8). `url`: the source's file (`<file>` when unknown).
+ */
+export function breaksCommand(
+  url: unknown,
+  c: { field?: unknown; method?: unknown; classes?: unknown; normalize?: unknown; multiply?: unknown }
+): string {
+  const arg = (v: unknown) => (/^[\w.-]+$/.test(String(v)) ? String(v) : JSON.stringify(String(v)));
+  const flag = (name: string, v: unknown) => (v === undefined ? "" : ` --${name} ${arg(v)}`);
+  const file = typeof url === "string" && url ? arg(commandFileName(url, "parquet")) : "<file>";
+  return (
+    `\`mlym breaks ${file}${flag("field", c.field)}${flag("method", String(c.method).trim().toLowerCase())}` +
+    `${flag("classes", c.classes)}${flag("normalize", c.normalize)}${flag("multiply", c.multiply)}\``
+  );
+}
+
 /** Re-create a FlatGeobuf file with a spatial index. */
 export function indexedFlatGeobufCommand(url: string): string {
   return `\`ogr2ogr -f FlatGeobuf -lco SPATIAL_INDEX=YES ${commandStem(url, "fgb")}-indexed.fgb ${commandFileName(url, "fgb")}\``;

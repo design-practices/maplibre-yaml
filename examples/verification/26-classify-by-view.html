@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>classify: computed breaks on a file read by view</title>
+  <!--
+    0.10 (U3, R6-R8, AE4/AE5): classify with a computed method on a source
+    read by view.
+      - "view":  an overview GeoParquet file (lots-overviews.parquet, levels
+                 at zooms 10-13 plus the 600 full-detail lots at 14) read by
+                 view, classified by `floors` (an INT64 column) with quantile
+                 breaks. The breaks come from the floors column of the
+                 full-detail level, read once when the source loads, so they
+                 are the same at every zoom and pan.
+      - "whole": the same file read whole (its load: maxFeatures raises
+                 the whole-file limit this page lowers), with the same
+                 classify: the whole-file computation "view" must match.
+      - "auto":  the same file with load: all over the lowered whole-file
+                 limit, so it switches itself to reading by view: the same
+                 breaks again, from the whole column.
+      - "fgb":   an indexed FlatGeobuf too large to load whole (the limit is
+                 lowered to 100 features through the browser-test hook
+                 `window.__MAPLIBRE_YAML_LIMITS__`), read by view, with
+                 method: jenks: refused, with a notice naming `mlym breaks`.
+    PASS = "view", "whole" and "auto" draw the lots in four blues with the
+    same legend; zooming "view" in and out leaves its legend as it was; "fgb"
+    draws grey points and a notice with an `mlym breaks` command.
+    Serve from the repo root:  pnpm verify:serve
+    Then open: http://localhost:4174/examples/verification/26-classify-by-view.html
+  -->
+  <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; }
+    header { padding: 8px 16px; background: #1d3557; color: white; font-size: 13px; }
+    main { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 8px; padding: 8px; }
+    h2 { font-size: 13px; margin: 0 0 4px; }
+    ml-map { display: block; height: 360px; }
+  </style>
+  <script>
+    // Test hook: a small FlatGeobuf stands in for one over the whole-file limit.
+    window.__MAPLIBRE_YAML_LIMITS__ = { maxFeatures: 100 };
+  </script>
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }
+  </script>
+</head>
+<body>
+  <header>PASS = "view", "whole" and "auto" show the same four-class legend, at every zoom of "view"; "fgb" shows a notice naming mlym breaks.</header>
+  <main>
+    <section>
+      <h2>GeoParquet read by view: quantile breaks from the whole floors column</h2>
+      <ml-map id="view">
+        <script type="text/yaml">
+type: map
+id: classify-by-view
+config:
+  center: [10.117, 42.058]
+  zoom: 10
+  mapStyle: "/examples/verification/configs/local-style.json"
+legend:
+  position: bottom-left
+sources:
+  lots:
+    type: geojson
+    url: /gallery-assets/cloud-native/lots-overviews.parquet
+    columns: [lot, level, floors]
+    load: viewport
+layers:
+  - id: floors
+    type: fill
+    source: lots
+    label: Floors
+    classify:
+      field: floors
+      method: quantile
+      classes: 4
+      palette: Blues
+    paint:
+      fill-opacity: 0.85
+        </script>
+      </ml-map>
+    </section>
+    <section>
+      <h2>The same file read whole: the breaks to match</h2>
+      <ml-map id="whole">
+        <script type="text/yaml">
+type: map
+id: classify-whole
+config:
+  center: [10.117, 42.058]
+  zoom: 14
+  mapStyle: "/examples/verification/configs/local-style.json"
+legend:
+  position: bottom-left
+sources:
+  lots:
+    type: geojson
+    url: /gallery-assets/cloud-native/lots-overviews.parquet
+    columns: [lot, level, floors]
+    load: { maxFeatures: 1000 }
+layers:
+  - id: floors
+    type: fill
+    source: lots
+    label: Floors
+    classify:
+      field: floors
+      method: quantile
+      classes: 4
+      palette: Blues
+    paint:
+      fill-opacity: 0.85
+        </script>
+      </ml-map>
+    </section>
+    <section>
+      <h2>The same file over the whole-file limit: switched to by view itself</h2>
+      <ml-map id="auto">
+        <script type="text/yaml">
+type: map
+id: classify-auto
+config:
+  center: [10.117, 42.058]
+  zoom: 12
+  mapStyle: "/examples/verification/configs/local-style.json"
+legend:
+  position: bottom-left
+sources:
+  lots:
+    type: geojson
+    url: /gallery-assets/cloud-native/lots-overviews.parquet
+    columns: [lot, level, floors]
+layers:
+  - id: floors
+    type: fill
+    source: lots
+    label: Floors
+    classify:
+      field: floors
+      method: quantile
+      classes: 4
+      palette: Blues
+    paint:
+      fill-opacity: 0.85
+        </script>
+      </ml-map>
+    </section>
+    <section>
+      <h2>FlatGeobuf read by view (too large to load whole): refused, naming mlym breaks</h2>
+      <ml-map id="fgb">
+        <script type="text/yaml">
+type: map
+id: classify-fgb
+config:
+  center: [10.2, 42.15]
+  zoom: 11
+  mapStyle: "/examples/verification/configs/local-style.json"
+sources:
+  points:
+    type: geojson
+    url: /gallery-assets/cloud-native/points.fgb
+layers:
+  - id: value
+    type: circle
+    source: points
+    classify:
+      field: value
+      method: jenks
+      classes: 5
+      palette: Reds
+    paint:
+      circle-radius: 5
+        </script>
+      </ml-map>
+    </section>
+  </main>
+  <script type="module" src="../../packages/core/register.js"></script>
+</body>
+</html>

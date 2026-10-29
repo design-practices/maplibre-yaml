@@ -29,8 +29,13 @@ import {
   loadGeoParquetWhole,
   overviewBand,
   parseOverviews,
+  readColumns,
+  columnBytes,
+  COLUMN_SCAN_MAX_BYTES,
   type Overviews,
 } from "../../src/formats/lib/geoparquet";
+import { ClassifyRuntime } from "../../src/renderer/classify-runtime";
+import { applyClassifyToSpec, classifyRecordOf, resolveClassify, withData } from "../../src/classify/compile";
 import { getDecoder, hasDecoder } from "../../src/formats/decoders";
 import { decodeGeoParquet } from "../../src/index";
 import { isFormatError } from "../../src/formats/errors";
@@ -1687,5 +1692,168 @@ describe("the 10–50 MB GeoParquet note names only what the file lacks (ml-cnv.
     const norange = warns().find((w) => w.includes("may take a few seconds"))!;
     expect(norange).not.toContain("load: viewport");
     expect(norange).toContain('list fewer "columns:"');
+  });
+});
+
+describe("whole columns for classify breaks on a source read by view (0.10 U3, KTD7/KTD8)", () => {
+  // lots-overviews.parquet: `floors` is INT64; the canonical level is rows 1132–1732 (600 lots).
+  const AREA: [number, number, number, number] = [10.0, 42.0, 10.4, 42.3];
+  afterEach(() => overrides.clear());
+
+  it("reads one column of the canonical level, no geometry, int64 as numbers", async () => {
+    vi.stubGlobal("fetch", fixtureFetch());
+    const source = await open("/lots-overviews.parquet");
+    const scanned = await readColumns(source, ["floors"]);
+    expect(scanned.features).toHaveLength(600);
+    expect(scanned.features.every((f) => f.geometry === null)).toBe(true);
+    expect(Object.keys(scanned.features[0]!.properties!)).toEqual(["floors"]);
+    expect(scanned.features.every((f) => typeof f.properties!["floors"] === "number")).toBe(true);
+    // The same values a whole read of the canonical rows has.
+    const whole = await readAll(source, { columns: ["floors"] });
+    expect(scanned.features.map((f) => f.properties!["floors"])).toEqual(
+      whole!.features.map((f) => f.properties!["floors"])
+    );
+    // A column the file doesn't have is left out; the file's own names are recorded for the hint.
+    const missing = await readColumns(source, ["flors"]);
+    expect(missing.features.length).toBeGreaterThan(0);
+    expect(missing.features[0]!.properties).toEqual({});
+  });
+
+  it("an INT64 field (districts' population) yields numeric breaks, not no data", async () => {
+    vi.stubGlobal("fetch", fixtureFetch());
+    const source = await open("/districts.parquet");
+    const scanned = await readColumns(source, ["population"]);
+    expect(scanned.features).toHaveLength(48);
+    const record = withData(resolveClassify({ field: "population", method: "quantile", classes: 3, palette: "Blues" } as never, "fill"), scanned);
+    expect(record.stats!.noData).toBe(0);
+    expect(record.breaks).toHaveLength(2);
+    expect(record.breaks!.every((b) => typeof b === "number" && Number.isFinite(b))).toBe(true);
+  });
+
+  it("a column over the 32 MB cap (compressed, canonical level) is not read; field and normalize are counted separately", async () => {
+    vi.stubGlobal("fetch", fixtureFetch());
+    const source = await open("/lots-overviews.parquet");
+    const floors = columnBytes(source, "floors");
+    const lot = columnBytes(source, "lot");
+    expect(floors).toBeGreaterThan(0);
+    // Each column's canonical row groups only.
+    let all = 0;
+    for (const group of source.metadata.row_groups) {
+      for (const chunk of group.columns) if (chunk.meta_data?.path_in_schema[0] === "floors") all += Number(chunk.meta_data.total_compressed_size);
+    }
+    expect(floors).toBeLessThan(all);
+    // Simulate a footer whose floors column is 20 MB per canonical row group (60 MB): over the cap.
+    const canonical = source.info.overviews!.canonical!;
+    for (let g = canonical.groupStart; g <= canonical.groupEnd; g++) {
+      for (const chunk of source.metadata.row_groups[g]!.columns) {
+        if (chunk.meta_data?.path_in_schema[0] === "floors") chunk.meta_data.total_compressed_size = BigInt(20 * 1024 * 1024);
+        // lot: 10 MB a group, 30 MB in all — under the cap on its own, though floors + lot is over.
+        if (chunk.meta_data?.path_in_schema[0] === "lot") chunk.meta_data.total_compressed_size = BigInt(10 * 1024 * 1024);
+      }
+    }
+    expect(columnBytes(source, "floors")).toBeGreaterThan(COLUMN_SCAN_MAX_BYTES);
+    expect(columnBytes(source, "lot")).toBeLessThanOrEqual(COLUMN_SCAN_MAX_BYTES);
+    await expect(readColumns(source, ["floors"])).rejects.toThrow(/floors.*60 MB.*32 MB/);
+    await expect(readColumns(source, ["lot", "floors"])).rejects.toThrow(/floors/);
+    const lots = await readColumns(source, ["lot", "level"]);
+    expect(lots.features).toHaveLength(600);
+    expect(lot).toBeGreaterThan(0);
+  });
+
+  it("the loader reads its columns from the file it already opened (no second footer read), within its columns:", async () => {
+    const log: Log = [];
+    vi.stubGlobal("fetch", fixtureFetch(log));
+    const loader = new GeoParquetLoader(fakeMap(14, AREA) as never, "/lots-overviews.parquet", loadModeOf({ load: "viewport" }), ["lot", "floors"], {
+      onData: vi.fn(),
+      onError: vi.fn(),
+    });
+    await loader.start();
+    const requests = log.length;
+    const scanned = await loader.readColumns(["floors"]);
+    expect(scanned.features).toHaveLength(600);
+    expect(log.length).toBe(requests);
+    // A column columns: leaves out is not read (the view's features don't carry it either).
+    const unread = await loader.readColumns(["level"]);
+    expect(unread.features[0]!.properties).toEqual({});
+  });
+
+  it("AE4: by view across zooms, pans and a level switch, quantile breaks stay those of the whole canonical column", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      const { LayerManager } = await import("../../src/renderer/layer-manager");
+      vi.stubGlobal("fetch", fixtureFetch());
+      const moveend: Array<() => void> = [];
+      const view = { zoom: 10, bounds: AREA };
+      const sources = new Map<string, { setData: ReturnType<typeof vi.fn> }>();
+      const added = new Set<string>();
+      const map = {
+        addSource: vi.fn((id: string) => sources.set(id, { setData: vi.fn() })),
+        getSource: vi.fn((id: string) => sources.get(id)),
+        addLayer: vi.fn((l: { id: string }) => added.add(l.id)),
+        getLayer: vi.fn((id: string) => (added.has(id) ? { id } : undefined)),
+        getStyle: vi.fn(() => ({ sources: {} })),
+        removeLayer: vi.fn(),
+        removeSource: vi.fn(),
+        removeFeatureState: vi.fn(),
+        setPaintProperty: vi.fn(),
+        getZoom: () => view.zoom,
+        getBounds: () => {
+          const [w, s, e, n] = view.bounds;
+          return { getWest: () => w, getSouth: () => s, getEast: () => e, getNorth: () => n };
+        },
+        on: vi.fn((event: string, fn: () => void) => {
+          if (event === "moveend") moveend.push(fn);
+        }),
+        off: vi.fn(),
+      };
+      let runtime: ClassifyRuntime | undefined;
+      const callbacks = {
+        onDataLoading: vi.fn(),
+        onDataLoaded: vi.fn((id: string) => runtime?.dataLoaded(id)),
+        onDataError: vi.fn(),
+      };
+      const manager = new LayerManager(map as never, callbacks);
+      const spec = { type: "geojson", url: "/lots-overviews.parquet", columns: ["lot", "level", "floors"], load: "viewport" };
+      manager.registerSources({ lots: spec } as never);
+      const record = resolveClassify({ field: "floors", method: "quantile", classes: 4, palette: "Blues" } as never, "fill");
+      const layer = applyClassifyToSpec({ id: "lots", type: "fill", source: "lots" }, record) as never;
+      const onRefused = vi.fn();
+      const changed = vi.fn();
+      runtime = new ClassifyRuntime(map as never, [layer], { lots: spec }, (id) => manager.getSourceData(id), changed, {
+        readsByView: (id) => manager.readsByView(id),
+        wholeColumn: (id, fields) => manager.wholeColumns(id, fields),
+        onRefused,
+      });
+      await manager.addLayer(layer);
+      await vi.waitFor(() => expect(changed).toHaveBeenCalled());
+      const first = classifyRecordOf(layer)!;
+      // The breaks of a whole read of the canonical rows.
+      const whole = await decodeBytes(fixture("lots-overviews.parquet"), "lots.parquet", { columns: ["floors"] });
+      expect(whole.features).toHaveLength(600);
+      expect(first.breaks).toEqual(withData(record, whole).breaks);
+      expect(first.stats).toEqual(withData(record, whole).stats);
+      // Pan and zoom across the levels (10 → 12 → 14 → a pan): the breaks never move.
+      for (const [zoom, bounds] of [
+        [12, AREA],
+        [14, AREA],
+        [14, [10.1, 42.05, 10.2, 42.1]],
+        [11, AREA],
+      ] as const) {
+        view.zoom = zoom;
+        view.bounds = bounds as never;
+        const delivered = callbacks.onDataLoaded.mock.calls.length;
+        moveend.forEach((fn) => fn());
+        await vi.advanceTimersByTimeAsync(300);
+        await vi.waitFor(() => expect(callbacks.onDataLoaded.mock.calls.length).toBeGreaterThan(delivered));
+        expect(classifyRecordOf(layer)!.breaks).toEqual(first.breaks);
+        expect(classifyRecordOf(layer)!.stats).toEqual(first.stats);
+      }
+      expect(map.removeFeatureState).toHaveBeenCalled(); // a level switch happened
+      expect(changed).toHaveBeenCalledTimes(1);
+      expect(onRefused).not.toHaveBeenCalled();
+      manager.destroy();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

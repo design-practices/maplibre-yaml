@@ -1137,6 +1137,73 @@ export function readBbox(
 }
 
 /**
+ * The most compressed bytes one column's scan for classify breaks reads
+ * (KTD8): a by-view source's `field` and `normalize` columns are each read
+ * whole only up to this; over it, the breaks are refused (`mlym breaks`).
+ */
+export const COLUMN_SCAN_MAX_BYTES = 32 * 1024 * 1024;
+
+/** One column's compressed bytes in the canonical level (an overview file's), from the footer. */
+export function columnBytes(source: GeoParquetFile, name: string): number {
+  let total = 0;
+  for (const { group } of dataRowGroups(source)) {
+    for (const chunk of group.columns) {
+      if (chunk.meta_data?.path_in_schema[0] === name) total += Number(chunk.meta_data.total_compressed_size);
+    }
+  }
+  return total;
+}
+
+/**
+ * Whole columns, for computed classify breaks on a source read by view
+ * (0.10 U3, KTD7): every row of the canonical level, no geometry, no bbox
+ * filter, values converted as a feature's properties are (64-bit integers
+ * to numbers). A name the file lacks is left out — the classify hint then
+ * names it, from the file's own columns. Statistics never come from a
+ * coarse overview level.
+ *
+ * @returns One geometry-less feature per row (one with no properties when
+ *   no name is a column).
+ * @throws When a column is over {@link COLUMN_SCAN_MAX_BYTES} compressed
+ *   (each counted on its own), or the read fails.
+ */
+export async function readColumns(source: GeoParquetFile, names: readonly string[]): Promise<FeatureCollection> {
+  const columns = [...new Set(names)].filter((name) => source.info.columns.includes(name));
+  for (const name of columns) {
+    const size = columnBytes(source, name);
+    if (size > COLUMN_SCAN_MAX_BYTES) {
+      throw new Error(`\`${name}\` is ${mb(size)} compressed, over the ${mb(COLUMN_SCAN_MAX_BYTES)} read for breaks`);
+    }
+  }
+  const band = source.info.overviews?.canonical;
+  let rows: Obj[] = [{}];
+  if (columns.length > 0) {
+    try {
+      rows = (await parquetReadObjects({
+        file: source.file,
+        metadata: source.metadata,
+        columns,
+        compressors: await compressorsFor(source, columns, band),
+        ...(band ? { rowStart: band.rowStart, rowEnd: band.rowEnd } : {}),
+      })) as Obj[];
+    } catch (error) {
+      throw readFailure(error, source.url);
+    }
+  }
+  const features: Feature[] = rows.map((row) => {
+    const properties: Obj = {};
+    for (const name of columns) {
+      const value = propertyValue(row[name]);
+      if (value !== undefined) properties[name] = value;
+    }
+    return { type: "Feature", geometry: null as never, properties };
+  });
+  const data: FeatureCollection = { type: "FeatureCollection", features };
+  host().recordPropertyNames(data, source.info.columns);
+  return data;
+}
+
+/**
  * Decode a whole GeoParquet file already in memory (`mlym emit`, classify
  * breaks at export). Node-safe.
  *
@@ -1383,6 +1450,19 @@ export class GeoParquetLoader extends ViewLoader<StartedTail> {
         "overviews with a zoom on every level (tylertoo writes one), or add `overviews: false` under `load:` to say so.",
       "no-zoom"
     );
+  }
+
+  /**
+   * Whole columns of the file this loader opened, for computed classify
+   * breaks while it reads by view ({@link readColumns}; no second footer
+   * read). A column its `columns:` leaves out is not read: the view's
+   * features don't carry it either.
+   */
+  readColumns(names: readonly string[]): Promise<FeatureCollection> {
+    const source = this.opened;
+    if (!source) return Promise.reject(new Error("not open"));
+    const read = columnsToRead(source, this.columns);
+    return readColumns(source, names.filter((name) => read.includes(name)));
   }
 
   /** The file's extent from its GeoParquet metadata — what `fitTo` frames when read by view. */

@@ -169,6 +169,7 @@ describe("ClassifyRuntime", () => {
       expect([layerId, sourceId]).toEqual(["income", "parcels"]);
       expect((error as Error).message).toContain("breaks:");
       expect((error as Error).message).toContain("whole file");
+      expect((error as Error).message).toContain("mlym breaks");
     });
 
     it("a FlatGeobuf that switches to by-view after its empty placeholder keeps the no-data colour (ml-aot.106)", async () => {
@@ -318,6 +319,238 @@ describe("ClassifyRuntime", () => {
       expect(onFieldProblem).toHaveBeenCalledTimes(2);
       expect(onFieldProblem.mock.calls.map((c) => c[0]).sort()).toEqual(["f", "i"]);
       expect(String(onFieldProblem.mock.calls.find((c) => c[0] === "i")![1])).toContain('"median_income"');
+    });
+  });
+
+  describe("a GeoParquet source read by view: breaks from one whole column (0.10 U3, KTD7)", () => {
+    const SOURCES = {
+      lots: { type: "geojson", url: "https://example.com/data/lots.parquet", load: "viewport" },
+      parcels: { type: "geojson", url: "/data/parcels.fgb", load: "viewport" },
+    };
+    const rows = (props: Array<Record<string, unknown>>) => ({
+      type: "FeatureCollection",
+      features: props.map((p) => ({ type: "Feature", properties: p, geometry: null })),
+    });
+
+    function computed(id: string, source: string, config: Record<string, unknown> = {}) {
+      const record = resolveClassify(
+        { field: "v", method: "quantile", classes: 2, colors: ["#000000", "#ffffff"], ...config } as never,
+        "fill"
+      );
+      return applyClassifyToSpec({ id, type: "fill", source }, record) as ReturnType<typeof layer>;
+    }
+
+    /** A scan the test settles by hand. */
+    function deferred<T>() {
+      let resolve!: (v: T) => void;
+      let reject!: (e: unknown) => void;
+      const promise = new Promise<T>((res, rej) => {
+        resolve = res;
+        reject = rej;
+      });
+      return { promise, resolve, reject };
+    }
+
+    it("computes once from the whole column, and the view's data never moves the breaks (R6, R7)", async () => {
+      const data = new Map<string, unknown>([["lots", fc([1, 2])]]);
+      const map = fakeMap(new Set(["lots"]));
+      const changed = vi.fn();
+      const onRefused = vi.fn();
+      const wholeColumn = vi.fn(async () => fc([0, 10, 20, 30, 40, 50, 60, 70, 80, 90]));
+      const l = computed("lots", "lots");
+      const runtime = new ClassifyRuntime(map as never, [l], SOURCES, (id) => data.get(id), changed, {
+        readsByView: () => true,
+        wholeColumn,
+        onRefused,
+      });
+      runtime.dataLoaded("lots");
+      runtime.dataLoaded("lots"); // a second view's read while the scan is in flight
+      await vi.waitFor(() => expect(changed).toHaveBeenCalledTimes(1));
+      expect(wholeColumn).toHaveBeenCalledTimes(1);
+      expect(wholeColumn).toHaveBeenCalledWith("lots", ["v"]);
+      const first = classifyRecordOf(l)!;
+      expect(first.breaks).toEqual([50]);
+      expect(first.stats).toMatchObject({ count: 10, min: 0, max: 90 });
+      expect(map.setPaintProperty).toHaveBeenCalledWith("lots", "fill-color", expect.any(Array));
+      // Pans and zooms deliver other features: nothing is recomputed.
+      for (const view of [fc([1000, 2000]), fc([-5]), fc([])]) {
+        data.set("lots", view);
+        runtime.dataLoaded("lots");
+      }
+      await runtime.layersReady({ fetch: vi.fn() } as never);
+      await Promise.resolve();
+      expect(classifyRecordOf(l)).toEqual(first);
+      expect(changed).toHaveBeenCalledTimes(1);
+      expect(wholeColumn).toHaveBeenCalledTimes(1);
+      expect(onRefused).not.toHaveBeenCalled();
+    });
+
+    it("scans the normalize: column too", async () => {
+      const wholeColumn = vi.fn(async () => rows([{ v: 1, pop: 10 }, { v: 4, pop: 10 }, { v: 9, pop: 10 }]));
+      const l = computed("r", "lots", { normalize: "pop" });
+      const changed = vi.fn();
+      const runtime = new ClassifyRuntime(fakeMap(new Set(["r"])) as never, [l], SOURCES, () => fc([]), changed, {
+        readsByView: () => true,
+        wholeColumn,
+        onRefused: vi.fn(),
+      });
+      runtime.dataLoaded("lots");
+      await vi.waitFor(() => expect(changed).toHaveBeenCalled());
+      expect(wholeColumn).toHaveBeenCalledWith("lots", ["v", "pop"]);
+      expect(classifyRecordOf(l)!.stats).toMatchObject({ min: 0.1, max: 0.9 });
+    });
+
+    it("AE5: a source whose reader can't scan (FlatGeobuf, PMTiles) keeps the refusal, naming mlym breaks with the command", () => {
+      const onRefused = vi.fn();
+      const l = computed("p", "parcels", { method: "jenks", classes: 5, colors: undefined, palette: "Blues" });
+      const runtime = new ClassifyRuntime(fakeMap(new Set(["p"])) as never, [l], SOURCES, () => fc([1, 2, 3]), () => {}, {
+        readsByView: () => true,
+        wholeColumn: () => undefined,
+        onRefused,
+      });
+      runtime.dataLoaded("parcels");
+      runtime.dataLoaded("parcels");
+      expect(onRefused).toHaveBeenCalledTimes(1);
+      const message = (onRefused.mock.calls[0]![2] as Error).message;
+      expect(message).toContain("source `parcels` is read by view");
+      expect(message).toContain("`mlym breaks parcels.fgb --field v --method jenks --classes 5`");
+      expect(message).toContain("breaks: [10, 25, 50]");
+      expect(l.paint["fill-color"]).toEqual(["to-color", DEFAULT_NO_DATA_COLOR]);
+    });
+
+    it("a column over the scan cap keeps the refusal, naming mlym breaks and why", async () => {
+      const onRefused = vi.fn();
+      const l = computed("lots", "lots");
+      const before = JSON.stringify(l.paint["fill-color"]);
+      const runtime = new ClassifyRuntime(fakeMap(new Set(["lots"])) as never, [l], SOURCES, () => fc([1]), () => {}, {
+        readsByView: () => true,
+        wholeColumn: () => Promise.reject(new Error("`v` is 40 MB compressed, over the 32 MB read for breaks")),
+        onRefused,
+      });
+      runtime.dataLoaded("lots");
+      await vi.waitFor(() => expect(onRefused).toHaveBeenCalledTimes(1));
+      const message = (onRefused.mock.calls[0]![2] as Error).message;
+      expect(message).toContain("`v` is 40 MB compressed, over the 32 MB read for breaks");
+      expect(message).toContain("`mlym breaks lots.parquet --field v --method quantile --classes 2`");
+      expect(JSON.stringify(l.paint["fill-color"])).toBe(before);
+      runtime.dataLoaded("lots");
+      await Promise.resolve();
+      expect(onRefused).toHaveBeenCalledTimes(1);
+    });
+
+    it("a scan that fails keeps the refusal; the layer keeps drawing its no-data colour, nothing throws", async () => {
+      const onRefused = vi.fn();
+      const map = fakeMap(new Set(["lots"]));
+      const l = computed("lots", "lots");
+      const runtime = new ClassifyRuntime(map as never, [l], SOURCES, () => fc([1]), () => {}, {
+        readsByView: () => true,
+        wholeColumn: () => Promise.reject(new Error("HTTP 500: Internal Server Error for lots.parquet")),
+        onRefused,
+      });
+      expect(() => runtime.dataLoaded("lots")).not.toThrow();
+      await vi.waitFor(() => expect(onRefused).toHaveBeenCalledTimes(1));
+      expect((onRefused.mock.calls[0]![2] as Error).message).toContain("mlym breaks");
+      expect(map.setPaintProperty).not.toHaveBeenCalled();
+      expect(l.paint["fill-color"]).toEqual(["to-color", DEFAULT_NO_DATA_COLOR]);
+    });
+
+    it("a missing or text field keeps the refusal, with the field-specific message", async () => {
+      const onRefused = vi.fn();
+      const onFieldProblem = vi.fn();
+      const missing = computed("m", "lots", { field: "Floors" });
+      const text = computed("t", "lots", { field: "zone" });
+      const runtime = new ClassifyRuntime(
+        fakeMap(new Set(["m", "t"])) as never,
+        [missing, text],
+        SOURCES,
+        () => fc([1]),
+        () => {},
+        {
+          readsByView: () => true,
+          wholeColumn: async () => rows([{ floors: 1, zone: "a" }, { floors: 2, zone: "b" }]),
+          onRefused,
+          onFieldProblem,
+        }
+      );
+      runtime.dataLoaded("lots");
+      await vi.waitFor(() => expect(onFieldProblem).toHaveBeenCalledTimes(2));
+      const byLayer = Object.fromEntries(onFieldProblem.mock.calls.map(([id, m]) => [id, String(m)]));
+      expect(byLayer["m"]).toContain('classify field: "Floors" is not a property of any feature');
+      expect(byLayer["m"]).toContain('Did you mean "floors"?');
+      expect(byLayer["t"]).toContain("holds no numbers");
+      expect(onRefused).not.toHaveBeenCalled();
+      expect(classifyRecordOf(missing)!.breaks).toBeUndefined();
+      expect(classifyRecordOf(text)!.breaks).toBeUndefined();
+      runtime.dataLoaded("lots");
+      await Promise.resolve();
+      expect(onFieldProblem).toHaveBeenCalledTimes(2);
+    });
+
+    it("categorical classify on the same source is unaffected: no scan", () => {
+      const wholeColumn = vi.fn();
+      const onRefused = vi.fn();
+      const record = resolveClassify({ field: "zone", categories: ["a", "b"] } as never, "fill");
+      const l = applyClassifyToSpec({ id: "c", type: "fill", source: "lots" }, record) as never as {
+        paint: Record<string, unknown>;
+      };
+      const before = JSON.stringify(l.paint["fill-color"]);
+      const runtime = new ClassifyRuntime(fakeMap(new Set(["c"])) as never, [l as never], SOURCES, () => fc([1]), () => {}, {
+        readsByView: () => true,
+        wholeColumn,
+        onRefused,
+      });
+      runtime.dataLoaded("lots");
+      expect(wholeColumn).not.toHaveBeenCalled();
+      expect(onRefused).not.toHaveBeenCalled();
+      expect(JSON.stringify(l.paint["fill-color"])).toBe(before);
+    });
+
+    it("a reseed changing classify.field while a scan is in flight discards the stale result and scans the new field", async () => {
+      const scans: Array<{ fields: string[]; d: ReturnType<typeof deferred<unknown>> }> = [];
+      const wholeColumn = vi.fn((_id: string, fields: string[]) => {
+        const d = deferred<unknown>();
+        scans.push({ fields, d });
+        return d.promise as never;
+      });
+      const changed = vi.fn();
+      const old = computed("lots", "lots");
+      const runtime = new ClassifyRuntime(fakeMap(new Set(["lots"])) as never, [old], SOURCES, () => fc([1]), changed, {
+        readsByView: () => true,
+        wholeColumn,
+        onRefused: vi.fn(),
+      });
+      runtime.dataLoaded("lots");
+      expect(scans.map((s) => s.fields)).toEqual([["v"]]);
+      const next = computed("lots", "lots", { field: "w" });
+      runtime.reseed([next], SOURCES, ["lots"]);
+      await runtime.layersReady({ fetch: vi.fn() } as never);
+      expect(scans.map((s) => s.fields)).toEqual([["v"], ["w"]]);
+      scans[0]!.d.resolve(rows([{ v: 0 }, { v: 100 }]));
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(changed).not.toHaveBeenCalled();
+      expect(classifyRecordOf(old)!.breaks).toBeUndefined();
+      scans[1]!.d.resolve(rows([{ w: 2 }, { w: 4 }, { w: 6 }]));
+      await vi.waitFor(() => expect(changed).toHaveBeenCalledTimes(1));
+      expect(classifyRecordOf(next)!.breaks).toEqual([4]);
+      expect(classifyRecordOf(next)!.field).toBe("w");
+    });
+
+    it("a scan landing after destroy is dropped", async () => {
+      const d = deferred<unknown>();
+      const changed = vi.fn();
+      const l = computed("lots", "lots");
+      const runtime = new ClassifyRuntime(fakeMap(new Set(["lots"])) as never, [l], SOURCES, () => fc([1]), changed, {
+        readsByView: () => true,
+        wholeColumn: () => d.promise as never,
+        onRefused: vi.fn(),
+      });
+      runtime.dataLoaded("lots");
+      runtime.destroy();
+      d.resolve(fc([0, 10]));
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(changed).not.toHaveBeenCalled();
     });
   });
 });

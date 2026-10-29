@@ -1718,6 +1718,17 @@ export class LayerManager {
     return this.formatLoaders.get(sourceId)?.readsByView ?? false;
   }
 
+  /**
+   * Whole columns of a source read by view, for computed classify breaks
+   * (0.10 U3): a GeoParquet source's canonical rows, from the file its
+   * reader opened; undefined when its reader can't (FlatGeobuf) or it isn't
+   * read by view.
+   */
+  wholeColumns(sourceId: string, names: readonly string[]): Promise<FeatureCollection> | undefined {
+    const loader = this.formatLoaders.get(sourceId);
+    return loader?.readsByView ? loader.readColumns?.(names) : undefined;
+  }
+
   /** Whether a source's data comes from a cloud-native reader (no live refresh in 0.9). */
   private isFormatSource(config: GeoJSONSourceConfig): boolean {
     const format = formatOfSource(config);

@@ -2078,6 +2078,8 @@ export class MapRenderer {
       },
       {
         readsByView: (sourceId) => this.layerManager.readsByView?.(sourceId) ?? false,
+        // A GeoParquet source read by view: its breaks from the whole column (0.10 U3).
+        wholeColumn: (sourceId, fields) => this.layerManager.wholeColumns?.(sourceId, fields),
         onRefused: (layerId, sourceId, error) => {
           console.warn(`[maplibre-yaml] ${consoleText(error.message)}`);
           this.options.onError?.(error, false, { kind: 'classify', layerId, sourceId });

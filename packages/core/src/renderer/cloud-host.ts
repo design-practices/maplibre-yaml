@@ -107,6 +107,12 @@ export interface FormatLoader {
    * 8 zooms. From what the reader already holds (no request).
    */
   zoomThatFits?(center: [number, number], from: number, width: number, height: number): number | undefined;
+  /**
+   * Whole columns of the file, for computed classify breaks while reading by
+   * view (GeoParquet only: its canonical level, no geometry; 0.10 U3). Rejects
+   * over the scan cap or on a failed read.
+   */
+  readColumns?(names: readonly string[]): Promise<FeatureCollection>;
   /** Begin reading; errors go to `onError`, never rejects. */
   start(started?: Promise<FeatureCollection>): Promise<void>;
   /** Stop: no more reads, no more callbacks. */

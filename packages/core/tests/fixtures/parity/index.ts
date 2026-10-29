@@ -1270,6 +1270,26 @@ export const classifyParse = {
     classify: { field: income, method: jenks }
 `)
   ),
+  methodOverViewportParquet: cl(
+    "map",
+    "method-over-viewport-parquet",
+    CL_HEAD.replace("url: /data/tracts.geojson", "url: /data/tracts.parquet\n    load: viewport") +
+      `  - id: v
+    type: fill
+    source: tracts
+    classify: { field: income, method: quantile, classes: 4 }
+`
+  ),
+  methodOverViewportParquetFormat: cl(
+    "map",
+    "method-over-viewport-parquet-format",
+    CL_HEAD.replace("url: /data/tracts.geojson", "url: /data/tracts\n    format: geoparquet\n    load: { mode: viewport }") +
+      `  - id: v
+    type: fill
+    source: tracts
+    classify: { field: income, method: jenks, normalize: area }
+`
+  ),
   breaksOverViewport: cl(
     "map",
     "breaks-over-viewport",

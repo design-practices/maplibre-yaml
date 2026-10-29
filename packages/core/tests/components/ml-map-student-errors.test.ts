@@ -153,13 +153,14 @@ describe("<ml-map> on-page errors", () => {
     it("classified breaks that can't be computed (a source read by view) show one notice", async () => {
       const el = await mount();
       const { byViewClassifyError } = await import("../../src/renderer/classify-runtime");
-      latest().options.onError(byViewClassifyError("income", "parcels"), false, {
+      latest().options.onError(byViewClassifyError("income", "parcels", "`mlym breaks parcels.fgb --field income --method jenks`"), false, {
         kind: "classify",
         layerId: "income",
         sourceId: "parcels",
       });
       expect(noticeText(el)).toContain("can't compute its classes");
       expect(noticeText(el)).toContain("breaks:");
+      expect(noticeText(el)).toContain("mlym breaks parcels.fgb --field income --method jenks");
     });
 
     it("a classified field the data has no value for is an author hint on the page (ml-aot.95)", async () => {

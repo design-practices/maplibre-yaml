@@ -13,12 +13,15 @@
  *   (one owner per property: classify, or a raw expression — never both);
  * - `radius:` only on circle layers;
  * - `noData: hide` / `other: hide` combine with an *expression* filter;
- * - `method:` only over a GeoJSON source read whole — a vector tile source,
- *   or a FlatGeobuf or GeoParquet source read by view (`load: viewport` in
- *   any spelling), never gives the browser the whole dataset, so computed
- *   breaks would describe only the part in view. (A file too large to read
- *   whole switches to the by-view read at runtime; the classify runtime
- *   refuses computed breaks there — see renderer/classify-runtime.)
+ * - `method:` only over a GeoJSON source read whole, or a GeoParquet one — a
+ *   vector tile source, or a FlatGeobuf source read by view (`load: viewport`
+ *   in any spelling), never gives the browser the whole dataset, so computed
+ *   breaks would describe only the part in view; the refusal names
+ *   `mlym breaks`, which computes them over the file. A GeoParquet source
+ *   read by view is the runtime's to decide: it computes from one whole
+ *   column, or refuses (renderer/classify-runtime; 0.10 U3). (A file too
+ *   large to read whole switches to the by-view read at runtime, and is
+ *   judged there the same way.)
  *
  * The walk is shape-agnostic (v1 and v2 map blocks, stories, multi-page
  * documents): any object under a `layers` key that carries `classify` is a
@@ -29,7 +32,8 @@
 import type { Document, LineCounter } from "yaml";
 import { positionForKey, positionForPath, type ValidationWarning } from "../parser/validation-utils";
 import { suggest } from "../utils/suggest";
-import { loadModeOf } from "../formats/detect";
+import { formatOfSource, loadModeOf } from "../formats/detect";
+import { breaksCommand } from "../components/student-messages";
 import { CLASSIFY_COLOR_PROPERTIES, defaultClassifyProperty } from "./compile";
 
 /** A classify check failure (the parser's ParseError shape). */
@@ -264,8 +268,8 @@ function checkLayer(
     const source = resolveSource(layer["source"], sources, ctx.rootSources);
     const mpath = [...cpath, "method"];
     const fix =
-      " Write the class thresholds yourself with breaks: (for example computed in QGIS over the " +
-      "full dataset): breaks: [10, 25, 50].";
+      ` Compute them over the file the data comes from with ${breaksCommand(undefined, classify)} and ` +
+      "paste the breaks: line it prints, or write the class thresholds yourself: breaks: [10, 25, 50].";
     if (source.kind === "other") {
       push(
         ctx,
@@ -286,7 +290,7 @@ function checkLayer(
           fix,
         atKey(ctx, cpath, "method")
       );
-    } else if (loadModeOf(source.spec).mode === "viewport") {
+    } else if (loadModeOf(source.spec).mode === "viewport" && formatOfSource(source.spec) !== "geoparquet") {
       // Every spelling of the by-view read: `load: viewport`, the object
       // form `{ mode: viewport }`, v2's `runtime.load`, an inline source.
       push(
@@ -294,7 +298,8 @@ function checkLayer(
         mpath,
         `method: computes breaks from the whole dataset, and ${name}'s source loads only the ` +
           "features in view (load: viewport), so breaks computed there would describe part of " +
-          "the data and change as you pan. Use load: all, or write breaks: yourself.",
+          `the data and change as you pan. Compute them over the whole file with ${breaksCommand(source.spec["url"], classify)} ` +
+          "and paste the breaks: line it prints; or use load: all; or write breaks: yourself.",
         atKey(ctx, cpath, "method")
       );
     }
