@@ -1658,8 +1658,18 @@ export class LayerManager {
         this.failed.add(sourceId);
         this.callbacks.onDataError?.(layerId, error);
       },
-      onHint: (message) => this.callbacks.onSourceHint?.(sourceId, message),
+      // A `once` hint is shown once per source, across the readers a live update recreates (KTD14).
+      onHint: (message, once) => {
+        const key = `\0${sourceId}\0${once}`;
+        if (once && this.hintedAnchors.has(key)) return;
+        if (once) this.hintedAnchors.add(key);
+        this.callbacks.onSourceHint?.(sourceId, message);
+      },
       onTooDense: (dense) => this.callbacks.onViewTooDense?.(sourceId, dense),
+      // Another overview level: its feature ids are another level's (U2, KTD5).
+      onLevelChange: () => {
+        if (this.isCurrent(sourceId, generation)) this.map.removeFeatureState?.({ source: sourceId });
+      },
     };
   }
 

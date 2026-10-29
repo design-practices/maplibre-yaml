@@ -68,7 +68,7 @@ import type { WholeFileTooLarge } from "../../renderer/cloud-sources";
 import { isLonLatCrs } from "../crs";
 import { VIEWPORT_DEFAULT_MAX_FEATURES } from "../detect";
 import { TAIL_BYTES } from "../geoparquet";
-import { roundedRaise } from "../large-data";
+import { roundedRaise, SAFE_VIEW_FEATURES } from "../large-data";
 import {
   costLimits,
   host,
@@ -1327,6 +1327,11 @@ export class GeoParquetLoader extends ViewLoader<StartedTail> {
   }
 
   private overviewsNoted = false;
+  /**
+   * The overview level the last read by view delivered (its index;
+   * undefined for a file read without levels), or null before the first.
+   */
+  private level: number | undefined | null = null;
 
   /**
    * An overview file whose `geo:overviews` major version this version
@@ -1339,7 +1344,44 @@ export class GeoParquetLoader extends ViewLoader<StartedTail> {
     this.hint(
       `\`${this.url}\` has overviews in a newer format (geo:overviews ${overviews.version || "?"}) than this ` +
         `version of maplibre-yaml reads: ${overviews.canonical ? "drawing its full-detail level only" : "reading every row"}. ` +
-        "Update maplibre-yaml, or write the file without overviews."
+        "Update maplibre-yaml, or write the file without overviews.",
+      "overviews"
+    );
+  }
+
+  /**
+   * The rows a read by view at map zoom `zoom` takes: the overview level for
+   * it (`load.overviews`, a known major version; {@link overviewBand}), else
+   * undefined — the canonical level, or every row.
+   */
+  private bandAt(zoom: number): OverviewBand | undefined {
+    return this.load.overviews ? overviewBand(this.opened?.info.overviews, zoom) : undefined;
+  }
+
+  /** Whether reads by view choose an overview level by zoom (every level has one). */
+  private get levels(): boolean {
+    const band = this.bandAt(0);
+    return band !== undefined && !band.fallback;
+  }
+
+  /**
+   * An overview file read by level with no author `minzoom`: 0, so its
+   * coarsest level serves the widest views (KTD4); an author `minzoom` wins.
+   */
+  get minzoom(): number {
+    return this.load.authorMinzoom === undefined && this.levels ? 0 : this.load.minzoom;
+  }
+
+  /** A level without a zoom (neither `zoom` nor `gsd`): the levels can't be chosen; the author told once. */
+  private noteNoZoom(): void {
+    const overviews = this.opened?.info.overviews;
+    if (!overviews || this.bandAt(0)?.fallback !== "no-zoom") return;
+    const missing = overviews.levels.findIndex((level) => levelZoom(level) === undefined);
+    this.hint(
+      `\`${this.url}\` has overviews, but its level ${missing} declares neither \`zoom\` nor \`gsd\`, so the ` +
+        `level for a zoom can't be chosen: drawing it at full detail only, from zoom ${this.minzoom}. Rebuild the ` +
+        "overviews with a zoom on every level (tylertoo writes one), or add `overviews: false` under `load:` to say so.",
+      "no-zoom"
     );
   }
 
@@ -1426,12 +1468,55 @@ export class GeoParquetLoader extends ViewLoader<StartedTail> {
     }
     if (this.destroyed) return;
     if (auto) this.autoNote(tooLarge);
+    this.noteNoZoom();
     await this.follow();
   }
 
-  /** The row groups in view, each counting its rows by the share of it in view. */
-  protected estimate(view: BBox): number {
-    return this.opened ? rowsInView(this.opened, view) : 0;
+  /**
+   * The row groups in view (of the level for `zoom`, on an overview file),
+   * each counting its rows by the share of it in view.
+   */
+  protected estimate(view: BBox, zoom: number): number {
+    return this.opened ? rowsInView(this.opened, view, this.bandAt(zoom)) : 0;
+  }
+
+  /**
+   * An overview file whose level for this zoom is still over `maxFeatures`
+   * (KTD6): no coarser level is drawn instead, so the hint says what the
+   * coarsest one holds here and how to rebuild the file.
+   */
+  protected denseHint(view: BBox, estimate: number, zoom: number): string | undefined {
+    const band = this.bandAt(zoom);
+    const overviews = this.opened?.info.overviews;
+    if (!band || band.fallback || !overviews) return undefined;
+    const n = host().messages.formatCount;
+    const zoomOf = (index: number) => Math.round(levelZoom(overviews.levels[index]!)!);
+    const coarsest = overviewBand(overviews, 0)!;
+    const lowest = zoomOf(coarsest.level);
+    // A map below every level: levels from its zoom too.
+    const from = Math.max(0, Math.min(Math.floor(zoom), lowest));
+    const to = zoomOf(overviews.canonicalLevel ?? overviews.levels.length - 1);
+    const stem = host().messages.commandStem(this.url, "parquet");
+    const raise = roundedRaise(estimate);
+    return (
+      `\`${this.url}\` is an overview file, and its zoom-${zoomOf(band.level)} level` +
+      (band.level === coarsest.level ? ", its coarsest," : "") +
+      ` still has about ${n(estimate)} features in view, more than one read takes ` +
+      `(\`maxFeatures\`: ${n(this.load.maxFeatures)}), so nothing of it is drawn until the map is zoomed in` +
+      (band.level === coarsest.level
+        ? ". "
+        : `; a coarser level isn't drawn instead (its coarsest, zoom ${lowest}, has about ${n(Math.round(rowsInView(this.opened!, view, coarsest)))} here). `) +
+      "To draw this view, rebuild the overviews from the data they were made from (`source.parquet` here) with fewer " +
+      "features per level — a higher `drop_rate` (tylertoo's default is 1.65)" +
+      (from < lowest ? `, and levels from zoom ${from}` : "") +
+      `: \`uv run --with tylertoo==0.8.0 python -c "import tylertoo as t; t.overview('source.parquet', ` +
+      `'${stem}.parquet', min_zoom=${from}, max_zoom=${to}, drop_rate=2.5)"\`. ` +
+      (raise <= SAFE_VIEW_FEATURES
+        ? `Or raise \`maxFeatures\` to ${raise} under \`load:\` (${host().messages.raiseCost(raise, true)}). `
+        : "") +
+      `To draw it at every zoom, convert it to PMTiles: ${host().messages.pmtilesCommand(this.url, "geoparquet")}. ` +
+      host().messages.largeDataLinks("geoparquet")
+    );
   }
 
   /**
@@ -1439,9 +1524,9 @@ export class GeoParquetLoader extends ViewLoader<StartedTail> {
    * {@link VIEW_DECODE_FACTOR} × `maxFeatures`: each is decoded whole, so
    * large row groups cost far more than the features in view.
    */
-  protected decodeTooCostly(view: BBox, estimate: number): string | undefined {
+  protected decodeTooCostly(view: BBox, estimate: number, zoom: number): string | undefined {
     if (!this.opened) return undefined;
-    const touched = rowGroupsInView(this.opened, view);
+    const touched = rowGroupsInView(this.opened, view, this.bandAt(zoom));
     const budget = Math.round(this.load.maxFeatures * VIEW_DECODE_FACTOR);
     if (touched.rows <= budget) return undefined;
     const n = host().messages.formatCount;
@@ -1473,7 +1558,18 @@ export class GeoParquetLoader extends ViewLoader<StartedTail> {
     );
   }
 
-  protected readView(view: BBox, isCurrent: () => boolean): Promise<FeatureCollection | null> {
-    return readBbox(this.opened!, view, { columns: this.columns, isCurrent });
+  /**
+   * Read the rows in view of the level for `zoom`. Moving to another level
+   * than the last read's tells the host first (`onLevelChange`: feature ids
+   * are unique only within a level); a read superseded meanwhile — the map
+   * zoomed on across another boundary — never lands.
+   */
+  protected async readView(view: BBox, isCurrent: () => boolean, zoom: number): Promise<FeatureCollection | null> {
+    const band = this.bandAt(zoom);
+    const data = await readBbox(this.opened!, view, { columns: this.columns, isCurrent, ...(band ? { band } : {}) });
+    if (!data || !isCurrent()) return null;
+    if (this.level !== null && band?.level !== this.level) this.callbacks.onLevelChange?.();
+    this.level = band?.level;
+    return data;
   }
 }

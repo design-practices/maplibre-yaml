@@ -116,6 +116,128 @@ test("an overview GeoParquet (geo:overviews) draws each feature once, from its f
   expect(errors).toEqual([]);
 });
 
+/** The overview levels (the `level` column) and lots a map's `lots` source holds now. */
+function levelsOf(page: Page, mapId: string) {
+  return page.evaluate((mapId) => {
+    const map = (document.getElementById(mapId) as any).getMap();
+    const features = (map.getSource("lots") as any)?._data?.features ?? map.querySourceFeatures("lots");
+    return {
+      n: features.length as number,
+      levels: [...new Set(features.map((f: any) => f.properties.level))].sort() as number[],
+    };
+  }, mapId);
+}
+
+/**
+ * A drawn lot near a map's centre: the page point at the middle of its box
+ * (relative to the canvas), its id and level.
+ */
+function lotNearCentre(page: Page, mapId: string) {
+  return page.evaluate((mapId) => {
+    const map = (document.getElementById(mapId) as any).getMap();
+    const c = map.project(map.getCenter());
+    let best: { x: number; y: number; id: unknown; level: unknown; d: number } | null = null;
+    for (const f of map.queryRenderedFeatures({ layers: ["lots"] })) {
+      const ring = f.geometry.coordinates[0] as [number, number][];
+      const xs = ring.map((p) => p[0]);
+      const ys = ring.map((p) => p[1]);
+      const p = map.project([(Math.min(...xs) + Math.max(...xs)) / 2, (Math.min(...ys) + Math.max(...ys)) / 2]);
+      const d = Math.hypot(p.x - c.x, p.y - c.y);
+      if (!best || d < best.d) best = { x: p.x, y: p.y, id: f.id, level: f.properties.level, d };
+    }
+    return best;
+  }, mapId);
+}
+
+/** The lot drawn at a canvas point and its hover feature-state. */
+function hoverAt(page: Page, mapId: string, point: { x: number; y: number }) {
+  return page.evaluate(
+    ({ mapId, point }) => {
+      const map = (document.getElementById(mapId) as any).getMap();
+      const f = map.queryRenderedFeatures([point.x, point.y], { layers: ["lots"] })[0];
+      if (!f) return { id: null, level: null, hover: null };
+      return { id: f.id ?? null, level: f.properties.level, hover: map.getFeatureState({ source: "lots", id: f.id }).hover ?? null };
+    },
+    { mapId, point }
+  );
+}
+
+test("an overview GeoParquet read by view draws the level for the zoom: 10, 12, then the full detail at 14 (0.10 U2, AE1)", async ({
+  page,
+}) => {
+  const errors = await guard(page);
+  await OPEN(page, "levels");
+  const jump = (zoom: number) =>
+    page.evaluate((zoom) => (document.getElementById("levels") as any).getMap().jumpTo({ zoom }), zoom);
+  // Level index 0 is zoom 10's, 2 zoom 12's, 4 the full-detail (canonical) one at zoom 14.
+  await expect.poll(async () => (await levelsOf(page, "levels")).levels, { timeout: 30_000 }).toEqual([0]);
+  await jump(12.6);
+  await expect.poll(async () => (await levelsOf(page, "levels")).levels, { timeout: 30_000 }).toEqual([2]);
+  await jump(14);
+  await expect.poll(async () => (await levelsOf(page, "levels")).levels, { timeout: 30_000 }).toEqual([4]);
+  expect((await levelsOf(page, "levels")).n).toBeGreaterThan(100);
+  await expect(page.locator("#levels .ml-map-zoom-in")).toHaveCount(0);
+  await page.locator("#levels").screenshot({ path: "e2e/results/large-data-levels.png" });
+  expect(errors).toEqual([]);
+});
+
+test("overviews: false reads only the full-detail level: over budget at zoom 10, the reader is asked to zoom in (AE2)", async ({
+  page,
+}) => {
+  const errors = await guard(page);
+  await OPEN(page, "levels-off");
+  const line = page.locator("#levels-off .ml-map-zoom-in");
+  await expect(line).toBeVisible({ timeout: 30_000 });
+  expect(await count(page, "levels-off", "lots")).toBe(0);
+  await page.evaluate(() => (document.getElementById("levels-off") as any).getMap().jumpTo({ zoom: 15 }));
+  await expect.poll(async () => (await levelsOf(page, "levels-off")).levels, { timeout: 30_000 }).toEqual([4]);
+  await expect(line).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
+test("hover with promoteId lights a lot at a coarse level and again after a level switch, which is no document update (AE8)", async ({
+  page,
+}) => {
+  const errors = await guard(page);
+  await OPEN(page, "levels");
+  await page.evaluate(() => {
+    const el = document.getElementById("levels")!;
+    (window as any).__updates = 0;
+    el.addEventListener("ml-map:update-applied", () => ((window as any).__updates += 1));
+  });
+  const map = page.locator("#levels");
+  await map.scrollIntoViewIfNeeded();
+  const jump = (zoom: number) =>
+    page.evaluate((zoom) => (document.getElementById("levels") as any).getMap().jumpTo({ zoom }), zoom);
+  await jump(12.2);
+  await expect.poll(async () => (await levelsOf(page, "levels")).levels, { timeout: 30_000 }).toEqual([2]);
+  const box = (await page.locator("#levels canvas.maplibregl-canvas").boundingBox())!;
+  /** Hover the drawn lot nearest the centre; returns where it is. */
+  const hoverLot = async (level: number) => {
+    await expect.poll(async () => (await lotNearCentre(page, "levels"))?.level, { timeout: 10_000 }).toBe(level);
+    const lot = (await lotNearCentre(page, "levels"))!;
+    await page.mouse.move(box.x + lot.x - 2, box.y + lot.y);
+    await page.mouse.move(box.x + lot.x, box.y + lot.y);
+    await expect.poll(() => hoverAt(page, "levels", lot), { timeout: 10_000 }).toMatchObject({ level, hover: true });
+    return lot;
+  };
+  const coarse = await hoverLot(2);
+  expect(coarse.id).not.toBeNull();
+
+  // Zoom in past the zoom-14 boundary with the pointer still: the full-detail level, the old lit state gone.
+  await jump(14.3);
+  await expect.poll(async () => (await levelsOf(page, "levels")).levels, { timeout: 30_000 }).toEqual([4]);
+  const stale = await page.evaluate(
+    (id) => (document.getElementById("levels") as any).getMap().getFeatureState({ source: "lots", id }).hover ?? null,
+    coarse.id
+  );
+  expect(stale).not.toBe(true);
+  await hoverLot(4);
+  await map.screenshot({ path: "e2e/results/large-data-levels-hover.png" });
+  expect(await page.evaluate(() => (window as any).__updates)).toBe(0);
+  expect(errors).toEqual([]);
+});
+
 test("the zoom-in line: hidden by quiet whenever it is set, gone with its source's last layer (ml-cnv.32)", async ({
   page,
 }) => {

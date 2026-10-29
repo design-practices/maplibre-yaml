@@ -207,7 +207,11 @@ export abstract class ViewLoader<Opening extends { abort: AbortController } = { 
     return this.viewport;
   }
 
-  /** The zoom below which a by-view read reads nothing. */
+  /**
+   * The zoom below which a by-view read reads nothing: `load.minzoom` (a
+   * GeoParquet overview file without an author `minzoom`: 0, its coarsest
+   * level serving wide views).
+   */
   get minzoom(): number {
     return this.load.minzoom;
   }
@@ -225,11 +229,11 @@ export abstract class ViewLoader<Opening extends { abort: AbortController } = { 
    * so the map opens showing features rather than the zoom-in line.
    */
   zoomThatFits(center: [number, number], from: number, width: number, height: number): number | undefined {
-    const start = Math.max(from, this.load.minzoom);
+    const start = Math.max(from, this.minzoom);
     for (let zoom = start; zoom <= Math.min(start + 8, 22); zoom += 0.25) {
       const view = viewAround(center, zoom, width, height);
-      const estimate = Math.round(this.estimate(view));
-      if (estimate <= this.load.maxFeatures && this.decodeTooCostly(view, estimate) === undefined) return zoom;
+      const estimate = Math.round(this.estimate(view, zoom));
+      if (estimate <= this.load.maxFeatures && this.decodeTooCostly(view, estimate, zoom) === undefined) return zoom;
     }
     return undefined;
   }
@@ -317,20 +321,32 @@ export abstract class ViewLoader<Opening extends { abort: AbortController } = { 
    */
   protected abstract startViewport(auto: boolean, tooLarge?: WholeFileTooLarge): Promise<void>;
 
-  /** About how many features `view` holds, from what the reader already has (no request). */
-  protected abstract estimate(view: BBox): number;
+  /**
+   * About how many features `view` at map zoom `zoom` holds, from what the
+   * reader already has (no request). `zoom` chooses a GeoParquet overview
+   * file's level.
+   */
+  protected abstract estimate(view: BBox, zoom: number): number;
 
   /**
    * An author hint when reading `view` would decode far more than the
    * features in it (GeoParquet's whole row groups), else undefined: the view
    * is then not read either.
    */
-  protected decodeTooCostly(_view: BBox, _estimate: number): string | undefined {
+  protected decodeTooCostly(_view: BBox, _estimate: number, _zoom: number): string | undefined {
     return undefined;
   }
 
-  /** Read the features in `view` (`null` when superseded). */
-  protected abstract readView(view: BBox, isCurrent: () => boolean): Promise<FeatureCollection | null>;
+  /**
+   * The author hint for a view over `maxFeatures`, when the reader words its
+   * own (a GeoParquet overview level too dense), else undefined.
+   */
+  protected denseHint(_view: BBox, _estimate: number, _zoom: number): string | undefined {
+    return undefined;
+  }
+
+  /** Read the features in `view` at map zoom `zoom` (`null` when superseded). */
+  protected abstract readView(view: BBox, isCurrent: () => boolean, zoom: number): Promise<FeatureCollection | null>;
 
   protected fail(error: unknown): void {
     if (this.destroyed || isAbortError(error)) return;
@@ -341,8 +357,12 @@ export abstract class ViewLoader<Opening extends { abort: AbortController } = { 
     if (data && !this.destroyed) this.callbacks.onData(data);
   }
 
-  protected hint(message: string): void {
-    if (this.callbacks.onHint) this.callbacks.onHint(message);
+  /**
+   * An author hint. `once`: the host shows it once for the source, across
+   * the loaders a live update recreates (see {@link FlatGeobufCallbacks.onHint}).
+   */
+  protected hint(message: string, once?: string): void {
+    if (this.callbacks.onHint) this.callbacks.onHint(message, once);
     else console.warn(`[maplibre-yaml] ${host().consoleText(message)}`);
   }
 
@@ -358,7 +378,7 @@ export abstract class ViewLoader<Opening extends { abort: AbortController } = { 
       ...tooLarge?.cost,
     });
     this.hint(
-      `\`${this.url}\` ${cause.text}, so only the part in view is read, from zoom ${this.load.minzoom}. ` +
+      `\`${this.url}\` ${cause.text}, so only the part in view is read, from zoom ${this.minzoom}. ` +
         "Add `load: viewport` to the source to say so (this note then goes). " +
         (cause.raise !== undefined
           ? `To load it whole anyway, raise \`load: { maxFeatures: ${cause.raise} }\` (${host().messages.raiseCost(cause.raise, false)}). `
@@ -381,23 +401,28 @@ export abstract class ViewLoader<Opening extends { abort: AbortController } = { 
     await this.refresh();
   }
 
-  /** Read the current view — or nothing below `minzoom`, or for a view too dense to read. */
+  /**
+   * Read the current view — or nothing below `minzoom`, or for a view too
+   * dense to read. The zoom is read once: it chooses an overview file's level
+   * for the estimate, the decode budget and the read alike.
+   */
   private async refresh(): Promise<void> {
     if (this.destroyed) return;
     const generation = ++this.generation;
-    if (this.map.getZoom() < this.load.minzoom) {
+    const zoom = this.map.getZoom();
+    if (zoom < this.minzoom) {
       // Once per stretch below minzoom, not on every pan.
       if (this.skip("minzoom")) {
         // Lowering minzoom helps only when this view would then be read
         // (ml-cnv.35): further out, a citywide file's view is over budget.
         const view = viewBBox(this.map);
-        const estimate = Math.round(this.estimate(view));
-        const lower = Math.floor(this.map.getZoom());
-        const helps = estimate <= this.load.maxFeatures && this.decodeTooCostly(view, estimate) === undefined;
+        const estimate = Math.round(this.estimate(view, zoom));
+        const lower = Math.floor(zoom);
+        const helps = estimate <= this.load.maxFeatures && this.decodeTooCostly(view, estimate, zoom) === undefined;
         console.info(
           "[maplibre-yaml] " +
             host().consoleText(
-            `${this.url} is read by view from zoom ${this.load.minzoom}, so nothing of it is drawn further ` +
+            `${this.url} is read by view from zoom ${this.minzoom}, so nothing of it is drawn further ` +
               "out and the reader is asked to zoom in. " +
               (helps
                 ? `To read it from here, lower \`minzoom\` to ${lower} under \`load:\`; to draw it at every zoom, convert it to PMTiles. `
@@ -409,7 +434,7 @@ export abstract class ViewLoader<Opening extends { abort: AbortController } = { 
       return;
     }
     const view = viewBBox(this.map);
-    const estimate = Math.round(this.estimate(view));
+    const estimate = Math.round(this.estimate(view, zoom));
     const max = this.load.maxFeatures;
     if (estimate > max) {
       // Reading it would decode (and draw) more than a tab can take: the
@@ -417,10 +442,12 @@ export abstract class ViewLoader<Opening extends { abort: AbortController } = { 
       this.skip("dense");
       if (!this.hintedDense) {
         this.hintedDense = true;
+        const own = this.denseHint(view, estimate, zoom);
         // A raise only while the view stays usable (formats/large-data):
         // 800,000 parcels by view ran at 6 fps on 5.1 GB.
         const raise = roundedRaise(estimate);
-        this.hint(
+        if (own !== undefined) this.hint(own, "dense-level");
+        else this.hint(
           `\`${this.url}\` has about ${host().messages.formatCount(estimate)} features in view, more than one read ` +
             `takes (\`maxFeatures\`: ${host().messages.formatCount(max)}), so nothing of it is drawn until the map is ` +
             "zoomed in. " +
@@ -433,7 +460,7 @@ export abstract class ViewLoader<Opening extends { abort: AbortController } = { 
       }
       return;
     }
-    const costly = this.decodeTooCostly(view, estimate);
+    const costly = this.decodeTooCostly(view, estimate, zoom);
     if (costly !== undefined) {
       this.skip("dense");
       if (!this.hintedDecode) {
@@ -442,7 +469,7 @@ export abstract class ViewLoader<Opening extends { abort: AbortController } = { 
       }
       return;
     }
-    const data = await this.readView(view, () => generation === this.generation && !this.destroyed);
+    const data = await this.readView(view, () => generation === this.generation && !this.destroyed, zoom);
     if (data) this.skip(undefined);
     this.deliver(data);
   }

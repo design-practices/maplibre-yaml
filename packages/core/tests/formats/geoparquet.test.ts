@@ -1267,6 +1267,409 @@ describe("geo:overviews levels: the band for a zoom (ml-cnv.22, 0.10 U1)", () =>
   });
 });
 
+describe("geo:overviews by view: the level for the zoom (ml-cnv.22, 0.10 U2)", () => {
+  // lots-overviews.parquet: levels at zooms 10–13 (256, 256, 256, 364 rows)
+  // and the canonical level at zoom 14 (600 lots); the `level` column is
+  // each row's level index (0–4).
+  const AREA: [number, number, number, number] = [10.0, 42.0, 10.4, 42.3];
+  const FILE = "/lots-overviews.parquet";
+  afterEach(() => overrides.clear());
+
+  /**
+   * Park every byte read of the loader's open file while `hold()` is in
+   * force. (The fixture is smaller than the footer read, so it is in memory
+   * after `open` and reads by view fetch nothing: the gate is on the file.)
+   */
+  function gateFile(instance: GeoParquetLoader) {
+    const file = (instance as unknown as { opened: { file: { slice: (s: number, e?: number) => unknown } } }).opened.file;
+    const slice = file.slice.bind(file);
+    const parked: (() => void)[] = [];
+    let holding = false;
+    file.slice = (start: number, end?: number) =>
+      holding ? new Promise((go) => parked.push(() => go(slice(start, end)))) : slice(start, end);
+    return {
+      parked: () => parked.length,
+      hold: () => {
+        holding = true;
+      },
+      release: () => {
+        holding = false;
+        parked.splice(0).forEach((go) => go());
+      },
+    };
+  }
+
+  function loader(map: ReturnType<typeof fakeMap>, load: ReturnType<typeof loadModeOf>, limits?: { warn: number; max: number; maxFeatures?: number }) {
+    const onData = vi.fn();
+    const onHint = vi.fn();
+    const onTooDense = vi.fn();
+    const onLevelChange = vi.fn();
+    const onError = vi.fn();
+    const instance = new GeoParquetLoader(
+      map as never,
+      FILE,
+      load,
+      ["lot", "level"],
+      { onData, onError, onHint, onTooDense, onLevelChange } as never,
+      limits
+    );
+    return { loader: instance, onData, onHint, onTooDense, onLevelChange, onError };
+  }
+
+  /** The `level` values of the last delivery, and how many features it had. */
+  const last = (onData: ReturnType<typeof vi.fn>) => {
+    const fc = onData.mock.calls.at(-1)![0] as FeatureCollectionLike;
+    return { n: fc.features.length, levels: [...new Set(fc.features.map((f) => f.properties!["level"]))] };
+  };
+  type FeatureCollectionLike = { features: { properties: Record<string, unknown> | null }[] };
+
+  it("a switch while a read is in flight: the stale band's read never lands, only the final band's does", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      vi.stubGlobal("fetch", fixtureFetch());
+      const map = fakeMap(14, AREA);
+      const { loader: l, onData, onLevelChange } = loader(map, loadModeOf({ load: "viewport" }));
+      await l.start();
+      const gate = gateFile(l);
+      expect(last(onData)).toEqual({ n: 600, levels: [4] });
+      const delivered = onData.mock.calls.length;
+
+      // Zoom out to 12: its read starts and is held mid-flight.
+      gate.hold();
+      map.zoom = 12;
+      map.moveend();
+      await vi.advanceTimersByTimeAsync(300);
+      await vi.waitFor(() => expect(gate.parked()).toBeGreaterThan(0));
+      // Zoom out again, to 10, before the zoom-12 read lands.
+      map.zoom = 10;
+      map.moveend();
+      await vi.advanceTimersByTimeAsync(300);
+      gate.release();
+      await vi.waitFor(() => expect(onData.mock.calls.length).toBe(delivered + 1));
+      await vi.advanceTimersByTimeAsync(300);
+      // One delivery after the start: the zoom-10 level's, never the zoom-12 one's.
+      expect(onData.mock.calls.length).toBe(delivered + 1);
+      expect(last(onData)).toEqual({ n: 256, levels: [0] });
+      expect(onLevelChange).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("two level boundaries crossed within the debounce: one read, of the final band", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      vi.stubGlobal("fetch", fixtureFetch());
+      const map = fakeMap(14, AREA);
+      const { loader: l, onData, onLevelChange } = loader(map, loadModeOf({ load: "viewport" }));
+      await l.start();
+      const delivered = onData.mock.calls.length;
+      map.zoom = 13;
+      map.moveend();
+      await vi.advanceTimersByTimeAsync(100);
+      map.zoom = 12.5;
+      map.moveend();
+      await vi.advanceTimersByTimeAsync(300);
+      await vi.waitFor(() => expect(onData.mock.calls.length).toBe(delivered + 1));
+      expect(last(onData)).toEqual({ n: 256, levels: [2] });
+      expect(onLevelChange).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("AE1: zoom 10 reads only the zoom-10 level, 12 only zoom 12's, 14 the 600 canonical lots", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      vi.stubGlobal("fetch", fixtureFetch());
+      const map = fakeMap(10, AREA);
+      const { loader: l, onData, onLevelChange, onHint } = loader(map, loadModeOf({ load: "viewport" }));
+      await l.start();
+      expect(last(onData)).toEqual({ n: 256, levels: [0] });
+      expect(onLevelChange).not.toHaveBeenCalled();
+      for (const [zoom, n, level, switches] of [
+        [12, 256, 2, 1],
+        [12.7, 256, 2, 1],
+        [14, 600, 4, 2],
+        [16, 600, 4, 2],
+        [11.4, 256, 1, 3],
+      ] as const) {
+        map.zoom = zoom;
+        map.moveend();
+        await vi.advanceTimersByTimeAsync(300);
+        await vi.waitFor(() => expect(last(onData)).toEqual({ n, levels: [level] }));
+        expect(onLevelChange).toHaveBeenCalledTimes(switches);
+      }
+      expect(onHint).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("AE2: overviews: false at zoom 10 reads the canonical rows, and the zoom-in line shows when over budget", async () => {
+    vi.stubGlobal("fetch", fixtureFetch());
+    const open = loader(fakeMap(10, AREA), loadModeOf({ load: { mode: "viewport", overviews: false } }));
+    await open.loader.start();
+    expect(last(open.onData)).toEqual({ n: 600, levels: [4] });
+    expect(open.loader.minzoom).toBe(10);
+
+    const log: Log = [];
+    vi.stubGlobal("fetch", fixtureFetch(log));
+    const dense = loader(fakeMap(10, AREA), loadModeOf({ load: { mode: "viewport", overviews: false, maxFeatures: 300 } }));
+    await dense.loader.start();
+    expect(last(dense.onData).n).toBe(0);
+    expect(dense.onTooDense).toHaveBeenLastCalledWith(true);
+    expect(dense.onHint).toHaveBeenCalledTimes(1);
+    expect(dense.onHint.mock.calls[0]![0]).toContain("has about 600 features in view, more than one read takes");
+    expect(log).toHaveLength(1); // the footer only
+  });
+
+  it("AE3: a level over maxFeatures shows the zoom-in line and one too-dense-level hint; no coarser level is read", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      const log: Log = [];
+      vi.stubGlobal("fetch", fixtureFetch(log));
+      const map = fakeMap(13, AREA);
+      const { loader: l, onData, onHint, onTooDense } = loader(map, loadModeOf({ load: { mode: "viewport", maxFeatures: 300 } }));
+      await l.start();
+      // Zoom 13's level holds 364 in view: over 300, and the zoom-12 level's 256 is not read instead.
+      expect(last(onData).n).toBe(0);
+      expect(onTooDense).toHaveBeenLastCalledWith(true);
+      expect(log).toHaveLength(1);
+      expect(onHint).toHaveBeenCalledTimes(1);
+      const [hint, once] = onHint.mock.calls[0]! as [string, string | undefined];
+      expect(hint).toContain("`/lots-overviews.parquet` is an overview file");
+      expect(hint).toContain("its zoom-13 level still has about 364 features in view");
+      expect(hint).toContain("(`maxFeatures`: 300)");
+      expect(hint).toContain("a coarser level isn't drawn instead (its coarsest, zoom 10, has about 256 here)");
+      expect(hint).toContain("t.overview('source.parquet', 'lots-overviews.parquet', min_zoom=10, max_zoom=14, drop_rate=2.5)");
+      // Not the plain dense-view hint (which starts "`…` has about").
+      expect(hint).not.toMatch(/^`\/lots-overviews\.parquet` has about/);
+      expect(once).toBeTruthy();
+      // Out to zoom 12: its level fits, and is read; back in to 13, dense again, no second hint.
+      map.zoom = 12;
+      map.moveend();
+      await vi.advanceTimersByTimeAsync(300);
+      await vi.waitFor(() => expect(last(onData)).toEqual({ n: 256, levels: [2] }));
+      expect(onTooDense).toHaveBeenLastCalledWith(false);
+      map.zoom = 13.5;
+      map.moveend();
+      await vi.advanceTimersByTimeAsync(300);
+      await vi.waitFor(() => expect(onTooDense).toHaveBeenLastCalledWith(true));
+      expect(onHint).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("AE3, below every level: the coarsest level too dense — the hint offers levels from the map's zoom", async () => {
+    vi.stubGlobal("fetch", fixtureFetch());
+    const { loader: l, onData, onHint, onTooDense } = loader(fakeMap(5.5, AREA), loadModeOf({ load: { mode: "viewport", maxFeatures: 200 } }));
+    await l.start();
+    expect(last(onData).n).toBe(0);
+    expect(onTooDense).toHaveBeenLastCalledWith(true);
+    const hint = onHint.mock.calls[0]![0] as string;
+    expect(hint).toContain("its zoom-10 level, its coarsest, still has about 256 features in view");
+    expect(hint).not.toContain("a coarser level isn't drawn instead");
+    expect(hint).toContain(", and levels from zoom 5: ");
+    expect(hint).toContain("min_zoom=5, max_zoom=14, drop_rate=2.5");
+  });
+
+  it("KTD3: under the whole-file limits with no load: key it is read whole at its canonical level; load: viewport uses levels", async () => {
+    vi.stubGlobal("fetch", fixtureFetch());
+    const whole = loader(fakeMap(10, AREA), loadModeOf({}));
+    await whole.loader.start();
+    expect(whole.loader.readsByView).toBe(false);
+    expect(last(whole.onData)).toEqual({ n: 600, levels: [4] });
+    expect(whole.onLevelChange).not.toHaveBeenCalled();
+
+    const byView = loader(fakeMap(10, AREA), loadModeOf({ load: "viewport" }));
+    await byView.loader.start();
+    expect(byView.loader.readsByView).toBe(true);
+    expect(last(byView.onData)).toEqual({ n: 256, levels: [0] });
+  });
+
+  it("KTD3: over the whole-file limits (counted on canonical rows) with no load: key, it switches to by view and uses levels", async () => {
+    vi.stubGlobal("fetch", fixtureFetch());
+    // 600 canonical rows over a 500-row whole-file limit (1,732 in the file).
+    const auto = loader(fakeMap(10, AREA), loadModeOf({}), { warn: 1e6, max: 50e6, maxFeatures: 500 });
+    await auto.loader.start();
+    expect(auto.onError).not.toHaveBeenCalled();
+    expect(auto.loader.readsByView).toBe(true);
+    expect(last(auto.onData)).toEqual({ n: 256, levels: [0] });
+    // …and 700 is enough to read it whole (the canonical level only).
+    const fits = loader(fakeMap(10, AREA), loadModeOf({}), { warn: 1e6, max: 50e6, maxFeatures: 700 });
+    await fits.loader.start();
+    expect(fits.loader.readsByView).toBe(false);
+    expect(last(fits.onData)).toEqual({ n: 600, levels: [4] });
+  });
+
+  it("KTD4: with no author minzoom an overview file is read from zoom 0 (its coarsest level); an author minzoom wins", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      const log: Log = [];
+      vi.stubGlobal("fetch", fixtureFetch(log));
+      const wide = loader(fakeMap(5, AREA), loadModeOf({ load: "viewport" }));
+      await wide.loader.start();
+      expect(wide.loader.minzoom).toBe(0);
+      expect(last(wide.onData)).toEqual({ n: 256, levels: [0] });
+      expect(wide.loader.zoomThatFits!([10.117, 42.058], 2, 1280, 800)).toBe(2);
+
+      log.length = 0;
+      const map = fakeMap(11, AREA);
+      const author = loader(map, loadModeOf({ load: { mode: "viewport", minzoom: 12 } }));
+      await author.loader.start();
+      expect(author.loader.minzoom).toBe(12);
+      expect(last(author.onData).n).toBe(0);
+      expect(author.onTooDense).toHaveBeenLastCalledWith(true);
+      expect(log).toHaveLength(1); // the footer only
+      map.zoom = 12;
+      map.moveend();
+      await vi.advanceTimersByTimeAsync(300);
+      await vi.waitFor(() => expect(last(author.onData)).toEqual({ n: 256, levels: [2] }));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("a level with neither zoom nor gsd: the canonical level by view, from the default minzoom, and one hint", async () => {
+    const bytes = fixture("lots-overviews.parquet").slice();
+    const text = new TextDecoder("latin1").decode(bytes);
+    const from = '"gsd":19.109257073402404,"zoom":11}';
+    const at = text.indexOf(from);
+    expect(at).toBeGreaterThan(0);
+    bytes.set(new TextEncoder().encode('"gs_":19.109257073402404,"zoo_":11}'), at);
+    overrides.set("lots-overviews.parquet", bytes);
+    vi.stubGlobal("fetch", fixtureFetch());
+    const l = loader(fakeMap(11, AREA), loadModeOf({ load: "viewport" }));
+    await l.loader.start();
+    expect(l.loader.minzoom).toBe(10);
+    expect(last(l.onData)).toEqual({ n: 600, levels: [4] });
+    expect(l.onHint).toHaveBeenCalledTimes(1);
+    const [hint, once] = l.onHint.mock.calls[0]! as [string, string | undefined];
+    expect(hint).toContain("level 1 declares neither `zoom` nor `gsd`");
+    expect(hint).toContain("drawing it at full detail only");
+    expect(once).toBeTruthy();
+  });
+});
+
+describe("LayerManager and an overview GeoParquet read by view (0.10 U2)", () => {
+  const AREA: [number, number, number, number] = [10.0, 42.0, 10.4, 42.3];
+
+  function overviewMap(zoom: number) {
+    const sources = new Map<string, { setData: ReturnType<typeof vi.fn> }>();
+    const moveend: (() => void)[] = [];
+    return {
+      sources,
+      zoom,
+      moveend: () => moveend.forEach((fn) => fn()),
+      addSource: vi.fn((id: string) => sources.set(id, { setData: vi.fn() })),
+      getSource: vi.fn((id: string) => sources.get(id)),
+      addLayer: vi.fn(),
+      getLayer: vi.fn(),
+      getStyle: vi.fn(() => ({ sources: {} })),
+      removeLayer: vi.fn(),
+      removeSource: vi.fn(),
+      removeFeatureState: vi.fn(),
+      getZoom() {
+        return this.zoom;
+      },
+      getBounds: () => ({ getWest: () => AREA[0], getSouth: () => AREA[1], getEast: () => AREA[2], getNorth: () => AREA[3] }),
+      on: vi.fn((type: string, fn: () => void) => {
+        if (type === "moveend") moveend.push(fn);
+      }),
+      off: vi.fn((type: string, fn: () => void) => {
+        if (type === "moveend" && moveend.includes(fn)) moveend.splice(moveend.indexOf(fn), 1);
+      }),
+    };
+  }
+
+  const levelsOf = (setData: ReturnType<typeof vi.fn>) =>
+    [...new Set((setData.mock.calls.at(-1)![0] as { features: { properties: Record<string, unknown> }[] }).features.map((f) => f.properties["level"]))];
+
+  it("AE8: a level switch resets the source's feature state, once, and is not a document update; promoteId reaches MapLibre", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      const { LayerManager } = await import("../../src/renderer/layer-manager");
+      vi.stubGlobal("fetch", fixtureFetch());
+      const map = overviewMap(12);
+      const callbacks = { onDataLoading: vi.fn(), onDataLoaded: vi.fn(), onDataError: vi.fn(), onSourceHint: vi.fn() };
+      const manager = new LayerManager(map as never, callbacks);
+      manager.registerSources({
+        lots: { type: "geojson", url: "/lots-overviews.parquet", columns: ["lot", "level"], load: "viewport", promoteId: "lot" },
+      });
+      await manager.addLayer({ id: "lots", type: "fill", source: "lots" } as never);
+      await vi.waitFor(() => expect(callbacks.onDataLoaded).toHaveBeenCalled());
+      expect(map.addSource).toHaveBeenCalledWith("lots", expect.objectContaining({ promoteId: "lot" }));
+      const setData = map.sources.get("lots")!.setData;
+      expect(levelsOf(setData)).toEqual([2]);
+      expect(map.removeFeatureState).not.toHaveBeenCalled();
+
+      // A pan within the level: new data, no reset of the source's feature state.
+      map.moveend();
+      await vi.advanceTimersByTimeAsync(300);
+      await vi.waitFor(() => expect(setData).toHaveBeenCalledTimes(2));
+      expect(map.removeFeatureState).not.toHaveBeenCalled();
+
+      // Zoom in past a level boundary: the zoom-14 level, and the source's feature state reset before it lands.
+      map.zoom = 14.2;
+      map.moveend();
+      await vi.advanceTimersByTimeAsync(300);
+      await vi.waitFor(() => expect(levelsOf(setData)).toEqual([4]));
+      expect(map.removeFeatureState).toHaveBeenCalledTimes(1);
+      expect(map.removeFeatureState).toHaveBeenCalledWith({ source: "lots" });
+      expect(map.removeFeatureState.mock.invocationCallOrder[0]!).toBeLessThan(setData.mock.invocationCallOrder.at(-1)!);
+      expect(callbacks.onDataError).not.toHaveBeenCalled();
+      manager.destroy();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("a live update changing load.overviews recreates the reader once per change; its hint does not repeat", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      const { LayerManager } = await import("../../src/renderer/layer-manager");
+      vi.stubGlobal("fetch", fixtureFetch());
+      const map = overviewMap(13);
+      const onSourceHint = vi.fn();
+      const callbacks = { onDataLoading: vi.fn(), onDataLoaded: vi.fn(), onDataError: vi.fn(), onSourceHint };
+      const manager = new LayerManager(map as never, callbacks);
+      const spec = (overviews: boolean) => ({
+        type: "geojson",
+        url: "/lots-overviews.parquet",
+        columns: ["lot", "level"],
+        load: { mode: "viewport", maxFeatures: 300, overviews },
+      });
+      manager.registerSources({ lots: spec(true) });
+      await manager.addLayer({ id: "lots", type: "fill", source: "lots" } as never);
+      const levelHints = () => onSourceHint.mock.calls.filter(([, m]) => String(m).includes("is an overview file"));
+      await vi.waitFor(() => expect(levelHints()).toHaveLength(1));
+      const destroy = vi.spyOn(GeoParquetLoader.prototype, "destroy");
+
+      await manager.retargetPipeline("lots", spec(false));
+      expect(destroy).toHaveBeenCalledTimes(1);
+      // Canonical rows: over budget, the plain dense hint.
+      await vi.waitFor(() =>
+        expect(onSourceHint.mock.calls.some(([, m]) => String(m).includes("more than one read takes"))).toBe(true)
+      );
+      await manager.retargetPipeline("lots", spec(true));
+      expect(destroy).toHaveBeenCalledTimes(2);
+      await vi.advanceTimersByTimeAsync(300);
+      await vi.waitFor(() => expect(manager.readsByView("lots")).toBe(true));
+      for (let i = 0; i < 20; i++) await Promise.resolve();
+      expect(levelHints()).toHaveLength(1);
+      // The same document again: nothing recreated.
+      await manager.retargetPipeline("lots", spec(true));
+      expect(destroy).toHaveBeenCalledTimes(2);
+      expect(callbacks.onDataError).not.toHaveBeenCalled();
+      manager.destroy();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
 describe("the 10–50 MB GeoParquet note names only what the file lacks (ml-cnv.35)", () => {
   it("sorted with a bbox column: just load: viewport; unsorted: the sort; no ranges: no load: viewport", async () => {
     vi.stubGlobal("fetch", fixtureFetch());

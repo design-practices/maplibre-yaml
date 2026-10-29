@@ -70,14 +70,26 @@ export interface FlatGeobufCallbacks {
    * An author hint: the map works, but the document could say what it means
    * (a file too large to read whole, read by view instead; a view too dense
    * to read). The console only when absent.
+   *
+   * @param once - A key for a hint shown once per source for the life of
+   *   the map: a loader recreated by a live update (a changed `load:`) says
+   *   it again, and the host drops the repeat (KTD14).
    */
-  onHint?: (message: string) => void;
+  onHint?: (message: string, once?: string) => void;
   /**
    * Nothing of the source is drawn until the reader zooms in (`true`): the
    * map is below the source's `minzoom`, or the view holds more features
    * than one read takes — or no longer (`false`).
    */
   onTooDense?: (dense: boolean) => void;
+  /**
+   * A GeoParquet overview file read by view moved to another level (a zoom
+   * crossed a level's boundary), just before that level's features are
+   * delivered: feature ids are unique only within a level, so the host drops
+   * the source's feature state (hover, selection). A data change, not a
+   * document update (0.10 U2, KTD5).
+   */
+  onLevelChange?: () => void;
 }
 
 /** What every cloud-native data provider offers the layer manager. */

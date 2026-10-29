@@ -26,6 +26,14 @@
       - "overviews": a tylertoo overview GeoParquet (geo:overviews: 600 lots
                  at zoom 14 plus coarser copies at zooms 10-13, 1,732 rows):
                  each lot is drawn once, from the full-detail level.
+      - "levels": the same file read by view (load: viewport; 0.10 U2): the
+                 level for the zoom is drawn — zoom 10's at zoom 10, zoom
+                 12's at zoom 12, the full detail from 14 — hover highlights
+                 a lot (promoteId: lot) at every level, and a level switch
+                 is not a document update.
+      - "levels-off": the same file, load: { overviews: false, maxFeatures:
+                 300 }: only the full-detail level, 600 lots in view at zoom
+                 10 — over the budget, so the reader is asked to zoom in.
       - "dark":  the "below" case on a dark page section (color-scheme: dark):
                  the zoom-in line follows it (dark background, light text).
     Under <ml-map quiet> the line is hidden — toggled live, not only when the
@@ -46,7 +54,7 @@
   </script>
 </head>
 <body>
-  <header>PASS = "fit" opens at zoom 13 with points; "dense" opens zoomed in with points, no zoom-in line; "below" asks to zoom in, then draws points once zoomed in; "groups" draws only the blue points and asks to zoom in; "overviews" draws 600 lots, each once.</header>
+  <header>PASS = "fit" opens at zoom 13 with points; "dense" opens zoomed in with points, no zoom-in line; "below" asks to zoom in, then draws points once zoomed in; "groups" draws only the blue points and asks to zoom in; "overviews" draws 600 lots, each once; "levels" draws coarser lots zoomed out, finer zoomed in, and lights the lot under the pointer; "levels-off" asks to zoom in.</header>
   <main>
     <section>
       <h2>fitTo on a file read by view from zoom 13</h2>
@@ -170,6 +178,57 @@ layers:
     type: fill
     source: lots
     paint: { fill-color: "#457b9d", fill-opacity: 0.35, fill-outline-color: "#1d3557" }
+        </script>
+      </ml-map>
+    </section>
+    <section>
+      <h2>The same overview file read by view: the level for the zoom</h2>
+      <ml-map id="levels">
+        <script type="text/yaml">
+type: map
+id: large-data-levels
+config:
+  center: [10.117, 42.058]
+  zoom: 10
+  mapStyle: "/examples/verification/configs/local-style.json"
+sources:
+  lots:
+    type: geojson
+    url: /gallery-assets/cloud-native/lots-overviews.parquet
+    columns: [lot, level, floors]
+    load: viewport
+    promoteId: lot
+layers:
+  - id: lots
+    type: fill
+    source: lots
+    paint: { fill-color: "#457b9d", fill-opacity: 0.6, fill-outline-color: "#1d3557" }
+    interactive:
+      hover: { cursor: pointer, highlight: true }
+        </script>
+      </ml-map>
+    </section>
+    <section>
+      <h2>overviews: false — the full-detail level only, over budget at zoom 10</h2>
+      <ml-map id="levels-off">
+        <script type="text/yaml">
+type: map
+id: large-data-levels-off
+config:
+  center: [10.117, 42.058]
+  zoom: 10
+  mapStyle: "/examples/verification/configs/local-style.json"
+sources:
+  lots:
+    type: geojson
+    url: /gallery-assets/cloud-native/lots-overviews.parquet
+    columns: [lot, level]
+    load: { mode: viewport, overviews: false, maxFeatures: 300 }
+layers:
+  - id: lots
+    type: fill
+    source: lots
+    paint: { fill-color: "#457b9d", fill-opacity: 0.6 }
         </script>
       </ml-map>
     </section>
