@@ -42,6 +42,10 @@
  * - **Encodings and CRS**: WKB geometry only (GeoArrow-native encodings are
  *   refused with how to rewrite the file); longitude/latitude only (the
  *   shared rule in formats/crs).
+ * - **Facts** ({@link parquetFacts}, large data round 2 U6): what
+ *   `mlym prepare` reports, from the footer alone, through any
+ *   `AsyncBuffer` — naming a projected CRS or a GeoArrow encoding instead of
+ *   refusing it. Node-safe: nothing here imports `node:`.
  *
  * Every failure becomes a `FormatError` with a plain-language message,
  * except an HTTP error status, which is thrown in the shape the GeoJSON
@@ -621,11 +625,43 @@ function topLevelColumns(metadata: FileMetaData): { name: string; logical_type?:
   return out;
 }
 
+/** What a footer's GeoParquet metadata says, before anything is refused. */
+interface GeoMetadata {
+  info: GeoParquetInfo;
+  /** The geometry column's `encoding` (`WKB`, or a GeoArrow name). */
+  encoding: string;
+  /** Whether the CRS is longitude/latitude (the shared rule in ../crs). */
+  lonLat: boolean;
+  /** The column's declared `geometry_types` (empty when it declares none). */
+  geometryTypes: string[];
+}
+
 /**
  * Read the GeoParquet facts from a parsed footer, and refuse what this
  * version can't draw.
  */
 export function geoInfo(metadata: FileMetaData, url: string): GeoParquetInfo {
+  const { info, encoding, lonLat } = geoMetadata(metadata, url);
+  if (encoding.toUpperCase() !== "WKB") {
+    throw host().formatError({ code: "encoding", format: "geoparquet", url, encoding });
+  }
+  if (!lonLat) {
+    throw host().formatError({
+      code: "crs",
+      format: "geoparquet",
+      url,
+      ...(info.crs ? { crs: info.crs } : {}),
+    });
+  }
+  return info;
+}
+
+/**
+ * The GeoParquet facts of a parsed footer, refusing only a file that isn't
+ * GeoParquet at all (`not-geoparquet`): {@link geoInfo} refuses what this
+ * version can't draw; {@link parquetFacts} reports it.
+ */
+function geoMetadata(metadata: FileMetaData, url: string): GeoMetadata {
   const schema = topLevelColumns(metadata);
   const topColumns = schema.map((c) => c.name);
   const geoText = metadata.key_value_metadata?.find((kv) => kv.key === "geo")?.value;
@@ -654,22 +690,12 @@ export function geoInfo(metadata: FileMetaData, url: string): GeoParquetInfo {
   }
 
   const encoding = String(column["encoding"] ?? "WKB");
-  if (encoding.toUpperCase() !== "WKB") {
-    throw host().formatError({ code: "encoding", format: "geoparquet", url, encoding });
-  }
-
   const bbox = toBBox(column["bbox"]);
   // `crs` absent means OGC:CRS84 (the spec's default); `null` means unknown.
   const facts = "crs" in column ? crsFacts(column["crs"]) : { org: "OGC", code: "CRS84" };
   const lonLat = !facts.projected && isLonLatCrs({ org: facts.org, code: facts.code, envelope: bbox });
-  if (!lonLat) {
-    throw host().formatError({
-      code: "crs",
-      format: "geoparquet",
-      url,
-      ...(facts.name ? { crs: facts.name } : {}),
-    });
-  }
+  const types = column["geometry_types"];
+  const geometryTypes = Array.isArray(types) ? types.filter((t): t is string => typeof t === "string") : [];
 
   const covering = isObject(column["covering"]) && isObject((column["covering"] as Obj)["bbox"])
     ? ((column["covering"] as Obj)["bbox"] as Obj)
@@ -689,7 +715,7 @@ export function geoInfo(metadata: FileMetaData, url: string): GeoParquetInfo {
   const overviews = parseOverviews(metadata, geo);
   const band = overviews?.canonical;
 
-  return {
+  const info: GeoParquetInfo = {
     geometryColumn: geometryColumn!,
     ...(facts.name ? { crs: facts.name } : {}),
     ...(bbox ? { bbox } : {}),
@@ -698,6 +724,144 @@ export function geoInfo(metadata: FileMetaData, url: string): GeoParquetInfo {
     rowGroups: band ? band.groupEnd - band.groupStart + 1 : metadata.row_groups.length,
     rows: band ? band.rowEnd - band.rowStart : Number(metadata.num_rows),
     ...(overviews ? { overviews } : {}),
+  };
+  return { info, encoding, lonLat, geometryTypes };
+}
+
+// ---------------------------------------------------------------------------
+// Facts: what `mlym prepare` reports (large data round 2, U6; KTD12)
+// ---------------------------------------------------------------------------
+
+/** One overview level, as {@link GeoParquetFacts} reports it. */
+export interface GeoParquetLevelFacts {
+  /** The Web Mercator zoom the level was built for, when the footer says. */
+  zoom?: number;
+  /** Its ground sample distance (metres per pixel), when the footer says. */
+  gsd?: number;
+  /** Rows (features) in the level. */
+  rows: number;
+  /** Row groups in the level. */
+  rowGroups: number;
+}
+
+/** A GeoParquet file's facts, from its footer alone ({@link parquetFacts}). */
+export interface GeoParquetFacts {
+  format: "geoparquet";
+  /** The file's size in bytes (the buffer's `byteLength`). */
+  byteLength: number;
+  /** Rows (features) a map reads: the canonical level's, for an overview file. */
+  rows: number;
+  /** Row groups a map reads: the canonical level's, for an overview file. */
+  rowGroups: number;
+  /** Every row in the file (every level's, for an overview file). */
+  totalRows: number;
+  /** Every row group in the file. */
+  totalRowGroups: number;
+  /** The smallest and largest of the {@link rowGroups}' row counts (0 and 0 without any). */
+  rowsPerRowGroup: { min: number; max: number };
+  /** The primary geometry column. */
+  geometryColumn: string;
+  /** Its `encoding`: `WKB` (what this version reads), or a GeoArrow name (`point`, …). */
+  encoding: string;
+  /** Its declared `geometry_types` (empty when it declares none). */
+  geometryTypes: string[];
+  /** The declared CRS, e.g. "EPSG:4326" or "EPSG:3857", when the file names one. */
+  crs?: string;
+  /** Whether the CRS is longitude/latitude — what this version draws. */
+  lonLat: boolean;
+  /** The file's extent `[w, s, e, n]`, when the metadata records one. */
+  bbox?: BBox;
+  /** The GeoParquet 1.1 bbox covering column's name (`bbox`), absent without one. */
+  bboxColumn?: string;
+  /**
+   * Whether the row groups are spatially sorted, as a read by view judges
+   * it ({@link canSkipByView}): `sorted`, `unsorted`, or `unknown` — no
+   * bbox column, fewer than two row groups, or groups without its statistics.
+   */
+  spatialOrder: "sorted" | "unsorted" | "unknown";
+  /** The attribute columns (every top-level column but geometry and the bbox column). */
+  columns: string[];
+  /** The compression codecs the column chunks use (`ZSTD`, `SNAPPY`, …). */
+  compression: string[];
+  /** The file's `geo:overviews` pyramid, when it has one ({@link parseOverviews}). */
+  overviews?: {
+    version: string;
+    mode: "duplicating" | "partitioning";
+    /** Whether this version knows the key's major version. */
+    known: boolean;
+    /** The canonical level's index in {@link levels} (`duplicating` mode). */
+    canonicalLevel?: number;
+    /** Coarse to fine, the canonical one included. */
+    levels: GeoParquetLevelFacts[];
+  };
+}
+
+/**
+ * Read a GeoParquet file's facts through any `AsyncBuffer` — a file handle
+ * in the CLI, a range reader over HTTP — touching only its first 4 bytes and
+ * its footer. A projected CRS or a GeoArrow encoding is reported, not
+ * refused; Node-safe.
+ *
+ * @param name - The file's name or URL, for messages.
+ * @throws A {@link FormatError}: `not-format` (not Parquet), `not-geoparquet`
+ *   (Parquet without geometry), `read` (a footer the library can't parse).
+ */
+export async function parquetFacts(buffer: AsyncBuffer, name: string): Promise<GeoParquetFacts> {
+  let metadata: FileMetaData;
+  try {
+    if (!(buffer.byteLength >= 12) || !hasMagic(new Uint8Array(await buffer.slice(0, 4)), 0)) {
+      throw host().formatError({ code: "not-format", format: "geoparquet", url: name });
+    }
+    // 8: the footer's length and magic first, then exactly the footer.
+    metadata = await parquetMetadataAsync(buffer, { initialFetchSize: 8 });
+  } catch (error) {
+    throw readFailure(error, name);
+  }
+  const { info, encoding, lonLat, geometryTypes } = geoMetadata(metadata, name);
+  const source: GeoParquetFile = { url: name, byteLength: buffer.byteLength, ranges: true, metadata, info, file: buffer };
+  const counts = dataRowGroups(source).map(({ group }) => Number(group.num_rows));
+  const extents = rowGroupExtents(source);
+  const spatialOrder =
+    extents.length < 2 || extents.some((e) => !e) ? "unknown" : canSkipByView(source) ? "sorted" : "unsorted";
+  const codecs = new Set<string>();
+  for (const group of metadata.row_groups) {
+    for (const chunk of group.columns) if (chunk.meta_data) codecs.add(chunk.meta_data.codec);
+  }
+  const overviews = info.overviews;
+  return {
+    format: "geoparquet",
+    byteLength: buffer.byteLength,
+    rows: info.rows,
+    rowGroups: info.rowGroups,
+    totalRows: Number(metadata.num_rows),
+    totalRowGroups: metadata.row_groups.length,
+    rowsPerRowGroup: counts.length > 0 ? { min: Math.min(...counts), max: Math.max(...counts) } : { min: 0, max: 0 },
+    geometryColumn: info.geometryColumn,
+    encoding,
+    geometryTypes,
+    ...(info.crs ? { crs: info.crs } : {}),
+    lonLat,
+    ...(info.bbox ? { bbox: info.bbox } : {}),
+    ...(info.covering ? { bboxColumn: info.covering.xmin.split(".")[0]! } : {}),
+    spatialOrder,
+    columns: info.columns,
+    compression: [...codecs],
+    ...(overviews
+      ? {
+          overviews: {
+            version: overviews.version,
+            mode: overviews.mode,
+            known: overviews.known,
+            ...(overviews.canonicalLevel !== undefined ? { canonicalLevel: overviews.canonicalLevel } : {}),
+            levels: overviews.levels.map((level) => ({
+              ...(level.zoom !== undefined ? { zoom: level.zoom } : {}),
+              ...(level.gsd !== undefined ? { gsd: level.gsd } : {}),
+              rows: level.rowEnd - level.rowStart,
+              rowGroups: level.groupEnd - level.groupStart + 1,
+            })),
+          },
+        }
+      : {}),
   };
 }
 

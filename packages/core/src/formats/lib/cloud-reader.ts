@@ -72,6 +72,19 @@ export const VIEWPORT_DEBOUNCE_MS = 250;
 /** `[west, south, east, north]`. */
 export type BBox = [number, number, number, number];
 
+/**
+ * A file's bytes, read a range at a time: what the facts readers
+ * (`parquetFacts`, `headerFacts`; large data round 2 U6) take. The shape of
+ * hyparquet's `AsyncBuffer`, so either is the other: a file handle in the
+ * CLI, a range reader over HTTP, or bytes in memory.
+ */
+export interface AsyncBuffer {
+  /** The file's size in bytes. */
+  byteLength: number;
+  /** The bytes `[start, end)` (`end` defaults to the file's end). */
+  slice(start: number, end?: number): ArrayBuffer | Promise<ArrayBuffer>;
+}
+
 /** The map's view as a bbox clamped to longitude/latitude (antimeridian → whole width). */
 function viewBBox(map: MapLibreMap): BBox {
   const b = map.getBounds();

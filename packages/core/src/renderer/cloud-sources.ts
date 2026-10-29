@@ -65,11 +65,15 @@ import {
 } from "../components/student-messages";
 import { consoleText } from "../utils/console-text";
 import type { CloudHost, ColumnChoice, SizeLimits, StartedOpen, StartedTail } from "./cloud-host";
+import type { AsyncBuffer } from "../formats/lib/cloud-reader";
+import type { FlatGeobufFacts } from "../formats/lib/flatgeobuf";
+import type { GeoParquetFacts, GeoParquetLevelFacts } from "../formats/lib/geoparquet";
 // No maplibre-gl here: the layer manager imports this module, and it loads
 // without maplibre-gl (types only). Protocol registration, which needs the
 // module, lives in ./cloud-protocols (MapRenderer only).
 
 export type { ColumnChoice, FlatGeobufCallbacks, FormatLoader, SizeLimits } from "./cloud-host";
+export type { AsyncBuffer, FlatGeobufFacts, GeoParquetFacts, GeoParquetLevelFacts };
 
 // ---------------------------------------------------------------------------
 // Size guards and viewport defaults (design §4.4; maintainer-accepted)
@@ -445,4 +449,36 @@ export async function decodeGeoParquet(
   options: { columns?: ColumnChoice } = {}
 ): Promise<FeatureCollection> {
   return (await cloudReaders("geoparquet")).decodeBytes(bytes, url, options);
+}
+
+/**
+ * A GeoParquet file's facts — rows, row groups, rows per group, bbox
+ * column, spatial order, geometry, CRS, overview levels — from its footer
+ * alone, through any {@link AsyncBuffer} (`mlym prepare` passes a file
+ * handle or a range reader; large data round 2 U6, KTD12). A projected CRS
+ * or a GeoArrow encoding is reported (`lonLat`, `encoding`), not refused.
+ * Node-safe; the reader is downloaded on first use (the `geoparquet`
+ * on-demand module).
+ *
+ * @param buffer - The file's bytes, read a range at a time.
+ * @param name - Its name or URL, for messages.
+ * @throws A {@link FormatError}: `not-format`, `not-geoparquet`, `read`.
+ */
+export async function readGeoParquetFacts(buffer: AsyncBuffer, name: string): Promise<GeoParquetFacts> {
+  return (await cloudReaders("geoparquet")).parquetFacts(buffer, name);
+}
+
+/**
+ * A FlatGeobuf file's facts — feature count, spatial index, geometry type,
+ * CRS, extent, columns — from its first bytes and header alone, through any
+ * {@link AsyncBuffer} (large data round 2 U6, KTD12). A projected CRS is
+ * reported (`lonLat`), not refused. Node-safe; the reader is downloaded on
+ * first use (the `flatgeobuf` on-demand module).
+ *
+ * @param buffer - The file's bytes, read a range at a time.
+ * @param name - Its name or URL, for messages.
+ * @throws A {@link FormatError}: `not-format`, `compressed`, `read`.
+ */
+export async function readFlatGeobufFacts(buffer: AsyncBuffer, name: string): Promise<FlatGeobufFacts> {
+  return (await cloudReaders("flatgeobuf")).headerFacts(buffer, name);
 }

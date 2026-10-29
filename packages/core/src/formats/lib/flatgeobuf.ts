@@ -14,6 +14,10 @@
  * - **part of it** ({@link probe} + {@link readBbox}): only the features in a
  *   bounding box, through the file's packed R-tree, with HTTP range requests.
  *
+ * And its facts ({@link headerFacts}, large data round 2 U6): what
+ * `mlym prepare` reports, from the header alone, through any `AsyncBuffer` —
+ * naming a projected CRS instead of refusing it. Node-safe.
+ *
  * Every failure becomes a `FormatError` with a plain-language message,
  * except an HTTP error status, which is thrown in the shape the GeoJSON
  * fetcher uses (`HTTP 404: Not Found for <url>`) so the on-page notice words
@@ -52,6 +56,7 @@ import {
   noRangeNote,
   shareInView,
   ViewLoader,
+  type AsyncBuffer,
   type BBox,
 } from "./cloud-reader";
 
@@ -402,6 +407,98 @@ export async function probe(url: string, signal?: AbortSignal): Promise<ProbeRes
   if (!magic) throw host().formatError({ code: "not-format", format: "flatgeobuf", url });
   const total = /\/(\d+)\s*$/.exec(response.headers.get("content-range") ?? "")?.[1];
   return { ranges: true, ...(total ? { size: Number(total) } : {}) };
+}
+
+// ---------------------------------------------------------------------------
+// Facts: what `mlym prepare` reports (large data round 2, U6; KTD12)
+// ---------------------------------------------------------------------------
+
+/** A FlatGeobuf file's facts, from its header alone ({@link headerFacts}). */
+export interface FlatGeobufFacts {
+  format: "flatgeobuf";
+  /** The file's size in bytes (the buffer's `byteLength`). */
+  byteLength: number;
+  /** The header's feature count (0 when the writer didn't record it). */
+  features: number;
+  /** Whether the file carries a spatial index (index node size > 0): what reading by view needs. */
+  indexed: boolean;
+  /** The index's node size (0 without one; readers accept 2 to 65,535). */
+  nodeSize: number;
+  /** The header's geometry type (`Point`, `Polygon`, …; `Unknown` for mixed). */
+  geometryType: string;
+  /** The declared CRS, e.g. "EPSG:4326" or "EPSG:3857", when the header records one. */
+  crs?: string;
+  /** Whether the data is longitude/latitude — what this version draws. */
+  lonLat: boolean;
+  /** `[west, south, east, north]`, when the header records an extent. */
+  envelope?: [number, number, number, number];
+  /** The attribute columns the header declares. */
+  columns: string[];
+}
+
+/** FlatGeobuf's geometry types, by their header code. */
+const GEOMETRY_TYPES = [
+  "Unknown", "Point", "LineString", "Polygon", "MultiPoint", "MultiLineString", "MultiPolygon",
+  "GeometryCollection", "CircularString", "CompoundCurve", "CurvePolygon", "MultiCurve",
+  "MultiSurface", "Curve", "Surface", "PolyhedralSurface", "TIN", "Triangle",
+];
+
+/** The largest header the library reads (its `HEADER_MAX_BUFFER_SIZE`). */
+const HEADER_MAX_BYTES = 10 * 1024 * 1024;
+
+/**
+ * Read a FlatGeobuf file's facts through any `AsyncBuffer` — a file handle
+ * in the CLI, a range reader over HTTP — touching only its first 12 bytes
+ * and its header. A projected CRS is reported, not refused; Node-safe.
+ *
+ * @param name - The file's name or URL, for messages.
+ * @throws A {@link FormatError}: `not-format` (not FlatGeobuf, or a header
+ *   cut short), `compressed` (a Zstandard-compressed file), `read`.
+ */
+export async function headerFacts(buffer: AsyncBuffer, name: string): Promise<FlatGeobufFacts> {
+  const notFormat = () => host().formatError({ code: "not-format", format: "flatgeobuf", url: name });
+  let raw: (RawHeader & { geometryType?: number; columns?: { name: string }[] | null }) | undefined;
+  try {
+    if (!(buffer.byteLength >= 12)) throw notFormat();
+    const head = new Uint8Array(await buffer.slice(0, 12));
+    if (isZstd(head)) throw compressedFailure(name);
+    if (!(head[0] === 0x66 && head[1] === 0x67 && head[2] === 0x62)) throw notFormat();
+    const length = new DataView(head.buffer, head.byteOffset, 12).getUint32(8, true);
+    if (length < 8 || length > HEADER_MAX_BYTES || 12 + length > buffer.byteLength) throw notFormat();
+    const bytes = new Uint8Array(12 + length);
+    bytes.set(head);
+    bytes.set(new Uint8Array(await buffer.slice(12, 12 + length)), 12);
+    // The library parses the header and hands it over before any feature:
+    // stop there (the bytes end with the header).
+    const stop = new Error("header read");
+    try {
+      const features = deserialize(bytes, {
+        headerMetaFn: ((header: typeof raw) => {
+          raw = header;
+          throw stop;
+        }) as never,
+      });
+      await features.next();
+    } catch (error) {
+      if (error !== stop) throw error;
+    }
+  } catch (error) {
+    throw readFailure(error, name);
+  }
+  if (!raw) throw notFormat();
+  const header = toHeader(raw);
+  return {
+    format: "flatgeobuf",
+    byteLength: buffer.byteLength,
+    features: header.featuresCount,
+    indexed: header.indexed,
+    nodeSize: header.nodeSize,
+    geometryType: GEOMETRY_TYPES[raw.geometryType ?? 0] ?? "Unknown",
+    ...(header.crs ? { crs: header.crs } : {}),
+    lonLat: isLonLat(header, raw),
+    ...(header.envelope ? { envelope: header.envelope } : {}),
+    columns: (raw.columns ?? []).map((column) => column.name),
+  };
 }
 
 /**
