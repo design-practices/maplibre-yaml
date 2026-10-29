@@ -422,6 +422,81 @@ npx maplibre-yaml@latest bake blueprint --out docs/public/classics/blueprint
 
 ---
 
+### breaks
+
+Compute [`classify:`](/guides/thematic-maps/) breaks for a field from a
+whole local data file, and print them ready to paste. In the browser,
+computed breaks (`method:`) need the whole dataset: a FlatGeobuf or PMTiles
+source read by view never has it, so its layer refuses `method:` and points
+here. `breaks` reads every feature of the file, computes the breaks with the
+same code the browser uses for a GeoJSON source, and prints a `breaks:` line
+to put under `classify:` in place of `method:` and `classes:`.
+
+```bash
+npx maplibre-yaml@latest breaks <file> --field <name> [options]
+```
+
+| Argument | Required | Description |
+| -------- | -------- | ----------- |
+| `file` | Yes | A local GeoParquet (`.parquet`), FlatGeobuf (`.fgb`) or GeoJSON (`.geojson`, `.json`) file. The extension names its format. A GeoParquet overview file is read at its full-detail level |
+
+| Option | Alias | Type | Default | Description |
+| ------ | ----- | ---- | ------- | ----------- |
+| `--field` | | string | | Required. The numeric property to classify, as `field:` |
+| `--method` | | string | `quantile` | `quantile`, `equal` or `jenks`, as `method:` |
+| `--classes` | | number | `5` | How many classes, 2 to 12, as `classes:` |
+| `--normalize` | | string | | Divide the field by this property to break a rate, as `normalize:` |
+| `--multiply` | | number | | Multiply the rate (`100000` for "per 100,000"), as `multiply:`. Needs `--normalize` |
+| `--format` | `-f` | string | `text` | `json` prints one JSON object on stdout instead: `success`, `file`, `format`, `field`, `method`, `classes`, `breaks`, `min`, `max`, `count` and `noData`, or `success: false` and `errors` |
+
+The output is a comment naming what was computed, the field's range, and the
+breaks:
+
+```bash
+npx maplibre-yaml@latest breaks districts.fgb --field population --method jenks --classes 5
+```
+
+```yaml no-validate
+# population, jenks, 5 classes, from districts.fgb (48 features)
+# range: 2063 to 24402
+breaks: [4548, 9185, 15975, 20657]
+```
+
+Paste it under the layer's `classify:`, beside `field:`:
+
+```yaml
+- id: districts-fill
+  type: fill
+  source: districts
+  classify:
+    field: population
+    # population, jenks, 5 classes, from districts.fgb (48 features)
+    # range: 2063 to 24402
+    breaks: [4548, 9185, 15975, 20657]
+    palette: YlGnBu
+```
+
+Features whose value is missing, null, empty or not a number are no data:
+the comment counts them, and they don't move the breaks. When ties leave
+fewer distinct classes than asked (40% of the features at 0 cannot fill five
+equal-count classes), a third comment line says how many the breaks make.
+
+The command exits `1` when `--field` is missing, names a property no feature
+has (it lists the ones they have), or names a text field (it says so and
+suggests [`categories:`](/guides/thematic-maps/)); when a flag is out of
+range; and when the file is not one of the three formats, including a
+PMTiles archive, whose tiles hold a generalised subset of the data: run
+`breaks` on the file the archive was built from. A file that can't be read
+exits `2`.
+
+```bash
+npx maplibre-yaml@latest breaks tracts.parquet --field median_income                    # quantile, 5 classes
+npx maplibre-yaml@latest breaks tracts.geojson --field cases --normalize population --multiply 100000
+npx maplibre-yaml@latest breaks points.fgb --field value --method equal --classes 4 -f json
+```
+
+---
+
 ## Project settings file \{#configuration-file}
 
 A `maplibre-yaml.config.json` file in the folder you run the CLI from sets
@@ -463,8 +538,8 @@ the built-in default. With the file above, `preview map.yaml` serves on port
 | Code | Meaning             | Commands          |
 | ---- | ------------------- | ----------------- |
 | `0`  | Success. For `emit`, the style was written; warnings, if any, are on stderr | All |
-| `1`  | Invalid input: validation or syntax errors, warnings in strict mode, an unknown template or option, a non-empty `init` folder, an `emit --strict` or `convert --strict` refusal | validate, emit, convert, init, schema, bake |
-| `2`  | File not found, no file matched a pattern, or a folder held no map or story document | validate, preview, emit, convert |
+| `1`  | Invalid input: validation or syntax errors, warnings in strict mode, an unknown template or option, a non-empty `init` folder, an `emit --strict` or `convert --strict` refusal, a `breaks` field that is missing or not numeric | validate, emit, convert, init, schema, bake, breaks |
+| `2`  | File not found, no file matched a pattern, or a folder held no map or story document | validate, preview, emit, convert, breaks |
 | `4`  | Unexpected error (for `emit`, for example, a basemap or image that could not be fetched) | All |
 
 ---

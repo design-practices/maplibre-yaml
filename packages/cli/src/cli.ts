@@ -39,6 +39,7 @@ const main = defineCommand({
     emit: () => import('./commands/emit.js').then(m => m.emitCommand),
     convert: () => import('./commands/convert.js').then(m => m.convertCommand),
     bake: () => import('./commands/bake.js').then(m => m.bakeCommand),
+    breaks: () => import('./commands/breaks.js').then(m => m.breaksCommand),
   },
 });
 
