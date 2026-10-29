@@ -402,6 +402,14 @@ export class LayerManager {
    */
   private failed = new Set<string>();
   /**
+   * Tile and image sources (`url:`, `pmtiles://`, `cog://`) whose TileJSON or
+   * image request failed — a reader chunk that didn't download, a wrong
+   * path — as the renderer saw on the map's `error` event; it clears one
+   * when its metadata loads. Among {@link failedSources}, and `setSourceUrl`
+   * sets an unchanged url again for them, so `reload()` asks anew.
+   */
+  readonly tileJsonFailed = new Set<string>();
+  /**
    * Where a document layer sat before {@link replaceSource} took it off the
    * map — the layer above it — so its re-add (`replaceLayer` with no
    * anchor) lands in the same slot.
@@ -696,6 +704,7 @@ export class LayerManager {
     this.formatLoaders.delete(sourceId);
     this.sourceData.delete(sourceId);
     this.failed.delete(sourceId);
+    this.tileJsonFailed.delete(sourceId);
     this.keylessWarned.delete(sourceId);
     this.pendingData.delete(sourceId);
     this.sourceSpecs.delete(sourceId);
@@ -709,7 +718,7 @@ export class LayerManager {
    * to hold across an update.
    */
   failedSources(): ReadonlySet<string> {
-    return new Set([...this.failed, ...this.liveUnavailable]);
+    return new Set([...this.failed, ...this.liveUnavailable, ...this.tileJsonFailed]);
   }
 
   /** The next generation for a source's loads (see `sourceGenerations`). */
@@ -808,7 +817,7 @@ export class LayerManager {
     const url = resolved["url"];
     if (typeof source.setUrl === "function") {
       const before = prev ? this.resolvedTileSpec(prev)["url"] : undefined;
-      if (typeof url === "string" && url !== before) source.setUrl(url);
+      if (typeof url === "string" && (url !== before || this.tileJsonFailed.has(sourceId))) source.setUrl(url);
       this.rememberSpec(sourceId, next);
       return true;
     }

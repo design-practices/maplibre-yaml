@@ -2150,6 +2150,10 @@ export class MLMap extends BaseElement {
       );
     });
 
+    // A tile source's TileJSON that failed (a reader chunk that didn't
+    // download) loaded on a retry: its line goes, as a layer's does above.
+    renderer.on("source:retried", ({ sourceId }) => this.withdrawNotices(`source:${sourceId}`));
+
     // Layer data error — also on the page: the layer is silently empty
     // otherwise, and nothing reached the console either (ml-aot.15).
     renderer.on("layer:data-error", ({ layerId, error }) => {
