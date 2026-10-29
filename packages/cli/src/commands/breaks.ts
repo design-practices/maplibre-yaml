@@ -39,7 +39,7 @@ import {
   type ClassifyMethod,
 } from '@maplibre-yaml/core';
 import { decodeFeatureFile } from '../lib/data-loader.js';
-import { logger } from '../lib/logger.js';
+import { reportOutput } from '../lib/report-output.js';
 import { EXIT_CODES, type ExitCode } from '../types.js';
 
 /** A refusal with the exit code the command stops with. */
@@ -308,9 +308,6 @@ export function formatBreaks(report: BreaksReport): string {
   return lines.join('\n') + '\n';
 }
 
-/** `--format` values; `human` is accepted as `text`, as `validate` spells it. */
-const OUTPUT_FORMATS = ['text', 'json', 'human'] as const;
-
 export const breaksCommand = defineCommand({
   meta: {
     name: 'breaks',
@@ -352,16 +349,7 @@ export const breaksCommand = defineCommand({
     },
   },
   async run({ args }) {
-    const outputFormat = String(args.format ?? 'text').toLowerCase();
-    const json = outputFormat === 'json';
-    const fail = (exitCode: number, message: string): never => {
-      if (json) process.stdout.write(JSON.stringify({ success: false, errors: [{ message }] }, null, 2) + '\n');
-      else for (const line of message.split('\n')) logger.error(line);
-      return process.exit(exitCode);
-    };
-    if (!(OUTPUT_FORMATS as readonly string[]).includes(outputFormat)) {
-      fail(EXIT_CODES.VALIDATION_ERROR, `--format must be text or json, not "${String(args.format)}".`);
-    }
+    const { json, fail } = reportOutput(args.format);
     if (!args.file) {
       fail(EXIT_CODES.VALIDATION_ERROR, 'Name a data file: mlym breaks <file> --field <name>.');
     }

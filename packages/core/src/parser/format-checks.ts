@@ -183,20 +183,22 @@ export function checkSourceFormats(
 
     // `columns:` and `load: { overviews }` only mean something for
     // GeoParquet (`load:` itself already warned above on other formats).
-    const load = runtime["load"];
-    const geoparquetOnly: [string, (string | number)[]][] = [];
-    if (runtime["columns"] !== undefined) geoparquetOnly.push(["columns", [...runtimePath, "columns"]]);
-    if (isObject(load) && load["overviews"] !== undefined && FEATURE_FILE_FORMATS.has(format)) {
-      geoparquetOnly.push(["overviews", [...runtimePath, "load", "overviews"]]);
-    }
-    for (const [key, keyPath] of format === "geoparquet" ? [] : geoparquetOnly) {
-      warnings.push({
-        path: keyPath.join("."),
-        message:
-          `${key}: only applies to GeoParquet sources (a .parquet URL or format: geoparquet); ` +
-          "it does nothing here.",
-        ...at(keyPath),
-      });
+    if (format !== "geoparquet") {
+      const load = runtime["load"];
+      const geoparquetOnly: [string, (string | number)[]][] = [];
+      if (runtime["columns"] !== undefined) geoparquetOnly.push(["columns", [...runtimePath, "columns"]]);
+      if (isObject(load) && load["overviews"] !== undefined && FEATURE_FILE_FORMATS.has(format)) {
+        geoparquetOnly.push(["overviews", [...runtimePath, "load", "overviews"]]);
+      }
+      for (const [key, keyPath] of geoparquetOnly) {
+        warnings.push({
+          path: keyPath.join("."),
+          message:
+            `${key}: only applies to GeoParquet sources (a .parquet URL or format: geoparquet); ` +
+            "it does nothing here.",
+          ...at(keyPath),
+        });
+      }
     }
 
     // A stream connects only beside a refresh: block, whose updateStrategy

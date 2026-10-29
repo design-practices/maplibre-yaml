@@ -34,7 +34,6 @@
 
 import { defineCommand } from 'citty';
 import { resolve } from 'node:path';
-import { brotliDecompressSync, gunzipSync } from 'node:zlib';
 import * as zlib from 'node:zlib';
 import {
   readFlatGeobufFacts,
@@ -52,7 +51,7 @@ import {
 } from '@maplibre-yaml/core';
 import { FileBufferError, openFileBuffer, openUrlBuffer, type FileBuffer } from '../lib/file-buffer.js';
 import { shellCommands } from '../lib/producer-commands.js';
-import { logger } from '../lib/logger.js';
+import { reportOutput } from '../lib/report-output.js';
 import { EXIT_CODES, type ExitCode } from '../types.js';
 
 /** A refusal with the exit code the command stops with. */
@@ -348,9 +347,9 @@ async function pmtilesFacts(buffer: AsyncBuffer, name: string): Promise<PmtilesF
       const zstd = (zlib as { zstdDecompressSync?: (b: Uint8Array) => Buffer }).zstdDecompressSync;
       const text =
         compression === 2
-          ? gunzipSync(raw)
+          ? zlib.gunzipSync(raw)
           : compression === 3
-            ? brotliDecompressSync(raw)
+            ? zlib.brotliDecompressSync(raw)
             : compression === 4 && zstd
               ? zstd(raw)
               : compression === 1 || compression === 0
@@ -947,9 +946,6 @@ export function formatPrepare(report: PrepareReport): string {
   return out.join('\n') + '\n';
 }
 
-/** `--format` values; `human` is accepted as `text`, as `validate` spells it. */
-const OUTPUT_FORMATS = ['text', 'json', 'human'] as const;
-
 export const prepareCommand = defineCommand({
   meta: {
     name: 'prepare',
@@ -970,16 +966,7 @@ export const prepareCommand = defineCommand({
     },
   },
   async run({ args }) {
-    const outputFormat = String(args.format ?? 'text').toLowerCase();
-    const json = outputFormat === 'json';
-    const fail = (exitCode: number, message: string): never => {
-      if (json) process.stdout.write(JSON.stringify({ success: false, errors: [{ message }] }, null, 2) + '\n');
-      else for (const line of message.split('\n')) logger.error(line);
-      return process.exit(exitCode);
-    };
-    if (!(OUTPUT_FORMATS as readonly string[]).includes(outputFormat)) {
-      fail(EXIT_CODES.VALIDATION_ERROR, `--format must be text or json, not "${String(args.format)}".`);
-    }
+    const { json, fail } = reportOutput(args.format);
     if (!args.file) {
       fail(EXIT_CODES.VALIDATION_ERROR, 'Name a data file or URL: mlym prepare <file>.');
     }

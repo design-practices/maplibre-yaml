@@ -67,7 +67,7 @@ import { applyAccessibleName } from './accessible-name';
 import { isProtocolRegistered, pmtilesUnavailable, prepareProtocols } from './cloud-protocols';
 import { cogHintFor } from '../formats/cog-protocol';
 import { basemapRequestTransformer, type RequestTransformer } from './basemap-urls';
-import { formatOfSource, type CloudFormat } from '../formats/detect';
+import { formatOfSource, schemeFormat, type CloudFormat } from '../formats/detect';
 import { protomapsBasemapOf, type ProtomapsBasemap } from '../schemas/basemap.schema';
 import {
   basemapAssetMessage,
@@ -1369,7 +1369,7 @@ export class MapRenderer {
     const pmtilesArchive = (sourceId: unknown): string | undefined => {
       const source =
         typeof sourceId === 'string' ? (this.map.getSource?.(sourceId) as { type?: unknown; url?: unknown } | undefined) : undefined;
-      return source?.type === 'vector' && typeof source.url === 'string' && /^pmtiles:\/\//i.test(source.url) ? source.url : undefined;
+      return source?.type === 'vector' && typeof source.url === 'string' && schemeFormat(source.url) === 'pmtiles' ? source.url : undefined;
     };
     // Sources told about their MLT tiles, once each for this map (U4).
     const int64Told = new Set<string>();
