@@ -116,13 +116,14 @@ test("reload() of an inline-YAML document keeps its map, its script and its slot
   expect(summary.rebuild).toBe(false);
   expect(summary.failures).toEqual([]);
 
-  // The SAME map (nothing was torn down) ...
+  // The SAME map (nothing was torn down) ... and it settles: reload() also
+  // retries sources, so loaded() can be false for a moment after the event.
   expect(
-    await page.evaluate(() => {
-      const map = (document.getElementById("map") as any).getMap();
-      return map === (window as any).__firstMap && map.loaded();
-    })
+    await page.evaluate(() => (document.getElementById("map") as any).getMap() === (window as any).__firstMap)
   ).toBe(true);
+  await expect
+    .poll(() => page.evaluate(() => (document.getElementById("map") as any).getMap().loaded()), { timeout: 10_000 })
+    .toBe(true);
   // ... the inline script still there, and the same author elements still in their corners.
   await waitForChrome(page);
   expect(await page.locator("ml-map script[type='text/yaml']").count()).toBe(1);
