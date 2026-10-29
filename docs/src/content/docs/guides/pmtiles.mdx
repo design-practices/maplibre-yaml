@@ -71,12 +71,20 @@ sources:
   the tiles carry feature ids; if they don't, add `promoteId: { <layer>:
   <property> }` to the source, naming a property that is different for every
   feature, and the map tells you so while you develop.
+- **MLT tiles** (MapLibre Tiles) draw with no `encoding:` on maplibre-gl 6.0
+  or later: maplibre-yaml reads the tile type from the archive's header, and
+  an `encoding:` you write wins. MapLibre can fail on MLT tiles with 64-bit
+  integer columns; the map's notice says to write those columns as doubles or
+  strings, or build MVT tiles. A page that registers its own `pmtiles`
+  protocol writes `encoding: mlt` itself
+  ([MLT tiles](/guides/large-data/#mlt-tiles)).
 
 ## Make a PMTiles file
 
 - **Vector tiles from GeoJSON:** [tippecanoe](https://github.com/felt/tippecanoe),
   `tippecanoe -o buildings.pmtiles buildings.geojson`. Its `-zg` option picks
-  a zoom range for you.
+  a zoom range for you. For parcels and building footprints, use
+  [the settings that keep the fabric whole](/guides/large-data/#alternative-tippecanoe-for-parcels).
 - **From GDAL:** `ogr2ogr -f PMTiles out.pmtiles in.gpkg` (GDAL 3.8 or later).
 - **From an existing MBTiles file:** `pmtiles convert in.mbtiles out.pmtiles`
   with the [`pmtiles` tool](https://docs.protomaps.com/pmtiles/cli). A browser
@@ -112,6 +120,9 @@ uv run --with tylertoo==0.8.0 python -c "import tylertoo as t; t.overview('lots.
   GDAL's `ogr2ogr -f Parquet` works too when your GDAL has its Arrow/Parquet
   driver (`ogrinfo --formats | grep Parquet`; conda-forge's `gdal` with
   `libgdal-arrow-parquet`, or the `ghcr.io/osgeo/gdal` Docker image).
+- What the coarse zooms show (squares for small lots, every lot from zoom
+  14), and how tippecanoe and freestiler compare:
+  [Parcel fabrics: PMTiles](/guides/large-data/#parcel-fabrics-pmtiles).
 - Every column stays a tile property. To highlight on hover or address
   features by id, name an id column with `promoteId`:
 

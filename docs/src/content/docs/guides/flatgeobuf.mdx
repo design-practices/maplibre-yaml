@@ -110,6 +110,10 @@ Reading by view changes a few things:
    (`uvx --from geoparquet-io==1.7.0 gpio convert geoparquet parcels.fgb parcels.parquet`,
    no GDAL needed), then follow the [PMTiles guide](/guides/pmtiles/#from-a-large-file).
 
+`npx maplibre-yaml@latest prepare parcels.fgb` reads the file's header and
+prints the step that applies, with the YAML to paste
+([Choose a format for large data](/guides/large-data/)).
+
 ## Make a FlatGeobuf file
 
 ```bash

@@ -1,0 +1,350 @@
+---
+title: Choose a format for large data
+description: Which format to use for how many features, the one command that writes it, and the YAML to paste — PMTiles for parcel fabrics, GeoParquet read by view, and overview GeoParquet files.
+---
+
+import { Aside } from "@astrojs/starlight/components";
+
+A file with a few thousand features works as it is. Past about 50,000, how
+you store it decides whether the map draws at every zoom. This page says
+which format to use for which size, gives one command per route, and the
+YAML to paste. For how each format works, see
+[Cloud-native data](/guides/cloud-native-data/).
+
+## Quick start: `mlym prepare` \{#mlym-prepare}
+
+Point `prepare` at your file. It reads only the file's header or footer (all
+of a GeoJSON file up to 200 MB), then prints the route from the table below,
+the command to run with your file names filled in, and the source to paste:
+
+```bash
+npx maplibre-yaml@latest prepare parcels.geojson
+```
+
+```text
+parcels.geojson: GeoJSON, 286 MB
+  features  about 1,170,000 (an estimate, from the first 8.0 MB: the file is over the 200 MB it parses in full)
+  geometry  Polygon
+  CRS       EPSG:4326 (longitude/latitude)
+
+About 1,170,000 polygons, over 250,000: PMTiles draws it at every zoom, citywide included.
+
+Run:
+
+  Convert it to PMTiles with tylertoo (the parcel recipe; MapLibre draws zoom 14’s tiles further in):
+     uvx --from geoparquet-io==1.7.0 gpio convert geoparquet parcels.geojson parcels.parquet
+     uv run --with tylertoo==0.8.0 python -c "import tylertoo as t; t.overview('parcels.parquet', 'parcels-ov.parquet', min_zoom=0, max_zoom=14, collapse_square=True); t.export_pmtiles('parcels-ov.parquet', 'parcels.pmtiles', layer_name='parcels', tile_size_limit=None)"
+
+Then paste:
+
+sources:
+  parcels:
+    type: vector
+    url: parcels.pmtiles
+    # layers draw it with source-layer: parcels
+```
+
+The report goes on with the alternative route (here, an overview GeoParquet
+file) and a link back to this page. `prepare` never writes or converts
+anything: you run the commands. They need only
+[uv](https://docs.astral.sh/uv/), which fetches geoparquet-io and tylertoo
+at the pinned versions. `prepare` reads GeoParquet, FlatGeobuf, GeoJSON and
+PMTiles files, local or at an `http(s)` URL
+([CLI reference › prepare](/cli/reference/#prepare)).
+
+## Which format? \{#which-format}
+
+Count the features at full detail (`prepare` does it for you):
+
+| You have | Use | Command | Source |
+| --- | --- | --- | --- |
+| Under 50,000 features (about 10 MB of GeoJSON) | The file as it is | none | `url:` to the file |
+| 50,000 to 250,000 | GeoParquet read by view: rows sorted by location, a `bbox` column | `gpio convert` ([below](#read-a-mid-size-file-by-view)) | `load: viewport` |
+| More than 250,000, or a dense polygon fabric (parcels, building footprints) seen citywide | **PMTiles**, built with tylertoo | [the parcel recipe](#parcel-fabrics-pmtiles) | `type: vector` |
+| More than 250,000 points or lines, or a GeoParquet file is what you publish | An **overview GeoParquet file** (experimental) | [tylertoo `overview`](#overview-geoparquet) | `load: viewport` |
+
+- **PMTiles is the one format that draws a dense fabric at every zoom.**
+  NYC's 856,687 parcels draw citywide in 1–3 s at 58–60 fps on a desktop.
+- **A GeoParquet file stays a table**: download it, open it in Python, DuckDB
+  or QGIS. On the map, popups, `classify:` and `fitTo` work as on GeoJSON.
+  Read by view, the map reads only the rows on screen.
+- **An indexed FlatGeobuf** reads by view too, for 50,000 to 250,000 features;
+  `prepare` keeps one you already have
+  ([FlatGeobuf › Large files](/guides/flatgeobuf/#large-files)).
+
+A file read by view keeps a per-view budget: a view that would hold more
+than `maxFeatures` features (default 150,000) isn't read, and readers see
+"Too many features to show here — zoom in to see them" until they zoom in.
+No route drops or samples features beyond MapLibre's normal simplification
+and what the file's producer wrote.
+
+## Read a mid-size file by view
+
+For 50,000 to 250,000 features, convert the file to GeoParquet. geoparquet-io
+sorts the rows along a Hilbert curve and adds the `bbox` column that reading
+by view needs:
+
+```bash
+uvx --from geoparquet-io==1.7.0 gpio convert geoparquet districts.geojson districts.parquet --row-group-size 10000
+```
+
+```yaml
+sources:
+  districts:
+    type: geojson
+    url: districts.parquet
+    load: viewport   # only the features in view; nothing below zoom 10 (minzoom)
+```
+
+A GeoParquet file you already have only needs sorting:
+`uvx --from geoparquet-io==1.7.0 gpio sort hilbert districts.parquet districts-hilbert.parquet --row-group-size 10000 --add-bbox`.
+The limits, `minzoom` and `maxFeatures` are in
+[GeoParquet › Large files](/guides/geoparquet/#large-files).
+
+## Parcel fabrics: PMTiles \{#parcel-fabrics-pmtiles}
+
+A city's parcels or building footprints are hundreds of thousands of small
+polygons side by side. PMTiles cuts them into tiles in advance, simplified for
+each zoom, and the browser reads only the tiles in view.
+[tylertoo](https://github.com/geoparquet-io/tylertoo) builds the archive from
+GeoParquet, so convert the file first:
+
+```bash
+uvx --from geoparquet-io==1.7.0 gpio convert geoparquet parcels.geojson parcels.parquet
+uv run --with tylertoo==0.8.0 python -c "import tylertoo as t; t.overview('parcels.parquet', 'parcels-ov.parquet', min_zoom=0, max_zoom=14, collapse_square=True); t.export_pmtiles('parcels-ov.parquet', 'parcels.pmtiles', layer_name='parcels', tile_size_limit=None)"
+```
+
+Start from a `.fgb` the same way; a `.parquet` file skips the first line. On
+NYC's 856,687 lots the build takes 26 s and 2.1 GB of memory and writes a
+115 MB archive (tippecanoe took 8 min 40 s). Two settings matter with
+tylertoo 0.8.0, so keep them:
+
+- **`tile_size_limit=None`.** 0.8.0's default 500 KB tile cap drops features
+  from dense tiles. With it, 40,047 lots were missing at zoom 14 and the
+  fabric had holes at every zoom.
+- **`collapse_square=True`.** A lot too small to draw at a zoom becomes a
+  small square that carries its attributes, so the residential fabric shows
+  citywide instead of only parks and large institutions.
+
+`min_zoom=0` draws the data at every zoom. MapLibre draws zoom 14's tiles
+further in; raise `max_zoom` for finer detail.
+
+### Keep the id attribute
+
+tylertoo keeps every column as a tile property, so a popup or filter on
+`BBL` (NYC's parcel id) works. To make that column the feature id as well,
+for hover highlight and feature state, name it with `promoteId`, keyed by
+the tile layer:
+
+```yaml
+sources:
+  parcels:
+    type: vector
+    url: parcels.pmtiles
+    promoteId: { parcels: BBL }   # BBL stays a property too
+layers:
+  - id: parcels
+    type: fill
+    source: parcels
+    source-layer: parcels
+    paint:
+      fill-color: "#e9c46a"
+    interactive:
+      hover: { highlight: true }
+      click:
+        popup:
+          - h3: [{ property: BBL }]
+```
+
+Don't give the id to the tiler as the feature id instead (tippecanoe's
+`--use-attribute-for-id`): that moves the column out of the properties, and
+a popup showing it comes up blank.
+
+### What low zooms show, by producer
+
+Measured on NYC's parcels (MapPLUTO, 856,687 lots) in Chromium on a desktop:
+a citywide view at zoom 10.5 (775,200 lots, 97% of them smaller than a
+pixel) and a borough view at zoom 13 (94,127 lots). *Coloured* is the share
+of the screen the fabric covers.
+
+| Producer and settings | Citywide | Borough | Every lot from |
+| --- | --- | --- | --- |
+| tylertoo 0.8.0, the recipe above | Small lots drawn as squares; 36.5% coloured; 7.3 MB read, 2.7 s | Thin slivers between neighbouring lots: 65% coloured against 75% | zoom 14 (856,554 lots; the rest are slivers) |
+| tippecanoe, [the recipe below](#alternative-tippecanoe-for-parcels) | Neighbouring lots merged into blocks (8,078 shapes); 37.1% coloured; 1.1 MB, 1.7 s | Merged blocks; 75% coloured | zoom 14 (856,578 lots) |
+| freestiler 0.3.0, defaults | Every lot (775,236); 31.4 MB, 6.5 s | Every lot (94,125 of 94,127); 75% coloured | zoom 10, the archive's first: every lot in every tile, a 179 MB archive, 14.5 MB tiles at zoom 10 |
+| tylertoo 0.8.0, default tile cap | Holes: 18.1% coloured | Holes: 41% coloured | never: 40,047 lots missing at zoom 14 |
+
+Every build that drew panned at 54–60 fps and kept `BBL` for popups and
+hover. A click on a merged tippecanoe block at zooms 10 to 13 reports one lot
+of that block; a click on a tylertoo square reports the lot it stands for.
+
+## Overview GeoParquet (experimental) \{#overview-geoparquet}
+
+An overview GeoParquet file carries its own zoom pyramid: tylertoo's
+`overview` writes simplified copies of the data for coarser zooms as extra
+rows of the same file (its `geo:overviews` key). Read by view, the map reads
+the level that fits the zoom, so a wide view draws instead of asking to zoom
+in. Use one for points, lines and sparse polygons, or when the GeoParquet
+file is itself the deliverable: one file to analyse, download and map.
+
+```bash
+uvx --from geoparquet-io==1.7.0 gpio convert geoparquet stops.geojson stops.parquet
+uv run --with tylertoo==0.8.0 python -c "import tylertoo as t; t.overview('stops.parquet', 'stops-ov.parquet', min_zoom=0, max_zoom=14, collapse_square=True)"
+```
+
+```yaml
+sources:
+  stops:
+    type: geojson
+    url: stops-ov.parquet
+    load: viewport   # the overview level that fits the zoom (experimental)
+```
+
+<Aside type="caution" title="Experimental">
+Reading overview levels is on by default and experimental in core 0.10. The
+`geo:overviews` spec is a draft (0.2.0) with one writer, tylertoo, whose next
+release changes what its commands write at coarse levels. A file whose
+levels look wrong can be read at full detail only:
+`load: { mode: viewport, overviews: false }`.
+</Aside>
+
+**What coarse levels show depends on the producer's settings.** tylertoo
+0.8.0 is the reference producer. On NYC's parcels:
+
+- **Without `collapse_square`** (tylertoo's 0.8.0 default), coarse levels
+  keep the largest lots and drop most small ones. The citywide view drew in
+  1.8 s from 2.3 MB, but showed parks, cemeteries, airports and institutions
+  with the residential lots almost absent: 18.9% of the screen coloured,
+  against 37% for PMTiles. The borough view drew 49,515 of its 94,127 lots,
+  with holes (61% coloured against 75%).
+- **With `collapse_square=True`** (the command above), small lots become
+  squares, so the zoom-10 level holds 254,155 of them. A citywide view holds
+  about 224,000 features, over the 150,000 budget, and shows "Too many
+  features to show here — zoom in". Raising `maxFeatures` to 300,000 drew the
+  same picture as PMTiles, but took 9.9 s and 3.5 GB and panned at 15 fps.
+- **At full detail** (zoom 14 and in here) every lot draws, each once.
+
+That is why PMTiles stays the route for a dense polygon fabric seen
+citywide. Points and lines in overview files weren't measured.
+
+Popups, hover and `classify:` work at every level, because each row of each
+level is a real feature with all its columns. A file small enough to read
+whole is read at full detail. The details (which level each zoom reads,
+`minzoom`, hover across a level switch) are in
+[GeoParquet › Overview files](/guides/geoparquet/#overview-files).
+
+## Class breaks on large data \{#class-breaks}
+
+`classify:` with `method:` (`quantile`, `equal`, `jenks`) needs every
+feature's value, while a source read by view holds only the features on
+screen.
+
+**GeoParquet read by view computes them.** When the source loads, the map
+reads the one column it classifies from every full-detail row, never from
+coarse overview levels, and computes the breaks once. The classes describe the
+whole dataset and stay the same as you pan and zoom:
+
+```yaml
+sources:
+  parcels:
+    type: geojson
+    url: parcels.parquet
+    load: viewport
+layers:
+  - id: parcels
+    type: fill
+    source: parcels
+    classify:
+      field: NumFloors
+      method: quantile
+      classes: 5
+      palette: YlOrRd
+```
+
+That column read is capped at 32 MB compressed (the `field` and `normalize`
+columns each count on their own). NYC's parcels need 0.3 MB for `NumFloors`
+and 2 MB for `AssessTot`. Over the cap, the layer's notice asks for
+`breaks:` and names `mlym breaks` (below).
+
+**FlatGeobuf read by view and PMTiles** can't be scanned that way, so they
+refuse `method:`, and the message names `mlym breaks`. Run it on the whole
+local file and paste the line it prints in place of `method:` and
+`classes:`:
+
+```bash
+npx maplibre-yaml@latest breaks parcels.fgb --field NumFloors --method quantile --classes 5
+```
+
+For a PMTiles archive, run it on the file you built the archive from
+([CLI reference › breaks](/cli/reference/#breaks),
+[Thematic maps](/guides/thematic-maps/#breaks-computed-from-the-data)).
+
+## MLT tiles \{#mlt-tiles}
+
+PMTiles archives can hold MLT tiles (MapLibre Tiles) instead of the usual
+MVT. maplibre-yaml reads the tile type from the archive's header, so an MLT
+archive draws on maplibre-gl 6.0 or later with no `encoding:` in the YAML.
+An `encoding:` you write wins:
+
+```yaml
+sources:
+  lots:
+    type: vector
+    url: lots-mlt.pmtiles
+    encoding: mlt   # optional: read from the archive
+```
+
+- **Below maplibre-gl 6**, the encoding isn't set, and an author hint says
+  the archive needs maplibre-gl 6 or later, or a build with MVT tiles.
+- **64-bit integer columns.** MapLibre decodes them as BigInt and can fail
+  on them: a `promoteId` naming one fails every tile, and so did freestiler's
+  MLT build of NYC's parcels with its 64-bit `BBL` column. The map shows one
+  notice: "…holds MLT tiles with 64-bit integer columns, which this MapLibre
+  version can't draw. Write those columns as doubles or strings, or build MVT
+  tiles."
+- **A page that registers its own `pmtiles` protocol** keeps it, and
+  maplibre-yaml sets no encoding for it: write `encoding: mlt` yourself.
+
+MLT tiles are smaller (freestiler's MLT build of NYC's parcels was 105 MB
+against 179 MB as MVT, with `BBL` written as a double), but used more memory
+in the browser. The recipes on this page build MVT.
+
+## Troubleshooting
+
+See [Troubleshooting › Large data](/troubleshooting/#large-data-pmtiles-flatgeobuf-geoparquet-and-cog)
+for hosting problems (range requests, CORS). Specific to this page:
+
+- **"Too many features to show here — zoom in to see them"** at a wide
+  zoom: the view holds more than `maxFeatures`. For a parcel fabric, build
+  [PMTiles](#parcel-fabrics-pmtiles). For an overview file, the level for that
+  zoom is too dense, and an author hint says so: rebuild the file with
+  coarser levels, or use PMTiles.
+- **The citywide view shows big lots only, or holes**: the producer's coarse
+  levels dropped the small ones ([what low zooms show](#what-low-zooms-show-by-producer)).
+  Rebuild with the settings on this page.
+- **A popup shows an empty id**: the tiler moved the id into the feature id.
+  Rebuild without `--use-attribute-for-id`, and use
+  [`promoteId`](#keep-the-id-attribute).
+
+## Alternative: tippecanoe for parcels
+
+[tippecanoe](https://github.com/felt/tippecanoe) is the reference tiler. It
+fills the fabric best at low zooms, by merging neighbours rather than
+dropping them. It reads GeoJSON, FlatGeobuf and CSV, not GeoParquet, and
+took 8 min 40 s and 3.2 GB for NYC's parcels:
+
+```bash
+tippecanoe -o parcels.pmtiles -l parcels -Z10 -z16 \
+  --coalesce-densest-as-needed --extend-zooms-if-still-dropping \
+  parcels.fgb          # BBL stays a property: promoteId: { parcels: BBL } in the YAML
+```
+
+- `--coalesce-densest-as-needed` merges neighbouring lots into one shape,
+  with one lot's attributes, until each tile fits. The fabric has no holes;
+  every lot is back by zoom 14. `--extend-zooms-if-still-dropping` adds zooms
+  past `-z` until nothing is dropped at the top one.
+- `-Z10` writes nothing below zoom 10, so the map is blank further out.
+- For every lot at every zoom, use `--no-feature-limit --no-tile-size-limit`
+  instead of `--coalesce-densest-as-needed`: 162 MB, 8.4 MB tiles at zoom 10,
+  18 MB for the citywide view, still 57 fps.
+- Leave out `--use-attribute-for-id`: use [`promoteId`](#keep-the-id-attribute).

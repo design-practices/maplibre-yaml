@@ -66,6 +66,18 @@ export const NEVER_MOVE = [
   "/guides/editor-setup/",
   "/guides/effects/",
   "/reference/api/maplibre-yaml/core/",
+  // Core's shipped large-data hint text (LARGE_DATA_DOCS in
+  // components/student-messages.ts) and `mlym prepare`'s output link these.
+  "/guides/geoparquet/#large-files",
+  "/guides/flatgeobuf/#large-files",
+  "/guides/pmtiles/#from-a-large-file",
+  "/guides/large-data/",
+  "/guides/large-data/#which-format",
+  "/guides/large-data/#mlym-prepare",
+  "/guides/large-data/#parcel-fabrics-pmtiles",
+  "/guides/large-data/#overview-geoparquet",
+  "/guides/large-data/#class-breaks",
+  "/guides/large-data/#mlt-tiles",
 ];
 
 /**

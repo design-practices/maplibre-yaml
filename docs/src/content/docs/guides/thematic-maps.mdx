@@ -114,15 +114,28 @@ the map. When many values tie (40% of tracts at 0), a method can produce
 fewer classes than you asked for; the map and legend show the classes that
 exist.
 
-`method:` needs the whole dataset in the browser. A vector tile source
-(including PMTiles and the basemap's sources) only ever holds the tiles in
-view, and so does a FlatGeobuf or GeoParquet file read with
-`load: viewport`; breaks computed there would change as you pan. Validation
-refuses `method:` on those sources. Use explicit `breaks:` instead, computed
-where the full data lives. A FlatGeobuf or GeoParquet file over 50 MB switches
-to reading by view by itself, so for one of those the map checks when it
-reads the file and asks for `breaks:` in its notice
-([FlatGeobuf](/guides/flatgeobuf/), [GeoParquet](/guides/geoparquet/)).
+`method:` needs every feature's value. A GeoParquet file read by view
+(`load: viewport`, or a large file the map reads by view by itself) has it:
+when the source loads, the map reads the classified column from every
+full-detail row, computes the breaks once, and keeps them as you pan and
+zoom. That read is capped at 32 MB compressed per column; over it, the
+layer asks for `breaks:` in its notice.
+
+A vector tile source (including PMTiles and the basemap's sources) only ever
+holds the tiles in view, and so does a FlatGeobuf file read by view; breaks
+computed there would change as you pan, so `method:` is refused on them.
+Compute the breaks from the whole local file with
+[`mlym breaks`](/cli/reference/#breaks) and paste the `breaks:` line it
+prints ([Class breaks on large data](/guides/large-data/#class-breaks)):
+
+```bash
+npx maplibre-yaml@latest breaks tracts.fgb --field median_income --method quantile --classes 5
+```
+
+Validation refuses `method:` on a vector source or a FlatGeobuf with
+`load: viewport`. A FlatGeobuf file over 50 MB switches to reading by view
+by itself, so for one of those the map checks when it reads the file and
+asks for `breaks:` in its notice ([FlatGeobuf](/guides/flatgeobuf/)).
 
 ### Categories
 
@@ -383,7 +396,8 @@ mean" where it can. The common ones:
   console (and, while you develop, a note on the map) names the field and
   the data's actual property names. The same goes for `normalize:`.
 - **"method: computes breaks from the whole dataset, and …"**: the source is
-  tiled or read by view. Write `breaks:` instead
+  tiled, or a FlatGeobuf read by view. Write `breaks:` instead; `mlym breaks`
+  computes them from the whole file
   ([above](#breaks-computed-from-the-data)).
 - **Breaks that don't go up**, or a `colors:` (or `radius:`) list whose length
   doesn't match the classes: n breaks make n + 1 classes.

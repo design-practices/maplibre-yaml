@@ -499,6 +499,9 @@ ${htmlPage(version)}
   ${SITE}/guides/cloud-native-data/, then one page per format:
   ${SITE}/guides/pmtiles/, ${SITE}/guides/flatgeobuf/,
   ${SITE}/guides/geoparquet/, ${SITE}/guides/cog/
+- Which format for which size, the command that writes it and the YAML to
+  paste (\`mlym prepare <file>\` prints it for a file; \`mlym breaks\` computes
+  \`breaks:\` from a whole file): ${SITE}/guides/large-data/
 - A whole basemap from one Protomaps \`.pmtiles\` file, no API key:
   \`mapStyle: data/city.pmtiles\`, or \`mapStyle: { pmtiles: data/city.pmtiles,
   flavor: dark }\`. ${SITE}/guides/host-your-own-basemap/

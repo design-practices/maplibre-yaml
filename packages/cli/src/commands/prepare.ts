@@ -617,7 +617,7 @@ function tilesRecommendation(facts: PmtilesFacts, file: string): Recommendation 
         ? `Each layer picks one of its tile layers with source-layer: ${facts.layers.join(' or ')}.`
         : 'Each layer names one of its tile layers with source-layer: (the archive lists none in its metadata).',
     );
-    if (facts.tileType === 'MLT') notes.push('Its tiles are MLT (MapLibre Tiles): MapLibre GL 6.12 or later draws them.');
+    if (facts.tileType === 'MLT') notes.push('Its tiles are MLT (MapLibre Tiles): maplibre-gl 6 or later draws them, and maplibre-yaml sets `encoding: mlt` from the header.');
   } else {
     notes.push('Raster tiles: for elevation tiles (terrain, hillshade), write type: raster-dem instead.');
   }
