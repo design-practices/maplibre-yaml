@@ -40,6 +40,7 @@ const main = defineCommand({
     convert: () => import('./commands/convert.js').then(m => m.convertCommand),
     bake: () => import('./commands/bake.js').then(m => m.bakeCommand),
     breaks: () => import('./commands/breaks.js').then(m => m.breaksCommand),
+    prepare: () => import('./commands/prepare.js').then(m => m.prepareCommand),
   },
 });
 
