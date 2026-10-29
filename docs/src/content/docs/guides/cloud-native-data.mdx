@@ -1,5 +1,5 @@
 ---
-title: "Large data"
+title: "Cloud-native data"
 description: Draw files too big to download whole — PMTiles, FlatGeobuf, GeoParquet and Cloud Optimized GeoTIFF — straight from YAML, and pick the right format for your data.
 ---
 
@@ -26,6 +26,10 @@ bundler.
 | A whole basemap with no tile server | **Protomaps** `.pmtiles` | [Host your own basemap](/guides/host-your-own-basemap/) |
 
 Under about 10 MB, plain GeoJSON is fine ([Loading data](/guides/data-sources/)).
+For which format to use at which size, with the command that writes it and
+the YAML to paste, see [Choose a format for large data](/guides/large-data/#which-format).
+`npx maplibre-yaml@latest prepare <file>` looks at a file and prints that
+advice for it.
 FlatGeobuf and GeoParquet files become ordinary GeoJSON sources, so popups,
 `classify:`, clustering and `fitTo` work on them as on any GeoJSON. PMTiles
 holds tiles, cut in advance, which is what keeps a huge dataset fast.

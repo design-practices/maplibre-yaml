@@ -8,7 +8,8 @@ table, the format GeoPandas, DuckDB and GDAL write. maplibre-yaml reads it into
 an ordinary GeoJSON source, and reads **only the columns the map uses**, so a
 table with dozens of columns downloads only the few you show. Popups,
 `classify:`, clustering and `fitTo` work as for a `.geojson` file. It is one
-of the [large-data formats](/guides/cloud-native-data/).
+of the [large-data formats](/guides/cloud-native-data/); for which one suits
+your data's size, see [Choose a format for large data](/guides/large-data/).
 
 ## Quick start
 
@@ -87,8 +88,9 @@ of the area is read whole instead, with a console note; one without a `bbox`
 column is refused with a notice that says how to add it. With `load: viewport`,
 `fitTo` frames the extent recorded in the file's metadata, at the outermost
 zoom whose view is read (never below `minzoom` nor over `maxFeatures`), so the
-map opens with features drawn; and `classify:` needs explicit `breaks:` rather
-than `method:`.
+map opens with features drawn. `classify:` with `method:` works too: the
+breaks come from one column of every row, read once when the source loads
+([Class breaks on large data](/guides/large-data/#class-breaks)).
 
 ## Large files
 
@@ -160,11 +162,65 @@ Each note and notice names the way that applies; here they all are.
    (1–3 s and 58–60 fps on a desktop for NYC's 856,687 parcels). The
    [PMTiles guide](/guides/pmtiles/#from-a-large-file) has the one-line
    tylertoo command.
+5. **Or write overview levels into the file**, so a wide view reads a
+   simplified level instead of asking to zoom in
+   ([Overview files](#overview-files), experimental).
 
-**Overview files.** A GeoParquet file written by tylertoo's `overview` stores a
-simplified copy per zoom level as extra rows (its `geo:overviews` key). The map
-reads its full-detail level, so each feature is drawn once; reading a coarser
-level when zoomed out is planned.
+`npx maplibre-yaml@latest prepare lots.parquet` reads the file's footer and
+prints the step that applies, with the YAML to paste
+([Choose a format for large data](/guides/large-data/#mlym-prepare)).
+
+## Overview files (experimental) \{#overview-files}
+
+An overview file carries its own zoom pyramid: tylertoo's `overview` writes a
+simplified copy of the data per zoom level as extra rows of the same file,
+listed in its `geo:overviews` key. Read by view, the map reads **the level
+that fits the zoom**, with no YAML change:
+
+```bash
+uv run --with tylertoo==0.8.0 python -c "import tylertoo as t; t.overview('lots.parquet', 'lots-ov.parquet', min_zoom=0, max_zoom=14, collapse_square=True)"
+```
+
+```yaml
+sources:
+  lots:
+    type: geojson
+    url: lots-ov.parquet
+    load: viewport   # the overview level that fits the zoom (experimental)
+```
+
+- **Which level.** At each zoom the map reads the finest level built for that
+  zoom or a coarser one: at zoom 11.4, the zoom-11 level, or zoom 10's when
+  there is none. Below the coarsest level it reads the coarsest. A level that
+  declares no zoom gets one from its ground resolution (`gsd`).
+- **`minzoom`.** By view, a plain file reads nothing below zoom 10. An
+  overview file with no `minzoom` of yours reads its coarsest level at every
+  wider zoom instead; a `minzoom` you write still wins.
+- **The budget applies to the level read.** A view of that level holding
+  more than `maxFeatures` (default 150,000) isn't read, and readers see "Too
+  many features to show here — zoom in", with an author hint about the
+  level. The map doesn't fall back to a coarser level.
+- **Whole reads use full detail.** A file small enough to read whole is read
+  at its full-detail level, and so are `classify:` breaks, `mlym emit` and
+  `mlym breaks`. Each feature is drawn once, never once per level.
+- **Popups and hover work at every level**: each row of each level is a real
+  feature with all its columns, and `promoteId` works within a level. When
+  the zoom crosses to another level, the map redraws from that level and
+  resets hover and other feature state for the source's layers. A popup
+  opened at a coarse level stays as it was until you close it.
+- **`load: { mode: viewport, overviews: false }`** reads only the full-detail
+  level, by view: for debugging, or for a file whose coarse levels look
+  wrong.
+- **Versions.** The `geo:overviews` spec is a draft (0.2.0). A file declaring
+  another major version is read at its full-detail level, with an author
+  hint.
+
+What the coarse levels look like is the producer's choice. With tylertoo
+0.8.0 on a parcel fabric they drop most small lots, or, with
+`collapse_square=True`, draw them as squares that fill a citywide view past
+the budget; [Overview GeoParquet](/guides/large-data/#overview-geoparquet) has
+the measurements, and why PMTiles stays the route for parcels and building
+footprints seen citywide.
 
 ## Make a GeoParquet file
 

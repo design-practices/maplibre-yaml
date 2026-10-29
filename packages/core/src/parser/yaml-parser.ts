@@ -1781,6 +1781,10 @@ export class YAMLParser {
           // swapped value when latitude and longitude look swapped.
           const bounds = boundsIssue(err.path, ctx?.value);
           if (bounds) return withPosition(bounds, ctx);
+          // A source of a known type with a key of the wrong type
+          // (`load: { overviews: "no" }`): report it at that key.
+          const key = sourceKeyTypeIssue(err, ctx?.value);
+          if (key) return this.formatIssue(key, ctx);
           message = this.formatUnionError(err, ctx);
           if (message === UNION_FALLBACK) {
             // Report the failure inside the union instead of the union
@@ -2496,6 +2500,20 @@ function isSourceTypeLiteralIssue(issue: ZodIssue): boolean {
     issue.path[issue.path.length - 1] === "type" &&
     looksLikeSourcePath(issue.path.slice(0, -1))
   );
+}
+
+/**
+ * In the source union, the matching branch's first issue when it is a key of
+ * the wrong type inside the source (`load.overviews: "no"`), so it is
+ * reported at that key, not at the source; undefined otherwise.
+ */
+function sourceKeyTypeIssue(err: ZodIssue & { code: "invalid_union" }, value: unknown): ZodIssue | undefined {
+  const typePath = findSourceTypeIssuePath(err.unionErrors);
+  if (!typePath || typePath.length !== err.path.length + 1) return undefined;
+  if (!(SOURCE_TYPES as readonly string[]).includes(valueAtPath(value, typePath) as string)) return undefined;
+  const issue = findMatchingSourceBranch(err.unionErrors)?.errors[0];
+  const wrongType = issue?.code === "invalid_union" || (issue?.code === "invalid_type" && issue.received !== "undefined");
+  return wrongType && issue!.path.length > err.path.length ? issue : undefined;
 }
 
 /**

@@ -150,6 +150,22 @@ describe("layer checks", () => {
     expect(inline.errors[0]!.path).toBe("layers.0.classify.method");
   });
 
+  it("AE5: the by-view refusal names mlym breaks, with the file, field and method filled in", () => {
+    const inline = parse(D.methodOverViewportInline);
+    expect(inline.errors[0]!.message).toContain("`mlym breaks t.fgb --field income --method jenks`");
+    const bare = YAMLParser.safeParseMapBlock(D.methodOverViewportBare);
+    expect(bare.errors[0]!.message).toContain("`mlym breaks tracts.fgb --field income --method quantile`");
+    // Vector tiles: computed over the file the tiles were made from.
+    const [tiles] = only(parse(D.methodOverTiles));
+    expect(tiles!.message).toContain("mlym breaks");
+  });
+
+  it("accepts method: over a GeoParquet source read by view: the runtime computes from one column (0.10 U3)", () => {
+    expect(YAMLParser.safeParseMapBlock(D.methodOverViewportParquet).errors).toEqual([]);
+    // format: geoparquet on an extensionless URL counts too.
+    expect(YAMLParser.safeParseMapBlock(D.methodOverViewportParquetFormat).errors).toEqual([]);
+  });
+
   it("keeps explicit breaks: on a source read by view", () => {
     const result = YAMLParser.safeParseMapBlock(D.breaksOverViewport);
     expect(result.errors).toEqual([]);

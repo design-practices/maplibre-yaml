@@ -67,7 +67,7 @@ import { applyAccessibleName } from './accessible-name';
 import { isProtocolRegistered, pmtilesUnavailable, prepareProtocols } from './cloud-protocols';
 import { cogHintFor } from '../formats/cog-protocol';
 import { basemapRequestTransformer, type RequestTransformer } from './basemap-urls';
-import { formatOfSource, type CloudFormat } from '../formats/detect';
+import { formatOfSource, schemeFormat, type CloudFormat } from '../formats/detect';
 import { protomapsBasemapOf, type ProtomapsBasemap } from '../schemas/basemap.schema';
 import {
   basemapAssetMessage,
@@ -83,7 +83,7 @@ import {
   NARROW_MAP_WIDTH,
   type FitPadding,
 } from '../utils/fit-padding';
-import { archiveMetadata } from '../formats/pmtiles';
+import { archiveMetadata, archiveTileType, mltNotice } from '../formats/pmtiles';
 import {
   basemapLanguage,
   fallbackBasemapStyle,
@@ -245,6 +245,15 @@ const BASEMAP_FILE_FAILURE =
 const MISSING_PROTOMAPS_LAYER = new RegExp(
   `^Source layer "[^"]*" does not exist on source "${PROTOMAPS_SOURCE_ID}"`
 );
+
+/**
+ * What MapLibre's worker throws for an MLT tile with 64-bit integer columns
+ * (decoded as BigInt): serialising one, or using one as a number (a
+ * `promoteId` naming it) — V8's, Firefox's and Safari's words. Only the text
+ * crosses the worker boundary.
+ */
+const BIGINT_FAILURE =
+  /serialize a BigInt|BigInt value can't be serialized|cannot serialize BigInt|convert a BigInt value to a number|can't convert BigInt to number|Conversion from 'BigInt' to 'number'/i;
 
 /**
  * What part of the document a reported error belongs to — the third argument
@@ -1356,6 +1365,37 @@ export class MapRenderer {
       return undefined;
     };
 
+    // A vector source's PMTiles archive (its `pmtiles://` URL), if it is one.
+    const pmtilesArchive = (sourceId: unknown): string | undefined => {
+      const source =
+        typeof sourceId === 'string' ? (this.map.getSource?.(sourceId) as { type?: unknown; url?: unknown } | undefined) : undefined;
+      return source?.type === 'vector' && typeof source.url === 'string' && schemeFormat(source.url) === 'pmtiles' ? source.url : undefined;
+    };
+    // Sources told about their MLT tiles, once per source and archive for this
+    // map (U4): a live `url:` change to another archive is told anew.
+    const int64Told = new Set<string>();
+    const mltHinted = new Set<string>();
+    // A maplibre-gl below 6 draws no MLT (KTD11), and the shared protocol
+    // handler can't say so: once an archive's TileJSON has loaded (its header
+    // is read), a document vector source whose archive holds MLT tiles gets
+    // one hint.
+    const runtime = this.mapVersion();
+    if (Number(runtime?.split('.')[0]) < 6) {
+      this.map.on('sourcedata', (e: { sourceId?: unknown; sourceDataType?: unknown }) => {
+        const archive = e.sourceDataType === 'metadata' ? pmtilesArchive(e.sourceId) : undefined;
+        const sourceId = e.sourceId as string;
+        const told = `${sourceId}\0${archive}`;
+        if (!archive || mltHinted.has(told) || !documentSourceIds().has(sourceId)) return;
+        mltHinted.add(told);
+        void archiveTileType(archive).then(async (tileType) => {
+          const hint = tileType === 6 ? await mltNotice(archive, runtime) : undefined;
+          if (!hint || this.destroyed) return;
+          console.warn(`[maplibre-yaml] ${consoleText(hint)}`);
+          options.onError?.(new Error(hint), false, { kind: 'source-hint', sourceId });
+        });
+      });
+    }
+
     // Handle errors. Runtime maplibre error events are non-fatal — the map
     // still reaches `load` after a failed tile/sprite/glyph request — except
     // a basemap style that never loaded (classified above).
@@ -1390,6 +1430,23 @@ export class MapRenderer {
       // the basemap's internals, not the document's; the file check
       // (loadProtomapsBasemap) says what is wrong, once.
       if (protomaps && MISSING_PROTOMAPS_LAYER.test(error.message)) return;
+      // MLT tiles from a PMTiles archive with 64-bit integer columns (U4,
+      // KTD10): every tile fails alike. One notice for the source, with the
+      // fix; the rest dropped.
+      const failed = (e as { sourceId?: unknown }).sourceId;
+      const archive = BIGINT_FAILURE.test(error.message) ? pmtilesArchive(failed) : undefined;
+      if (archive && typeof failed === 'string') {
+        const told = `${failed}\0${archive}`;
+        if (!int64Told.has(told)) {
+          int64Told.add(told);
+          void mltNotice(archive).then((notice) => {
+            if (this.destroyed) return;
+            const reported = notice ? Object.assign(new Error(notice), { cause: raw }) : error;
+            options.onError?.(reported, false, classify(e as never, reported.message));
+          });
+        }
+        return;
+      }
       const hinted = withWorkerUrlHint(error.message, runtimeVersion());
       if (hinted !== error.message) error = Object.assign(new Error(hinted), { cause: raw });
       const context = classify(e as never, error.message);
@@ -2024,6 +2081,10 @@ export class MapRenderer {
       },
       {
         readsByView: (sourceId) => this.layerManager.readsByView?.(sourceId) ?? false,
+        // A GeoParquet source read by view: its breaks from the whole column (0.10 U3).
+        wholeColumn: (sourceId, fields) => this.layerManager.wholeColumns?.(sourceId, fields),
+        // A live url: change gives the source a new reader: its breaks come from the new file.
+        readerToken: (sourceId) => this.layerManager.readerToken?.(sourceId),
         onRefused: (layerId, sourceId, error) => {
           console.warn(`[maplibre-yaml] ${consoleText(error.message)}`);
           this.options.onError?.(error, false, { kind: 'classify', layerId, sourceId });

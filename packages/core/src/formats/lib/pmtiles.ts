@@ -9,10 +9,13 @@
  * are cut from a compressed copy). The main bundle keeps the `pmtiles://`
  * registration and the metadata reads (formats/pmtiles.ts); a request that
  * fails is handed to {@link tileFailure}, which reaches core through the
- * {@link PmtilesHost} given at load ({@link useHost}). This module imports
- * core as types only (see the seam, formats/decoders.ts).
+ * {@link PmtilesHost} given at load ({@link useHost}). A TileJSON reply
+ * passes through {@link withEncoding} (an MLT archive's `encoding`), and the
+ * MLT notices are worded here ({@link mltNotice}). This module imports core
+ * as types only (see the seam, formats/decoders.ts).
  */
 
+import type { Protocol } from "pmtiles";
 import type { PmtilesHost } from "../../renderer/cloud-host";
 
 export { PMTiles, Protocol } from "pmtiles";
@@ -128,4 +131,58 @@ export async function tileFailure(
     }
   }
   return classified;
+}
+
+/** The PMTiles header's tile type for MLT (`TileType.Mlt`). */
+const MLT = 6;
+
+/**
+ * A `pmtiles://` reply as MapLibre gets it: the TileJSON of an archive whose
+ * header says MLT gets `encoding: "mlt"` (0.10, U4; KTD9), on a maplibre-gl
+ * that draws MLT (`drawsMlt`, which formats/pmtiles.ts decides from the
+ * running version, KTD11); anything else as the library gave it. The header
+ * is the one the reader read for this TileJSON (cached). MapLibre merges the
+ * source over the TileJSON (load_tilejson.ts: explicit source options take
+ * precedence), so an author's `encoding:` still wins. Only core's own
+ * handler gets here: a page that registered `pmtiles` itself keeps its
+ * handler, without this (host wins).
+ *
+ * @param protocol - The reader that answered.
+ * @param url - The TileJSON request's `pmtiles://` URL.
+ * @param reply - The library's reply.
+ * @param drawsMlt - Whether the running maplibre-gl draws MLT.
+ */
+export async function withEncoding<T extends { data?: unknown }>(
+  protocol: Protocol,
+  url: string,
+  reply: T,
+  drawsMlt: boolean
+): Promise<T> {
+  const data = reply.data as Record<string, unknown> | null | undefined;
+  if (!drawsMlt || !data || typeof data !== "object") return reply;
+  // The library's own key for the archive (`url.substr(10)`).
+  const header = await protocol.tiles.get(url.slice("pmtiles://".length))?.getHeader().catch(() => undefined);
+  return header?.tileType === MLT ? { ...reply, data: { ...data, encoding: "mlt" } } : reply;
+}
+
+/**
+ * What core says about an archive's MLT tiles (0.10, U4; design §8.3), shown
+ * by the main bundle: with `runtime`, the running maplibre-gl draws no MLT
+ * (KTD11, an author hint); without, the tiles failed on 64-bit integer
+ * columns, which MapLibre's worker can't pass on (KTD10, the source's notice).
+ *
+ * @param archive - The archive URL (`pmtiles://` scheme or not).
+ * @param runtime - The running maplibre-gl version, when it is below 6.
+ */
+export function mltNotice(archive: string, runtime?: string): string {
+  const file = `\`${displayUrl(archive.replace(/^pmtiles:\/\//i, ""))}\``;
+  return (
+    (runtime
+      ? `${file} holds MLT tiles, which maplibre-gl draws from version 6; this page runs ${runtime}. ` +
+        "Use maplibre-gl 6 or later, or build the archive with MVT tiles."
+      : `${file} holds MLT tiles with 64-bit integer columns, which this MapLibre version can't draw. ` +
+        "Write those columns as doubles or strings, or build MVT tiles.") +
+    // The Large data guide's MLT section (core's LARGE_DATA_DOCS.mlt, through the host).
+    ` More: ${host().mltDocs}`
+  );
 }

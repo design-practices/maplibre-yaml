@@ -299,8 +299,45 @@ describe("load: maxFeatures — the per-view budget (ml-37r.17)", () => {
     expect(bad.errors[0]).toMatchObject({ path: "sources.lots.load.maxFeatures" });
   });
 
-  it("refuses a maxFeatures that isn't a number", () => {
+  it("refuses a maxFeatures that isn't a number, at load.maxFeatures", () => {
     const result = v1(D.maxFeaturesWord);
     expect(result.success).toBe(false);
+    expect(result.errors[0]).toMatchObject({ path: "sources.lots.load.maxFeatures", message: "Expected number, got string" });
+  });
+});
+
+describe("load: overviews — geo:overviews levels by view (0.10, ml-cnv.22)", () => {
+  it("overviews: false validates on a GeoParquet source, flat (v1) and under runtime: (v2)", () => {
+    const flat = v1(D.overviewsOffFlat);
+    expect(flat.errors).toEqual([]);
+    expect(flat.warnings).toEqual([]);
+    expect(flat.success).toBe(true);
+    const nested = v2(D.overviewsOffNested);
+    expect(nested.errors).toEqual([]);
+    expect(nested.warnings).toEqual([]);
+    expect(nested.success).toBe(true);
+  });
+
+  it("warns on a FlatGeobuf source, where it does nothing (v1 and v2)", () => {
+    const flat = v1(D.overviewsOnFgb);
+    expect(flat.success).toBe(true);
+    expect(flat.warnings).toEqual([
+      expect.objectContaining({
+        path: "sources.lots.load.overviews",
+        message: expect.stringContaining("overviews: only applies to GeoParquet sources"),
+        line: expect.any(Number),
+      }),
+    ]);
+    const nested = v2(D.overviewsOnFgbNested);
+    expect(nested.success).toBe(true);
+    expect(nested.warnings).toEqual([
+      expect.objectContaining({ path: "style.sources.lots.runtime.load.overviews" }),
+    ]);
+  });
+
+  it("refuses an overviews: that isn't true or false, at load.overviews", () => {
+    const result = v1(D.overviewsWord);
+    expect(result.success).toBe(false);
+    expect(result.errors[0]).toMatchObject({ path: "sources.lots.load.overviews" });
   });
 });

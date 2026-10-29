@@ -422,6 +422,189 @@ npx maplibre-yaml@latest bake blueprint --out docs/public/classics/blueprint
 
 ---
 
+### breaks
+
+Compute [`classify:`](/guides/thematic-maps/) breaks for a field from a
+whole local data file, and print them ready to paste. In the browser,
+computed breaks (`method:`) need the whole dataset: a FlatGeobuf or PMTiles
+source read by view never has it, so its layer refuses `method:` and points
+here. `breaks` reads every feature of the file, computes the breaks with the
+same code the browser uses for a GeoJSON source, and prints a `breaks:` line
+to put under `classify:` in place of `method:` and `classes:`.
+
+```bash
+npx maplibre-yaml@latest breaks <file> --field <name> [options]
+```
+
+| Argument | Required | Description |
+| -------- | -------- | ----------- |
+| `file` | Yes | A local GeoParquet (`.parquet`), FlatGeobuf (`.fgb`) or GeoJSON (`.geojson`, `.json`) file. The extension names its format. A GeoParquet overview file is read at its full-detail level |
+
+| Option | Alias | Type | Default | Description |
+| ------ | ----- | ---- | ------- | ----------- |
+| `--field` | | string | | Required. The numeric property to classify, as `field:` |
+| `--method` | | string | `quantile` | `quantile`, `equal` or `jenks`, as `method:` |
+| `--classes` | | number | `5` | How many classes, 2 to 12, as `classes:` |
+| `--normalize` | | string | | Divide the field by this property to break a rate, as `normalize:` |
+| `--multiply` | | number | | Multiply the rate (`100000` for "per 100,000"), as `multiply:`. Needs `--normalize` |
+| `--format` | `-f` | string | `text` | `json` prints one JSON object on stdout instead: `success`, `file`, `format`, `field`, `method`, `classes`, `breaks`, `min`, `max`, `count` and `noData`, or `success: false` and `errors` (as [`convert`'s](#convert-json-output): one `{ path, message, code }` per problem, `code` naming the exit code, e.g. `file-not-found`) |
+
+The output is a comment naming what was computed, the field's range, and the
+breaks:
+
+```bash
+npx maplibre-yaml@latest breaks districts.fgb --field population --method jenks --classes 5
+```
+
+```yaml no-validate
+# population, jenks, 5 classes, from districts.fgb (48 features)
+# range: 2063 to 24402
+breaks: [4548, 9185, 15975, 20657]
+```
+
+Paste it under the layer's `classify:`, beside `field:`:
+
+```yaml
+- id: districts-fill
+  type: fill
+  source: districts
+  classify:
+    field: population
+    # population, jenks, 5 classes, from districts.fgb (48 features)
+    # range: 2063 to 24402
+    breaks: [4548, 9185, 15975, 20657]
+    palette: YlGnBu
+```
+
+Features whose value is missing, null, empty or not a number are no data:
+the comment counts them, and they don't move the breaks. When ties leave
+fewer distinct classes than asked (40% of the features at 0 cannot fill five
+equal-count classes), a third comment line says how many the breaks make.
+
+The command exits `1` when `--field` is missing, names a property no feature
+has (it lists the ones they have), or names a text field (it says so and
+suggests [`categories:`](/guides/thematic-maps/)); when a flag is out of
+range; and when the file is not one of the three formats, including a
+PMTiles archive, whose tiles hold a generalised subset of the data: run
+`breaks` on the file the archive was built from. A file that can't be read
+exits `2`.
+
+```bash
+npx maplibre-yaml@latest breaks tracts.parquet --field median_income                    # quantile, 5 classes
+npx maplibre-yaml@latest breaks tracts.geojson --field cases --normalize population --multiply 100000
+npx maplibre-yaml@latest breaks points.fgb --field value --method equal --classes 4 -f json
+```
+
+---
+
+### prepare
+
+Look at a data file and say what to do with it. `prepare` reports the file's
+facts, prints the one recommended route from the
+[Large data guide](/guides/large-data/)'s size-to-format table with its
+commands (file names filled in), and the YAML source block to paste. It only
+reads: it writes no data and runs nothing.
+
+```bash
+npx maplibre-yaml@latest prepare <file> [options]
+```
+
+| Argument | Required | Description |
+| -------- | -------- | ----------- |
+| `file` | Yes | A local path or an `http(s)` URL: GeoParquet (`.parquet`), FlatGeobuf (`.fgb`), GeoJSON (`.geojson`, `.json`) or PMTiles (`.pmtiles`). The file's first bytes decide its format; the extension is the fallback |
+
+| Option | Alias | Type | Default | Description |
+| ------ | ----- | ---- | ------- | ----------- |
+| `--format` | `-f` | string | `text` | `json` prints one JSON object on stdout instead: `success`, `file`, `facts` and `recommendation` (`verdict`, `route`, `summary`, `steps`, `yaml`, `alternative`, `notes`), or `success: false` and `errors` (as `breaks` prints them) |
+
+What it reads:
+
+- **GeoParquet and FlatGeobuf:** only the footer or header, never the
+  features: rows or features, size, geometry, CRS, the `bbox` column, row
+  groups and rows per group, sort order, and a GeoParquet overview file's
+  levels. A FlatGeobuf whose header doesn't record its feature count (some
+  streaming writers leave it out) is routed by its size instead: up to
+  10 MB it is read whole; above that, the `ogr2ogr` command re-creates it
+  with an index and the count, to read by view.
+- **GeoJSON:** the whole file up to 200 MB, to count its features. Above
+  that it reads the first 8 MB and estimates the count from them, and the
+  report calls it an estimate.
+- **PMTiles:** the header and metadata: tile type, zooms, bounds and the
+  tile layers that `source-layer:` names. An archive is already tiles, so
+  the answer is "no change needed" and the `type: vector` (or `raster`)
+  source.
+- **A URL** is read with range requests, as a map reading the file by view
+  reads it. A server that ignores them (`python -m http.server`) is refused
+  rather than downloaded whole; the message says to host the file where range
+  requests work, or to run `prepare` on a downloaded copy. Each request
+  waits up to 30 seconds for an answer.
+
+The route, from the number of features at full detail:
+
+| Features | Route | What `prepare` prints |
+| -------- | ----- | --------------------- |
+| Under 50,000 | Use it as it is | "No change needed" and the source. For a FlatGeobuf without a spatial index or a GeoParquet file not sorted by location, also the command that would make it readable by view, if you want that |
+| 50,000 to 250,000 | Read it by view | For a sorted GeoParquet file with a `bbox` column or an indexed FlatGeobuf, "no change needed" and the source with `load: viewport`. Otherwise the `gpio sort hilbert` command (GeoParquet), the `ogr2ogr` index command (FlatGeobuf) or the `gpio convert` command (GeoJSON) first. For polygons, PMTiles as the alternative |
+| Over 250,000 | PMTiles (polygons), or an overview GeoParquet file (points and lines) | The tylertoo command and the source: `type: vector` for PMTiles, `load: viewport` for the overview file, which is experimental. The other route as the alternative |
+
+A file in a projected CRS gets the `ogr2ogr -t_srs EPSG:4326` command first,
+and a GeoParquet file with GeoArrow geometry the WKB rewrite; the rest of the
+route then applies to the file those write. The commands are the ones the
+map's own notices print, so a notice and `prepare` name the same command.
+
+```bash
+npx maplibre-yaml@latest prepare parcels.geojson
+```
+
+```text
+parcels.geojson: GeoJSON, 300 MB
+  features  about 1,480,000 (an estimate, from the first 8.0 MB: the file is over the 200 MB it parses in full)
+  geometry  Polygon
+  CRS       EPSG:4326 (longitude/latitude)
+
+About 1,480,000 polygons, over 250,000: PMTiles draws it at every zoom, citywide included.
+
+Run:
+
+  Convert it to PMTiles with tylertoo (the parcel recipe; MapLibre draws zoom 14’s tiles further in):
+     uvx --from geoparquet-io==1.7.0 gpio convert geoparquet parcels.geojson parcels.parquet
+     uv run --with tylertoo==0.8.0 python -c "import tylertoo as t; t.overview('parcels.parquet', 'parcels-ov.parquet', min_zoom=0, max_zoom=14, collapse_square=True); t.export_pmtiles('parcels-ov.parquet', 'parcels.pmtiles', layer_name='parcels', tile_size_limit=None)"
+
+Then paste:
+
+sources:
+  parcels:
+    type: vector
+    url: parcels.pmtiles
+    # layers draw it with source-layer: parcels
+…
+```
+
+The block pastes into the document's `sources:`, and the `url:` is relative
+to the document (for a URL argument, the URL itself):
+
+```yaml
+sources:
+  parcels:
+    type: vector
+    url: parcels.pmtiles
+    # layers draw it with source-layer: parcels
+```
+
+The command exits `1` with no file argument, a bad `--format`, a file of none
+of the four formats (a Parquet file without geometry metadata included), or a
+server without range requests. A path that can't be read (missing, a folder,
+no permission) or a URL that answers 404, can't be reached, or doesn't
+answer within 30 seconds exits `2`.
+
+```bash
+npx maplibre-yaml@latest prepare data/trees.fgb
+npx maplibre-yaml@latest prepare https://data.example.org/lots.parquet
+npx maplibre-yaml@latest prepare lots-overviews.parquet -f json
+```
+
+---
+
 ## Project settings file \{#configuration-file}
 
 A `maplibre-yaml.config.json` file in the folder you run the CLI from sets
@@ -463,8 +646,8 @@ the built-in default. With the file above, `preview map.yaml` serves on port
 | Code | Meaning             | Commands          |
 | ---- | ------------------- | ----------------- |
 | `0`  | Success. For `emit`, the style was written; warnings, if any, are on stderr | All |
-| `1`  | Invalid input: validation or syntax errors, warnings in strict mode, an unknown template or option, a non-empty `init` folder, an `emit --strict` or `convert --strict` refusal | validate, emit, convert, init, schema, bake |
-| `2`  | File not found, no file matched a pattern, or a folder held no map or story document | validate, preview, emit, convert |
+| `1`  | Invalid input: validation or syntax errors, warnings in strict mode, an unknown template or option, a non-empty `init` folder, an `emit --strict` or `convert --strict` refusal, a `breaks` field that is missing or not numeric, a file `prepare` doesn't read or a server without range requests | validate, emit, convert, init, schema, bake, breaks, prepare |
+| `2`  | File not found, no file matched a pattern, a folder held no map or story document, or a `prepare` URL answered 404, couldn't be reached or didn't answer in 30 s | validate, preview, emit, convert, breaks, prepare |
 | `4`  | Unexpected error (for `emit`, for example, a basemap or image that could not be fetched) | All |
 
 ---

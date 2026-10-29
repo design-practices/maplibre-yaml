@@ -185,29 +185,43 @@ export interface LoadMode {
    * file over the limit load whole and a dense view read.
    */
   authorMaxFeatures?: number;
+  /**
+   * The author's own `minzoom`, when the document sets one: it always wins
+   * over the overview files' floor of 0 (0.10, ml-cnv.22).
+   */
+  authorMinzoom?: number;
+  /**
+   * Whether a GeoParquet overview file read by view draws the `geo:overviews`
+   * level that fits the zoom (`load: { overviews }`, default true); false
+   * reads its canonical level only, as 0.9.2 does.
+   */
+  overviews: boolean;
 }
 
 /**
  * The source's `load:` key, normalized (`all` when absent or unrecognized):
  * flat (v1, and every source the renderer sees) or under a v2 source's
- * `runtime:`; the bare string or the `{ mode, minzoom, maxFeatures }` object
- * (`mode` defaults to `all`).
+ * `runtime:`; the bare string or the `{ mode, minzoom, maxFeatures, overviews }`
+ * object (`mode` defaults to `all`, `overviews` to true).
  */
 export function loadModeOf(source: unknown): LoadMode {
   const runtime = isObject(source) ? source["runtime"] : undefined;
   const load = isObject(source) ? (source["load"] ?? (isObject(runtime) ? runtime["load"] : undefined)) : undefined;
-  const num = (key: string, fallback: number): number =>
-    isObject(load) && typeof load[key] === "number" ? (load[key] as number) : fallback;
+  const num = (key: string): number | undefined =>
+    isObject(load) && typeof load[key] === "number" ? (load[key] as number) : undefined;
   const viewport =
     (typeof load === "string" && load.trim().toLowerCase() === "viewport") ||
     (isObject(load) && load["mode"] === "viewport");
-  const author = isObject(load) && typeof load["maxFeatures"] === "number" ? (load["maxFeatures"] as number) : undefined;
+  const author = num("maxFeatures");
+  const minzoom = num("minzoom");
   return {
     mode: viewport ? "viewport" : "all",
-    minzoom: num("minzoom", VIEWPORT_DEFAULT_MINZOOM),
+    minzoom: minzoom ?? VIEWPORT_DEFAULT_MINZOOM,
     // Also read for `all`: a file too large to load whole is read by view.
     maxFeatures: author ?? VIEWPORT_DEFAULT_MAX_FEATURES,
+    overviews: !isObject(load) || load["overviews"] !== false,
     ...(author !== undefined ? { authorMaxFeatures: author } : {}),
+    ...(minzoom !== undefined ? { authorMinzoom: minzoom } : {}),
   };
 }
 

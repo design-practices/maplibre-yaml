@@ -1,5 +1,12 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { MapRenderer } from "../../src/renderer/map-renderer";
+
+/** The maplibre-gl version the stand-in module reports (none by default), and the archive tile type `archiveTileType` reads. */
+const runtime = vi.hoisted(() => ({ version: undefined as string | undefined, tileType: vi.fn(async (_url: string): Promise<number | undefined> => 6) }));
+vi.mock("../../src/formats/pmtiles", async (load) => ({
+  ...(await load<object>()),
+  archiveTileType: runtime.tileType,
+}));
 
 // Mock maplibre-gl
 vi.mock("maplibre-gl", () => {
@@ -59,8 +66,11 @@ vi.mock("maplibre-gl", () => {
     remove: vi.fn(),
   }));
 
+  const getVersion = () => runtime.version;
   return {
+    getVersion,
     default: {
+      getVersion,
       Map: MockMap,
       NavigationControl,
       GeolocateControl,
@@ -1247,5 +1257,157 @@ describe("the applied document is the document as written (KTD1 review sweep)", 
     expect(renderer.getDocument().sources.pts).toEqual({ type: "geojson", url: "/pts.geojson" });
     expect(renderer.getDocument().sources.own).toHaveProperty("prefetchedData");
     renderer.destroy();
+  });
+});
+
+describe("MLT tiles from a PMTiles archive (U4)", () => {
+  const until = async (check: () => boolean) => {
+    for (let i = 0; i < 100 && !check(); i++) await new Promise((r) => setTimeout(r, 5));
+  };
+  const config = { center: [0, 0] as [number, number], zoom: 2, mapStyle: "https://example.com/style.json" };
+  const SOURCES = {
+    lots: { type: "vector", url: "https://h.org/lots.pmtiles" },
+    roads: { type: "vector", tiles: ["https://h.org/roads/{z}/{x}/{y}.mlt"], encoding: "mlt" },
+  };
+  /** A map over SOURCES whose style holds them as MapLibre would (canonical URLs). */
+  function render(onError = vi.fn()) {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const renderer = new MapRenderer(container, config, [], { onError }, SOURCES as any);
+    const map = renderer.getMap() as any;
+    map.getSource.mockImplementation((id: string) =>
+      id === "lots"
+        ? { type: "vector", url: "pmtiles://https://h.org/lots.pmtiles" }
+        : id === "roads"
+          ? { type: "vector", tiles: SOURCES.roads.tiles }
+          : undefined
+    );
+    map.emit("style.load");
+    return { renderer, map, onError };
+  }
+  afterEach(() => {
+    runtime.version = undefined;
+    runtime.tileType.mockClear();
+    vi.restoreAllMocks();
+  });
+
+  describe("64-bit integer columns: one notice per source, not an error per tile (KTD10, AE7)", () => {
+    it.each([
+      ["V8", "Do not know how to serialize a BigInt"],
+      ["Firefox", "BigInt value can't be serialized in JSON"],
+      ["Safari", "JSON.stringify cannot serialize BigInt."],
+      // An int64 column used as a number (a `promoteId` naming it).
+      ["V8, as a number", "Cannot convert a BigInt value to a number"],
+      ["Firefox, as a number", "can't convert BigInt to number"],
+      ["Safari, as a number", "Conversion from 'BigInt' to 'number' is not allowed."],
+    ])("%s: ten tile failures, one notice naming the cause and both fixes", async (_engine, text) => {
+      const { renderer, map, onError } = render();
+      for (let i = 0; i < 10; i++) map.emit("error", { sourceId: "lots", tile: { i }, error: new Error(text) });
+      await until(() => onError.mock.calls.length > 0);
+      await new Promise((r) => setTimeout(r, 20));
+      expect(onError).toHaveBeenCalledTimes(1);
+      const [error, fatal, context] = onError.mock.calls[0]!;
+      expect(error.message).toBe(
+        "`https://h.org/lots.pmtiles` holds MLT tiles with 64-bit integer columns, which this MapLibre version can't draw. " +
+          "Write those columns as doubles or strings, or build MVT tiles. More: https://docs.maplibre-yaml.org/guides/large-data/#mlt-tiles"
+      );
+      expect(fatal).toBe(false);
+      expect(context).toEqual({ kind: "source", sourceId: "lots" });
+      renderer.destroy();
+    });
+
+    it("a source re-pointed at another archive (a live url: change) gets that archive's notice, once", async () => {
+      const { renderer, map, onError } = render();
+      map.emit("error", { sourceId: "lots", tile: {}, error: new Error("Do not know how to serialize a BigInt") });
+      await until(() => onError.mock.calls.length > 0);
+      map.getSource.mockImplementation((id: string) =>
+        id === "lots" ? { type: "vector", url: "pmtiles://https://h.org/lots-2.pmtiles" } : undefined
+      );
+      for (let i = 0; i < 3; i++) map.emit("error", { sourceId: "lots", tile: { i }, error: new Error("Do not know how to serialize a BigInt") });
+      await until(() => onError.mock.calls.length > 1);
+      await new Promise((r) => setTimeout(r, 20));
+      expect(onError).toHaveBeenCalledTimes(2);
+      expect(onError.mock.calls[0]![0].message).toContain("`https://h.org/lots.pmtiles` holds MLT tiles with 64-bit integer columns");
+      expect(onError.mock.calls[1]![0].message).toContain("`https://h.org/lots-2.pmtiles` holds MLT tiles with 64-bit integer columns");
+      renderer.destroy();
+    });
+
+    it("an unrelated MLT decode error on the same source is reported as it comes", async () => {
+      const { renderer, map, onError } = render();
+      map.emit("error", { sourceId: "lots", tile: {}, error: new Error("Unsupported MLT stream: 9") });
+      map.emit("error", { sourceId: "lots", tile: {}, error: new Error("Unsupported MLT stream: 9") });
+      expect(onError).toHaveBeenCalledTimes(2);
+      expect(onError.mock.calls[0]![0].message).toBe("Unsupported MLT stream: 9");
+      renderer.destroy();
+    });
+
+    it("a BigInt failure from a source that is not a PMTiles archive is reported as it comes", async () => {
+      const { renderer, map, onError } = render();
+      for (let i = 0; i < 3; i++) map.emit("error", { sourceId: "roads", tile: {}, error: new Error("Do not know how to serialize a BigInt") });
+      expect(onError).toHaveBeenCalledTimes(3);
+      expect(onError.mock.calls[0]![0].message).toBe("Do not know how to serialize a BigInt");
+      renderer.destroy();
+    });
+  });
+
+  describe("below maplibre-gl 6, which can't draw MLT: one hint per source per map (KTD11)", () => {
+    it("two maps on one page over the same MLT archive each show the hint once", async () => {
+      runtime.version = "5.24.0";
+      vi.spyOn(console, "warn").mockImplementation(() => {});
+      const maps = [render(), render()];
+      for (const { map } of maps) {
+        for (let i = 0; i < 3; i++) map.emit("sourcedata", { sourceId: "lots", sourceDataType: "metadata" });
+      }
+      await until(() => maps.every(({ onError }) => onError.mock.calls.length > 0));
+      await new Promise((r) => setTimeout(r, 20));
+      for (const { renderer, onError } of maps) {
+        expect(onError).toHaveBeenCalledTimes(1);
+        const [error, fatal, context] = onError.mock.calls[0]!;
+        expect(error.message).toBe(
+          "`https://h.org/lots.pmtiles` holds MLT tiles, which maplibre-gl draws from version 6; this page runs 5.24.0. " +
+            "Use maplibre-gl 6 or later, or build the archive with MVT tiles. More: https://docs.maplibre-yaml.org/guides/large-data/#mlt-tiles"
+        );
+        expect(fatal).toBe(false);
+        expect(context).toEqual({ kind: "source-hint", sourceId: "lots" });
+        renderer.destroy();
+      }
+      expect(runtime.tileType).toHaveBeenCalledWith("pmtiles://https://h.org/lots.pmtiles");
+      expect(console.warn).toHaveBeenCalledTimes(2);
+    });
+
+    it("a source re-pointed at another MLT archive (a live url: change) hints again, naming it, once", async () => {
+      runtime.version = "5.24.0";
+      vi.spyOn(console, "warn").mockImplementation(() => {});
+      const { renderer, map, onError } = render();
+      map.emit("sourcedata", { sourceId: "lots", sourceDataType: "metadata" });
+      await until(() => onError.mock.calls.length > 0);
+      map.getSource.mockImplementation((id: string) =>
+        id === "lots" ? { type: "vector", url: "pmtiles://https://h.org/lots-2.pmtiles" } : undefined
+      );
+      for (let i = 0; i < 3; i++) map.emit("sourcedata", { sourceId: "lots", sourceDataType: "metadata" });
+      await until(() => onError.mock.calls.length > 1);
+      await new Promise((r) => setTimeout(r, 20));
+      expect(onError).toHaveBeenCalledTimes(2);
+      expect(onError.mock.calls[1]![0].message).toContain("`https://h.org/lots-2.pmtiles` holds MLT tiles, which maplibre-gl draws from version 6");
+      expect(runtime.tileType).toHaveBeenCalledTimes(2);
+      renderer.destroy();
+    });
+
+    it("no hint for an MVT archive, a source that is not an archive, or a runtime that draws MLT", async () => {
+      runtime.version = "5.24.0";
+      runtime.tileType.mockResolvedValueOnce(1);
+      const below = render();
+      below.map.emit("sourcedata", { sourceId: "lots", sourceDataType: "metadata" });
+      below.map.emit("sourcedata", { sourceId: "roads", sourceDataType: "metadata" });
+      runtime.version = "6.12.0";
+      const at = render();
+      at.map.emit("sourcedata", { sourceId: "lots", sourceDataType: "metadata" });
+      await new Promise((r) => setTimeout(r, 30));
+      expect(below.onError).not.toHaveBeenCalled();
+      expect(at.onError).not.toHaveBeenCalled();
+      expect(runtime.tileType).toHaveBeenCalledTimes(1);
+      below.renderer.destroy();
+      at.renderer.destroy();
+    });
   });
 });

@@ -375,6 +375,49 @@ export const formatChecks = {
     url: data/lots.fgb
     load: { mode: viewport, maxFeatures: lots }`)
   ),
+  overviewsOffFlat: fc(
+    "map",
+    "overviews-off-flat",
+    fcV1(`  lots:
+    type: geojson
+    url: data/lots.parquet
+    load: { mode: viewport, overviews: false }`)
+  ),
+  overviewsOffNested: fc(
+    "map",
+    "overviews-off-nested",
+    fcV2(`    lots:
+      type: geojson
+      url: https://example.com/api/lots
+      runtime:
+        format: geoparquet
+        load: { overviews: false }`)
+  ),
+  overviewsOnFgb: fc(
+    "map",
+    "overviews-on-fgb",
+    fcV1(`  lots:
+    type: geojson
+    url: data/lots.fgb
+    load: { mode: viewport, overviews: true }`)
+  ),
+  overviewsOnFgbNested: fc(
+    "map",
+    "overviews-on-fgb-nested",
+    fcV2(`    lots:
+      type: geojson
+      url: data/lots.fgb
+      runtime:
+        load: { mode: viewport, overviews: false }`)
+  ),
+  overviewsWord: fc(
+    "map",
+    "overviews-word",
+    fcV1(`  lots:
+    type: geojson
+    url: data/lots.parquet
+    load: { mode: viewport, overviews: "no" }`)
+  ),
 };
 
 // ---------------------------------------------------------------------------
@@ -1226,6 +1269,26 @@ export const classifyParse = {
     source: { type: geojson, url: /data/t.fgb, load: { mode: viewport } }
     classify: { field: income, method: jenks }
 `)
+  ),
+  methodOverViewportParquet: cl(
+    "map",
+    "method-over-viewport-parquet",
+    CL_HEAD.replace("url: /data/tracts.geojson", "url: /data/tracts.parquet\n    load: viewport") +
+      `  - id: v
+    type: fill
+    source: tracts
+    classify: { field: income, method: quantile, classes: 4 }
+`
+  ),
+  methodOverViewportParquetFormat: cl(
+    "map",
+    "method-over-viewport-parquet-format",
+    CL_HEAD.replace("url: /data/tracts.geojson", "url: /data/tracts\n    format: geoparquet\n    load: { mode: viewport }") +
+      `  - id: v
+    type: fill
+    source: tracts
+    classify: { field: income, method: jenks, normalize: area }
+`
   ),
   breaksOverViewport: cl(
     "map",

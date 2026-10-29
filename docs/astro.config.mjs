@@ -216,7 +216,8 @@ export default defineConfig({
               label: "Large data",
               collapsed: true,
               items: [
-                { label: "Large data", link: "/guides/cloud-native-data/" },
+                { label: "Choose a format", link: "/guides/large-data/" },
+                { label: "Cloud-native data", link: "/guides/cloud-native-data/" },
                 { label: "PMTiles", link: "/guides/pmtiles/" },
                 { label: "FlatGeobuf", link: "/guides/flatgeobuf/" },
                 { label: "GeoParquet", link: "/guides/geoparquet/" },

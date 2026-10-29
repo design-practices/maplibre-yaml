@@ -289,12 +289,14 @@ describe("the whole-file guard without Content-Length (ml-cnv.19)", () => {
 describe("loadModeOf", () => {
   it("normalizes load:", () => {
     const max = VIEWPORT_DEFAULT_MAX_FEATURES;
-    expect(loadModeOf({})).toEqual({ mode: "all", minzoom: VIEWPORT_DEFAULT_MINZOOM, maxFeatures: max });
-    expect(loadModeOf({ load: "viewport" })).toEqual({ mode: "viewport", minzoom: 10, maxFeatures: max });
+    expect(loadModeOf({})).toEqual({ mode: "all", minzoom: VIEWPORT_DEFAULT_MINZOOM, maxFeatures: max, overviews: true });
+    expect(loadModeOf({ load: "viewport" })).toEqual({ mode: "viewport", minzoom: 10, maxFeatures: max, overviews: true });
     expect(loadModeOf({ load: { mode: "viewport", minzoom: 13 } })).toEqual({
       mode: "viewport",
       minzoom: 13,
       maxFeatures: max,
+      overviews: true,
+      authorMinzoom: 13,
     });
     expect(loadModeOf({ load: { mode: "all" } }).mode).toBe("all");
     // The per-view budget (ml-37r.17), flat or under a v2 source's runtime:.
@@ -306,8 +308,30 @@ describe("loadModeOf", () => {
       mode: "all",
       minzoom: 10,
       maxFeatures: 600_000,
+      overviews: true,
       authorMaxFeatures: 600_000,
     });
+  });
+
+  it("records whether the author wrote minzoom, and reads overviews (0.10, ml-cnv.22)", () => {
+    expect(loadModeOf({}).authorMinzoom).toBeUndefined();
+    expect(loadModeOf({ load: "viewport" }).authorMinzoom).toBeUndefined();
+    expect(loadModeOf({ load: { mode: "viewport", maxFeatures: 10 } }).authorMinzoom).toBeUndefined();
+    expect(loadModeOf({ load: { mode: "viewport", minzoom: 10 } }).authorMinzoom).toBe(10);
+    expect(loadModeOf({ load: { minzoom: 0 } }).authorMinzoom).toBe(0);
+    expect(loadModeOf({ runtime: { load: { mode: "viewport", minzoom: 12 } } }).authorMinzoom).toBe(12);
+    // Levels on by default; off only for an explicit false.
+    expect(loadModeOf({ load: "viewport" }).overviews).toBe(true);
+    expect(loadModeOf({ load: { overviews: true } }).overviews).toBe(true);
+    expect(loadModeOf({ load: { overviews: false } }).overviews).toBe(false);
+    expect(loadModeOf({ load: { mode: "viewport", overviews: false } })).toEqual({
+      mode: "viewport",
+      minzoom: VIEWPORT_DEFAULT_MINZOOM,
+      maxFeatures: VIEWPORT_DEFAULT_MAX_FEATURES,
+      overviews: false,
+    });
+    expect(loadModeOf({ runtime: { load: { overviews: false } } }).overviews).toBe(false);
+    expect(loadModeOf({ load: { overviews: "no" } }).overviews).toBe(true);
   });
 });
 
@@ -641,7 +665,17 @@ describe("per-view budget (ml-37r.17)", () => {
       expect(onHint).toHaveBeenCalledTimes(1);
       expect(onHint.mock.calls[0]![0]).toMatch(/has about 4\d\d features in view, more than one read takes \(`maxFeatures`: 50\)/);
       expect(onHint.mock.calls[0]![0]).toContain("raise `maxFeatures` to 10000 under `load:` (about 2.5 GB of browser memory");
-      expect(onHint.mock.calls[0]![0]).toContain("gpio convert geoparquet points.fgb points.parquet");
+      // The PMTiles route, through GeoParquet; no overview file for a FlatGeobuf (U5, R12).
+      const dense = onHint.mock.calls[0]![0] as string;
+      expect(dense).toContain(
+        "convert it to PMTiles: `uvx --from geoparquet-io==1.7.0 gpio convert geoparquet points.fgb points.parquet`, then " +
+          "`uv run --with tylertoo==0.8.0 python -c \"import tylertoo as t; t.overview('points.parquet', 'points-ov.parquet'"
+      );
+      expect(dense).not.toContain("overview file");
+      expect(dense).toContain(
+        "More: https://docs.maplibre-yaml.org/guides/flatgeobuf/#large-files and https://docs.maplibre-yaml.org/guides/large-data/#which-format"
+      );
+      expect(onHint.mock.calls[0]![1]).toBeTruthy();
       // Only the probe, the header and the index were fetched: no features.
       const fetched = log.reduce((sum, r) => {
         const m = /bytes=(\d+)-(\d+)/.exec(r.range ?? "");

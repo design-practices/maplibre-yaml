@@ -172,6 +172,20 @@ export { FormatError, isFormatError } from "./formats/errors";
 export type { FormatFailure, FormatFailureCode } from "./formats/errors";
 // Thin async wrappers: the readers are on-demand modules (bundle headroom, U5).
 export { decodeFlatGeobuf, decodeGeoParquet } from "./renderer/cloud-sources";
+// The facts `mlym prepare` reports, from a footer or header alone, through
+// any AsyncBuffer (large data round 2 U6, KTD12): Node-safe, on demand too.
+export { readFlatGeobufFacts, readGeoParquetFacts } from "./renderer/cloud-sources";
+export type { AsyncBuffer, FlatGeobufFacts, GeoParquetFacts, GeoParquetLevelFacts } from "./renderer/cloud-sources";
+// The producer commands the browser's large-file hints name, so `mlym prepare`
+// prints the same command per route (large data round 2 U7).
+export {
+  LARGE_DATA_DOCS,
+  commandStem,
+  indexedFlatGeobufCommand,
+  overviewsCommand,
+  pmtilesCommand,
+  sortedParquetCommand,
+} from "./components/student-messages";
 
 // Capability policy — what a document may do, given where it is compiled
 export {

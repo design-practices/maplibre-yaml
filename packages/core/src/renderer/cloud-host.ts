@@ -70,14 +70,26 @@ export interface FlatGeobufCallbacks {
    * An author hint: the map works, but the document could say what it means
    * (a file too large to read whole, read by view instead; a view too dense
    * to read). The console only when absent.
+   *
+   * @param once - A key for a hint shown once per source for the life of
+   *   the map: a loader recreated by a live update (a changed `load:`) says
+   *   it again, and the host drops the repeat (KTD14).
    */
-  onHint?: (message: string) => void;
+  onHint?: (message: string, once?: string) => void;
   /**
    * Nothing of the source is drawn until the reader zooms in (`true`): the
    * map is below the source's `minzoom`, or the view holds more features
    * than one read takes — or no longer (`false`).
    */
   onTooDense?: (dense: boolean) => void;
+  /**
+   * A GeoParquet overview file read by view moved to another level (a zoom
+   * crossed a level's boundary), just before that level's features are
+   * delivered: feature ids are unique only within a level, so the host drops
+   * the source's feature state (hover, selection). A data change, not a
+   * document update (0.10 U2, KTD5).
+   */
+  onLevelChange?: () => void;
 }
 
 /** What every cloud-native data provider offers the layer manager. */
@@ -95,6 +107,12 @@ export interface FormatLoader {
    * 8 zooms. From what the reader already holds (no request).
    */
   zoomThatFits?(center: [number, number], from: number, width: number, height: number): number | undefined;
+  /**
+   * Whole columns of the file, for computed classify breaks while reading by
+   * view (GeoParquet only: its canonical level, no geometry; 0.10 U3). Rejects
+   * over the scan cap or on a failed read.
+   */
+  readColumns?(names: readonly string[]): Promise<FeatureCollection>;
   /** Begin reading; errors go to `onError`, never rejects. */
   start(started?: Promise<FeatureCollection>): Promise<void>;
   /** Stop: no more reads, no more callbacks. */
@@ -118,6 +136,7 @@ export type CloudMessages = Pick<
   | "formatCount"
   | "indexedFlatGeobufCommand"
   | "largeDataLinks"
+  | "overviewsCommand"
   | "pmtilesCommand"
   | "raiseCost"
   | "sortedParquetCommand"
@@ -187,4 +206,6 @@ export interface PmtilesHost {
   formatError(failure: FormatFailure): FormatError;
   /** Whether an archive's host serves its range replies from a compressed copy (asked once per archive). */
   rangeRepliesUnreadable: typeof http.rangeRepliesUnreadable;
+  /** The Large data guide's MLT section, which the MLT notices link (LARGE_DATA_DOCS.mlt). */
+  mltDocs: string;
 }

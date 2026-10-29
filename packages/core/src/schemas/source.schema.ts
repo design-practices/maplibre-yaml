@@ -167,10 +167,15 @@ export const ColorRampSchema = z
  * `maxFeatures` is the one override: it sets the per-view budget, and above
  * 400,000 it also raises the whole-file limit (heavier on memory).
  *
+ * `overviews` (experimental, 0.10): a GeoParquet file with `geo:overviews`
+ * levels, read by view, draws the level that fits the zoom; `false` reads
+ * only its full-detail level, as 0.9.2 does.
+ *
  * @example
  * ```yaml
  * load: { mode: viewport, minzoom: 12, maxFeatures: 50000 }
  * load: { maxFeatures: 600000 }   # load a 550,000-feature file whole
+ * load: { mode: viewport, overviews: false }
  * ```
  */
 export const SourceLoadSchema = z
@@ -194,6 +199,12 @@ export const SourceLoadSchema = z
         .optional()
         .describe(
           "The most features one read takes: a view holding more isn't read (default 150000; the map asks to zoom in), and above 400000 it also raises the whole-file limit (heavier on memory)"
+        ),
+      overviews: z
+        .boolean()
+        .optional()
+        .describe(
+          "Experimental. GeoParquet overview files (geo:overviews) read by view: draw the level that fits the zoom (true, the default) or only the full-detail level (false)"
         ),
     }),
   ])
@@ -654,6 +665,11 @@ export type GeoJSONSource = z.infer<typeof GeoJSONSourceSchema>;
  *   maxzoom: 14
  * ```
  *
+ * `encoding` (0.10): the tiles' format, `mvt` (Mapbox Vector Tiles, the
+ * default) or `mlt` (MapLibre Tiles, drawn by maplibre-gl 6 and later). A
+ * PMTiles archive whose header says MLT gets `mlt` without it; a value
+ * written here wins.
+ *
  * @see {@link https://maplibre.org/maplibre-style-spec/sources/#vector | MapLibre Vector Source}
  */
 export const VectorSourceSchema = z
@@ -699,6 +715,12 @@ export const VectorSourceSchema = z
       .boolean()
       .optional()
       .describe("Skip the tile cache (MapLibre `volatile`); for frequently changing tiles"),
+    encoding: z
+      .enum(["mvt", "mlt"])
+      .optional()
+      .describe(
+        "The tiles' format: mvt (Mapbox Vector Tiles, the default) or mlt (MapLibre Tiles, maplibre-gl 6+). A PMTiles archive whose header says MLT gets mlt without it; a value written here wins"
+      ),
   })
   .passthrough()
   .refine((data) => data.url || data.tiles, {

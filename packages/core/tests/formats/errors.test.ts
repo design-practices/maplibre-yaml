@@ -221,7 +221,7 @@ describe("too-large: the cause, why it can't be read by view, and every way to m
         "t.export_pmtiles('lots-ov.parquet', 'lots.pmtiles', layer_name='lots', tile_size_limit=None)\"` (the parcel " +
         "recipe; MapLibre draws zoom 14's tiles further in). More: " +
         "https://docs.maplibre-yaml.org/guides/geoparquet/#large-files and " +
-        "https://docs.maplibre-yaml.org/guides/pmtiles/#from-a-large-file"
+        "https://docs.maplibre-yaml.org/guides/large-data/#which-format"
     );
   });
 

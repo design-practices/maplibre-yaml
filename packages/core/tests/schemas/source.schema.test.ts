@@ -15,6 +15,7 @@ import {
   VideoSourceSchema,
   LayerSourceSchema,
 } from '../../src/schemas/source.schema';
+import { YAMLParser } from '../../src/parser';
 
 describe('StreamConfigSchema', () => {
   describe('valid configurations', () => {
@@ -352,6 +353,39 @@ describe('GeoJSONSourceSchema', () => {
 });
 
 describe('VectorSourceSchema', () => {
+  describe('encoding (MLT, 0.10 U4)', () => {
+    it('accepts encoding: mlt and encoding: mvt', () => {
+      for (const encoding of ['mlt', 'mvt'] as const) {
+        const source = { type: 'vector' as const, url: 'https://h.org/lots.pmtiles', encoding };
+        expect(VectorSourceSchema.parse(source)).toMatchObject(source);
+      }
+    });
+
+    it('refuses any other encoding, at the key', () => {
+      const result = VectorSourceSchema.safeParse({ type: 'vector', url: 'https://h.org/lots.pmtiles', encoding: 'x' });
+      expect(result.success).toBe(false);
+      expect(result.error?.issues[0]?.path).toEqual(['encoding']);
+    });
+
+    it('a document with encoding: x is refused on its source, naming the key and the choices (as raster-dem encoding)', () => {
+      const result = YAMLParser.safeParseMapBlock(`type: map
+id: m
+config:
+  center: [10.2, 42.15]
+  zoom: 9
+  mapStyle: https://example.com/style.json
+sources:
+  lots:
+    type: vector
+    url: data/lots.pmtiles
+    encoding: x
+layers: []
+`);
+      expect(result.success).toBe(false);
+      expect(result.errors[0]).toMatchObject({ path: 'sources.lots', message: 'encoding: "x" is not one of mvt, mlt.' });
+    });
+  });
+
   describe('valid sources', () => {
     it('accepts TileJSON URL', () => {
       const source = {

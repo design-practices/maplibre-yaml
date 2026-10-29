@@ -55,6 +55,20 @@ export function localDataCandidates(url: string, documentPath?: string): string[
   return [...new Set(candidates)];
 }
 
+/**
+ * Decode a whole FlatGeobuf or GeoParquet file to a GeoJSON FeatureCollection
+ * (an overview file: its canonical level). `name` labels errors. Loads core's
+ * reader chunk, in Node as in the browser; `mlym emit` and `mlym breaks`
+ * both decode through here.
+ */
+export function decodeFeatureFile(
+  bytes: Uint8Array,
+  format: 'flatgeobuf' | 'geoparquet',
+  name: string
+): Promise<unknown> {
+  return format === 'geoparquet' ? decodeGeoParquet(bytes, name) : decodeFlatGeobuf(bytes, name);
+}
+
 /** Read a FlatGeobuf or GeoParquet file (http(s) or local, same rules as below) and decode it. */
 async function loadFeatureFile(
   url: string,
@@ -82,7 +96,7 @@ async function loadFeatureFile(
     }
     bytes = new Uint8Array(readFileSync(found));
   }
-  return format === 'geoparquet' ? decodeGeoParquet(bytes, url) : decodeFlatGeobuf(bytes, url);
+  return decodeFeatureFile(bytes, format, url);
 }
 
 /**

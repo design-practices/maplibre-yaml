@@ -49,6 +49,9 @@ const LIBRARY_MARKERS: Record<string, string[]> = {
     "Server returned no content-length header",
     "missing content-length on 416",
     "didn't let this page read the file size",
+    // The MLT notices (0.10, U4): shown by the main bundle, worded in the chunk.
+    "holds MLT tiles with 64-bit integer columns",
+    "which maplibre-gl draws from version 6",
   ],
   // The library's own errors, and (bundle headroom U5) the adapter's and its
   // data provider's wording, which moved into the chunk with them.

@@ -5,6 +5,9 @@
  * working map that failed (a rejected layer, a data file that 404'd).
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 vi.mock("maplibre-gl", () => ({ default: {}, Map: vi.fn() }));
 
@@ -153,13 +156,18 @@ describe("<ml-map> on-page errors", () => {
     it("classified breaks that can't be computed (a source read by view) show one notice", async () => {
       const el = await mount();
       const { byViewClassifyError } = await import("../../src/renderer/classify-runtime");
-      latest().options.onError(byViewClassifyError("income", "parcels"), false, {
+      latest().options.onError(byViewClassifyError("income", "parcels", "`mlym breaks parcels.fgb --field income --method jenks`"), false, {
         kind: "classify",
         layerId: "income",
         sourceId: "parcels",
       });
       expect(noticeText(el)).toContain("can't compute its classes");
       expect(noticeText(el)).toContain("breaks:");
+      expect(noticeText(el)).toContain("mlym breaks parcels.fgb --field income --method jenks");
+      // The Large data guide's section on class breaks, as a link (U5).
+      expect(el.querySelector<HTMLAnchorElement>(".ml-map-notice a")?.href).toBe(
+        "https://docs.maplibre-yaml.org/guides/large-data/#class-breaks"
+      );
     });
 
     it("a classified field the data has no value for is an author hint on the page (ml-aot.95)", async () => {
@@ -222,6 +230,62 @@ describe("<ml-map> on-page errors", () => {
       el.quiet = true;
       expect(el.hasAttribute("quiet")).toBe(true);
       expect(el.querySelector(".ml-map-notice")).toBeNull();
+    });
+  });
+
+  describe("large-data hints point at the Large data guide, with its commands (0.10 U5, R12, KTD14)", () => {
+    const guide = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), "../../../../docs/src/content/docs/guides/large-data.mdx"),
+      "utf8"
+    );
+    /** The shell commands in a hint: its backtick-quoted spans. */
+    const commands = (hint: string) => [...hint.matchAll(/`([^`]+)`/g)].map((m) => m[1]!);
+
+    it("LARGE_DATA_DOCS names the guide and the anchors the hints link", async () => {
+      const { LARGE_DATA_DOCS } = await import("../../src/components/student-messages");
+      const page = "https://docs.maplibre-yaml.org/guides/large-data/";
+      expect(LARGE_DATA_DOCS).toMatchObject({
+        guide: page,
+        whichFormat: `${page}#which-format`,
+        prepare: `${page}#mlym-prepare`,
+        pmtiles: `${page}#parcel-fabrics-pmtiles`,
+        overviews: `${page}#overview-geoparquet`,
+        classBreaks: `${page}#class-breaks`,
+        mlt: `${page}#mlt-tiles`,
+      });
+      for (const url of Object.values(LARGE_DATA_DOCS).filter((u) => u.startsWith(page) && u.includes("#"))) {
+        expect(guide).toContain(`\\{${url.slice(url.indexOf("#"))}}`);
+      }
+    });
+
+    it("the overview-file and PMTiles commands are the guide's, one per route", async () => {
+      const { overviewsCommand, pmtilesCommand } = await import("../../src/components/student-messages");
+      expect(commands(overviewsCommand("stops.parquet"))).toEqual([
+        "uv run --with tylertoo==0.8.0 python -c \"import tylertoo as t; t.overview('stops.parquet', 'stops-ov.parquet', min_zoom=0, max_zoom=14, collapse_square=True)\"",
+      ]);
+      // From GeoJSON or FlatGeobuf: converted to GeoParquet first, as in the guide.
+      const [convert, overview] = commands(overviewsCommand("stops.geojson", "geojson"));
+      for (const line of [convert, overview, ...commands(pmtilesCommand("parcels.geojson", "geojson"))]) {
+        expect(guide).toContain(line);
+      }
+      // The PMTiles recipe starts with the overview-file command's call.
+      expect(pmtilesCommand("lots.parquet", "geoparquet")).toContain(
+        overviewsCommand("lots.parquet").replace(/"`$/, "")
+      );
+    });
+
+    it("a large-data hint's guide link is a link in the notice", async () => {
+      const el = await mount();
+      const { largeDataLinks } = await import("../../src/components/student-messages");
+      latest().options.onError(new Error(`\`lots.parquet\` is too dense. ${largeDataLinks("geoparquet", "overviews")}`), false, {
+        kind: "source-hint",
+        sourceId: "lots",
+      });
+      const links = [...el.querySelectorAll<HTMLAnchorElement>(".ml-map-notice a")].map((a) => a.href);
+      expect(links).toEqual([
+        "https://docs.maplibre-yaml.org/guides/geoparquet/#large-files",
+        "https://docs.maplibre-yaml.org/guides/large-data/#overview-geoparquet",
+      ]);
     });
   });
 
