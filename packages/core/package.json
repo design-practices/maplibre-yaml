@@ -1,6 +1,6 @@
 {
   "name": "@maplibre-yaml/core",
-  "version": "0.10.0",
+  "version": "0.10.1",
   "description": "Declarative MapLibre web maps from YAML: the <ml-map> and <ml-scrollytelling> web components, parser, schemas and renderer",
   "type": "module",
   "main": "./dist/index.js",
