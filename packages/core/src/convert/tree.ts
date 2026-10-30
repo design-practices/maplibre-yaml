@@ -22,6 +22,7 @@
 
 import { CST, Lexer, LineCounter, isAlias, isMap, isScalar, isSeq, parseDocument, type Document, type Node } from "yaml";
 import { YAML_PARSE_OPTIONS } from "../parser/yaml-parser";
+import { pastSafeInteger as pastSafe } from "../parser/big-integers";
 import { normalizeDates } from "../parser/normalize";
 import type { TomlRead } from "../parser/toml/reader";
 import type { TomlEntry, TomlNode } from "../parser/toml/index-positions";
@@ -33,18 +34,6 @@ type TomlReadOk = Extract<TomlRead, { ok: true }>;
 const MODELINE = /^#\s*yaml-language-server\s*:\s*\$schema=(\S+)/;
 /** Taplo's `#:schema <url>` directive. */
 const TOML_DIRECTIVE = /^#:schema\s+(\S+)/;
-
-const LIMIT = 2n ** 53n;
-
-/** Whether an integer literal (`0x…`, `0o…`, `0b…`, `_` separators allowed) is past 2^53. */
-function pastSafe(literal: string): boolean {
-  const body = literal.replace(/_/g, "").replace(/^[-+]/, "");
-  try {
-    return BigInt(body) > LIMIT;
-  } catch {
-    return false;
-  }
-}
 
 /** The value of `key` on `obj`, own properties only (a `__proto__` key is data). */
 const own = (obj: object, key: string): unknown => Object.getOwnPropertyDescriptor(obj, key)?.value;

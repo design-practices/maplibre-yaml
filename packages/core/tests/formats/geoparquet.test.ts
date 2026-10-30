@@ -32,6 +32,7 @@ import {
   readColumns,
   columnBytes,
   COLUMN_SCAN_MAX_BYTES,
+  geoInfo,
   type Overviews,
 } from "../../src/formats/lib/geoparquet";
 import { ClassifyRuntime } from "../../src/renderer/classify-runtime";
@@ -39,6 +40,7 @@ import { applyClassifyToSpec, classifyRecordOf, resolveClassify, withData } from
 import { getDecoder, hasDecoder } from "../../src/formats/decoders";
 import { decodeGeoParquet } from "../../src/index";
 import { isFormatError } from "../../src/formats/errors";
+import { parquetMetadata, type FileMetaData } from "hyparquet";
 import {
   loadModeOf,
   cloudSourceDataLoader,
@@ -2035,5 +2037,92 @@ describe("whole columns for classify breaks on a source read by view (0.10 U3, K
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe("Parquet's native GEOMETRY type, no geo key: its CRS is read and checked (ml-37r.8)", () => {
+  /** A fixture's parsed footer, its geometry column's logical-type `crs` set to `crs` (deleted when undefined). */
+  function withCrs(name: string, crs: string | undefined, kv: { key: string; value: string }[] = []): FileMetaData {
+    const bytes = fixture(name);
+    const metadata = parquetMetadata(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer);
+    const element = metadata.schema.find((e) => e.name === "geometry")!;
+    const logical = element.logical_type as { type: string; crs?: string };
+    expect(logical.type).toBe("GEOMETRY");
+    if (crs === undefined) delete logical.crs;
+    else logical.crs = crs;
+    metadata.key_value_metadata = [...(metadata.key_value_metadata ?? []), ...kv];
+    return metadata;
+  }
+  const refusal = (fn: () => unknown) => {
+    try {
+      fn();
+    } catch (error) {
+      return error;
+    }
+    return undefined;
+  };
+  const PROJJSON_2272 = () =>
+    (parquetMetadata(fixture("districts-native-2272.parquet").slice().buffer).schema.find((e) => e.name === "geometry")!
+      .logical_type as { crs: string }).crs;
+
+  it("a lon/lat file (inline PROJJSON EPSG:4326) reads, as before", async () => {
+    vi.stubGlobal("fetch", fixtureFetch());
+    const source = await open("/districts-native.parquet");
+    expect(source.info).toMatchObject({ geometryColumn: "geometry", crs: "EPSG:4326" });
+    expect((await readAll(source))!.features).toHaveLength(48);
+    const fc = await decodeBytes(fixture("districts-native.parquet"), "districts-native.parquet");
+    expect(fc.features).toHaveLength(48);
+    expect(fc.features[0]!.geometry.type).toBe("Polygon");
+  });
+
+  it("a projected file (inline PROJJSON EPSG:2272) is refused with the same crs notice as the geo-key path", async () => {
+    const error = await decodeBytes(fixture("districts-native-2272.parquet"), "districts-native-2272.parquet").catch((e) => e);
+    expect(failure(error)).toMatchObject({ code: "crs", crs: "EPSG:2272" });
+    expect((error as Error).message).toContain("ogr2ogr -t_srs EPSG:4326 out.parquet districts-native-2272.parquet");
+    // The same wording as districts-3857.parquet (a geo key), its CRS and name aside.
+    const keyed = await decodeBytes(fixture("districts-3857.parquet"), "districts-3857.parquet").catch((e) => e);
+    expect((error as Error).message.replaceAll("districts-native-2272", "F").replaceAll("2272", "N")).toBe(
+      (keyed as Error).message.replaceAll("districts-3857", "F").replaceAll("3857", "N")
+    );
+    vi.stubGlobal("fetch", fixtureFetch());
+    expect(failure(await open("/districts-native-2272.parquet").catch((e) => e))).toMatchObject({ code: "crs", crs: "EPSG:2272" });
+  });
+
+  it.each([
+    ["srid:2272", "EPSG:2272"],
+    ["EPSG:2272", "EPSG:2272"],
+    ["epsg:2272", "EPSG:2272"],
+    ["EPSG:3857", "EPSG:3857"],
+  ])("crs %s (decided by the column's geospatial statistics when the code isn't known) is refused", (crs, named) => {
+    const error = refusal(() => geoInfo(withCrs("districts-native-2272.parquet", crs), "x.parquet"));
+    expect(failure(error)).toMatchObject({ code: "crs", crs: named });
+  });
+
+  it("crs projjson:<key> is read from the footer's key-value metadata", () => {
+    const metadata = withCrs("districts-native-2272.parquet", "projjson:projjson_crs_geometry", [
+      { key: "projjson_crs_geometry", value: PROJJSON_2272() },
+    ]);
+    expect(failure(refusal(() => geoInfo(metadata, "x.parquet")))).toMatchObject({ code: "crs", crs: "EPSG:2272" });
+    // A key the footer doesn't have: the statistics still say feet, not degrees.
+    const missing = withCrs("districts-native-2272.parquet", "projjson:nowhere");
+    expect(failure(refusal(() => geoInfo(missing, "x.parquet")))?.code).toBe("crs");
+  });
+
+  it.each([
+    [undefined, undefined],
+    ["OGC:CRS84", "OGC:CRS84"],
+    ["EPSG:4326", "EPSG:4326"],
+    ["srid:4326", "EPSG:4326"],
+  ])("a lon/lat crs (%s) reads", (crs, named) => {
+    const info = geoInfo(withCrs("districts-native.parquet", crs), "x.parquet");
+    expect(info.crs).toBe(named);
+    expect(info.geometryColumn).toBe("geometry");
+  });
+
+  it("projjson:<key> naming lon/lat PROJJSON reads", () => {
+    const lonLat = (parquetMetadata(fixture("districts-native.parquet").slice().buffer).schema.find((e) => e.name === "geometry")!
+      .logical_type as { crs: string }).crs;
+    const info = geoInfo(withCrs("districts-native.parquet", "projjson:k", [{ key: "k", value: lonLat }]), "x.parquet");
+    expect(info.crs).toBe("EPSG:4326");
   });
 });

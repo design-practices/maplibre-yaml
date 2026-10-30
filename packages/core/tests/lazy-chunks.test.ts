@@ -365,6 +365,15 @@ describe.skipIf(!built)("CDN build: register.browser.js + chunks/", () => {
     }
   });
 
+  it("the YAML/JSON big-integer walk is tooling only: the entry has TOML's warning, not the walk (ml-4cn.12)", () => {
+    // The walk's integer-literal pattern (bigIntegerWarnings, pastSafeInteger) is in the tooling bundle only.
+    const walk = "0o[0-7][0-7_]*";
+    expect(read("index.js").includes(walk)).toBe(true);
+    expect(main.includes(walk), `register.browser.js has ${walk}`).toBe(false);
+    // TOML's reader finds lost integers in the browser too: the wording stays in the entry.
+    expect(main.includes("is beyond the integers a number keeps exactly (2^53)")).toBe(true);
+  });
+
   it("the COG chunk keeps its heavy codecs in their own files next to it (ml-cnv.11)", () => {
     const cog = read("chunks/cog.js");
     const codecs = ["deflate", "jpeg", "lerc", "zstd"];

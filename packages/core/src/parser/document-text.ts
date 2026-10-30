@@ -35,7 +35,7 @@ import type { MapBlockV2 } from "../schemas/map-v2.schema";
 import { LayerSchema } from "../schemas/layer.schema";
 import { MapConfigSchema } from "../schemas/map.schema";
 import { getDecoder } from "../formats/decoders";
-import { schemaKeys } from "./validation-utils";
+import { bigIntegerMessage, schemaKeys } from "./validation-utils";
 
 export type { DocumentFormat };
 
@@ -501,12 +501,22 @@ function readToml(toml: TomlReader, text: string, kind: DocumentKind): Outcome {
         : YAMLParser.safeParseAny(stringifyYAML(read.value), source);
   const keys = (knownKeys ??= { layer: schemaKeys(LayerSchema), config: schemaKeys(MapConfigSchema) });
   const { result } = outcome;
+  // Integers that lost digits (ml-4cn.12): the reader knows them as written.
+  const bigIntegers = read.bigIntegers.map((big) => ({
+    path: big.path,
+    message: bigIntegerMessage(big.digits, big.value),
+    // A note, not a problem warning: --strict never fails a document on it,
+    // so a patch release can't turn a passing CI run red (the document is
+    // valid; the warning says how a value is read).
+    kind: "note" as const,
+    ...read.positions.position(big.at),
+  }));
   return {
     blockType: outcome.blockType,
     result: {
       ...result,
       errors: toml.hintsFor(read.positions, result.errors, keys),
-      warnings: toml.hintsFor(read.positions, result.warnings, keys),
+      warnings: [...toml.hintsFor(read.positions, result.warnings, keys), ...bigIntegers],
     },
   };
 }

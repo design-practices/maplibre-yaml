@@ -440,7 +440,13 @@ WARN  3 things the TOML output does not keep (listed above).
   `--strict` makes any loss an error: exit `1`, nothing written.
 - **Values the target can't hold** stop the conversion, naming the path: a
   null anywhere else going to TOML (inside an expression, say), `inf` or
-  `nan` going to JSON, an integer too large to keep exactly.
+  `nan` going to JSON, an integer too large to keep exactly (past 2^53, a
+  number no longer holds every integer). Validation warns about such an
+  integer too: in TOML, everywhere (`<ml-map>`, `mlym validate`, the
+  playground); in YAML and JSON, only `mlym validate` does, and the browser
+  reads the number without a word. It is a note, so `mlym validate --strict`
+  still passes. Write a long id as a string
+  (`"id": "12345678901234567890"`).
 - **An invalid document** is not converted: the command prints its errors
   and exits `1`. Warnings don't stop it.
 
