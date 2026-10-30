@@ -505,6 +505,10 @@ function readToml(toml: TomlReader, text: string, kind: DocumentKind): Outcome {
   const bigIntegers = read.bigIntegers.map((big) => ({
     path: big.path,
     message: bigIntegerMessage(big.digits, big.value),
+    // A note, not a problem warning: --strict never fails a document on it,
+    // so a patch release can't turn a passing CI run red (the document is
+    // valid; the warning says how a value is read).
+    kind: "note" as const,
     ...read.positions.position(big.at),
   }));
   return {

@@ -118,6 +118,8 @@ async function warningsFor(format: string, text: string) {
 }
 
 describe("ml-4cn.12: integers past 2^53 warn where they are written", () => {
+  // kind "note": --strict (the CI default) never promotes it, so a document
+  // that validated before 0.10.1 still does (asserted end to end in the CLI).
   for (const [format, text] of Object.entries(docs(BIG))) {
     it(`${format}: the feature id warns at its key, the filter's at the element`, async () => {
       const found = await warningsFor(format, text);
@@ -125,11 +127,13 @@ describe("ml-4cn.12: integers past 2^53 warn where they are written", () => {
       expect(found).toContainEqual({
         path: ID_PATH,
         message: message(BIG, "12345678901234567000"),
+        kind: "note",
         ...at(text, /^\s*"?id"?\s*[:=]\s*1/),
       });
       expect(found).toContainEqual({
         path: "layers.0.filter.2",
         message: message(BIG, "12345678901234567000"),
+        kind: "note",
         ...at(text, /"?filter"?\s*[:=]/, (l) => l.indexOf(BIG)),
       });
     });
@@ -177,11 +181,11 @@ describe("ml-4cn.12: integers past 2^53 warn where they are written", () => {
 
   it("bigIntegerWarnings strips a byte-order mark and reads text that isn't valid YAML without throwing", () => {
     expect(bigIntegerWarnings(`\uFEFFid: ${BIG}\n`)).toEqual([
-      { path: "id", message: message(BIG, "12345678901234567000"), line: 1, column: 1 },
+      { path: "id", message: message(BIG, "12345678901234567000"), kind: "note", line: 1, column: 1 },
     ]);
     expect(() => bigIntegerWarnings("a: [1, \n")).not.toThrow();
     expect(bigIntegerWarnings(String(BIG))).toEqual([
-      { path: "", message: message(BIG, "12345678901234567000"), line: 1, column: 1 },
+      { path: "", message: message(BIG, "12345678901234567000"), kind: "note", line: 1, column: 1 },
     ]);
   });
 

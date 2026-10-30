@@ -85,6 +85,7 @@ export function bigIntegerWarnings(text: string): ValidationWarning[] {
       found.push({
         path: path.join("."),
         message: bigIntegerMessage(node.source, node.value),
+        kind: "note",
         ...(position ? { line: position.line, column: position.col } : {}),
       });
     }

@@ -444,7 +444,8 @@ WARN  3 things the TOML output does not keep (listed above).
   number no longer holds every integer). Validation warns about such an
   integer too: in TOML, everywhere (`<ml-map>`, `mlym validate`, the
   playground); in YAML and JSON, only `mlym validate` does, and the browser
-  reads the number without a word. Write a long id as a string
+  reads the number without a word. It is a note, so `mlym validate --strict`
+  still passes. Write a long id as a string
   (`"id": "12345678901234567890"`).
 - **An invalid document** is not converted: the command prints its errors
   and exits `1`. Warnings don't stop it.

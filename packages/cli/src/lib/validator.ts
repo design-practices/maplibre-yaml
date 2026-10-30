@@ -90,8 +90,9 @@ export async function validateFile(filePath: string): Promise<ValidationResult> 
   // warns for TOML's (in the browser too); YAML's and JSON's are found here
   // only, so the CDN entry doesn't carry the walk.
   if (format !== 'toml') {
+    // A note like TOML's: --strict never promotes it (a patch must not fail CI).
     for (const { path, message, line, column } of bigIntegerWarnings(content)) {
-      warnings.push({ path, message, line, column, severity: 'warning' });
+      warnings.push({ path, message, line, column, severity: 'note', kind: 'note' });
     }
   }
 

@@ -88,25 +88,37 @@ describe('mlym validate: integers past 2^53 (ml-4cn.12)', () => {
       expect(parsed.valid).toBe(true);
       const found = parsed.files[0].warnings.filter((w: { message: string }) => w.message.includes('beyond the integers'));
       expect(found).toEqual([
-        { path: ID_PATH, message: MESSAGE, line: 9, column: COLUMN[file], severity: 'warning' },
+        { path: ID_PATH, message: MESSAGE, line: 9, column: COLUMN[file], severity: 'note', kind: 'note' },
       ]);
     });
 
     it(`${file}: human, sarif and vscode output carry it once`, async () => {
       const human = (await validate(file, 'human')).stdout;
       expect(human.split('beyond the integers').length - 1).toBe(1);
-      expect(human).toContain(`at line 9, column ${COLUMN[file]}`);
+      expect(human).toContain(`note ${ID_PATH}`);
 
       const sarif = JSON.parse((await validate(file, 'sarif')).stdout);
       const results = sarif.runs[0].results.filter((r: { message: { text: string } }) => r.message.text.includes('beyond the integers'));
       expect(results).toHaveLength(1);
-      expect(results[0].level).toBe('warning');
+      expect(results[0].level).toBe('note');
       expect(results[0].locations[0].physicalLocation.region).toMatchObject({ startLine: 9, startColumn: COLUMN[file] });
 
       const vscode = (await validate(file, 'vscode')).stdout;
       const lines = vscode.split('\n').filter((l) => l.includes('beyond the integers'));
       expect(lines).toHaveLength(1);
-      expect(lines[0]).toContain(`:9:${COLUMN[file]}: warning:`);
+      expect(lines[0]).toContain(`:9:${COLUMN[file]}: info:`);
+    });
+  }
+
+  // A note, never promoted: a document that passed --strict (the CI default)
+  // before 0.10.1 still passes with a big integer in it.
+  for (const file of Object.keys(DOCS)) {
+    it(`${file}: --strict and the CI default still pass, the note still shown`, async () => {
+      const strict = JSON.parse((await execAsync(`node "${CLI}" validate "${join(dir, file)}" --strict --format json`, { env: NO_CI })).stdout);
+      expect(strict.valid).toBe(true);
+      expect(JSON.stringify(strict)).toContain('beyond the integers');
+      const ci = JSON.parse((await execAsync(`node "${CLI}" validate "${join(dir, file)}" --format json`, { env: { ...process.env, CI: 'true' } })).stdout);
+      expect(ci.valid).toBe(true);
     });
   }
 
