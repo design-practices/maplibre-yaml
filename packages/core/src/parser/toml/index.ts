@@ -14,6 +14,6 @@
  * (tests/lazy-chunks.test.ts).
  */
 
-export { readToml, MAX_DEPTH, type TomlRead } from "./reader";
+export { readToml, MAX_DEPTH, type TomlRead, type BigInteger } from "./reader";
 export { hintsFor, type KnownKeys } from "./hints";
 export type { TomlPositions } from "./index-positions";

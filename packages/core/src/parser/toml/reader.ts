@@ -16,6 +16,10 @@
  * - **key origins** (a dotted key, a header and what was written under it),
  *   which the hints read.
  * - **the comments' ranges**, which `convertDocument` reports as losses.
+ * - **the integers that lost digits**: past 2^53, a number no longer holds
+ *   every integer, so `12345678901234567890` reads as `12345678901234567000`.
+ *   Found here, where the digits as written are known; the entry words the
+ *   warning (ml-4cn.12).
  *
  * Every table is built by defining own properties, never by assignment, so a
  * `__proto__` key is data like any other (KTD4). Nothing here throws: a
@@ -48,8 +52,22 @@ export type TomlRead =
       authoredOrder: AuthoredOrder;
       /** Each comment's source range, `#` included (the converter reports them). */
       comments: Array<readonly [number, number]>;
+      /** Each integer that read as a number with fewer digits, where it is written. */
+      bigIntegers: BigInteger[];
     }
   | { ok: false; error: ParseError };
+
+/** An integer past 2^53 that read as a different number. */
+export interface BigInteger {
+  /** Its dotted path, as findings name it. */
+  path: string;
+  /** The integer as written. */
+  digits: string;
+  /** The number it reads as. */
+  value: number;
+  /** Where its key is written; for an array element, where the element is. */
+  at: number;
+}
 
 class TooDeep extends Error {
   constructor(readonly at: number) {
@@ -137,6 +155,8 @@ function build(text: string, program: AST.TOMLProgram): TomlRead {
   const objects = new WeakMap<TomlNode, Rec | unknown[]>([[root, value]]);
   /** Tables holding an integer-like key, named by their key (`categories`). */
   const numbered = new Map<TomlNode, string>();
+  /** Integers that lost digits, by their value's offset: as written, and as read. */
+  const lost = new Map<number, [string, number]>();
 
   const table = (at: number): TomlNode => ({ at, kids: new Map(), keys: new Map() });
 
@@ -179,6 +199,10 @@ function build(text: string, program: AST.TOMLProgram): TomlRead {
   const content = (node: AST.TOMLContentNode, name: string, depth: number): [unknown, TomlEntry] => {
     switch (node.type) {
       case "TOMLValue":
+        // Past 2^53 a number can't hold every integer: one that reads back as other digits lost some.
+        if (node.kind === "integer" && !Number.isSafeInteger(node.value) && String(node.bigint) !== String(node.value)) {
+          lost.set(node.range[0], [text.slice(node.range[0], node.range[1]), node.value]);
+        }
         return [
           node.kind === "offset-date-time" ||
           node.kind === "local-date-time" ||
@@ -270,5 +294,18 @@ function build(text: string, program: AST.TOMLProgram): TomlRead {
         });
       });
   const comments = program.comments.map((c) => [c.range[0], c.range[1]] as const);
-  return { ok: true, value, positions, authoredOrder, comments };
+  const bigIntegers: BigInteger[] = [];
+  /** Find each lost integer's path, walking the tree only when there is one. */
+  const findLost = (node: TomlNode, path: string[]) => {
+    for (const [key, entry] of node.kids.entries()) {
+      const at = [...path, String(key)];
+      if (typeof entry !== "number") findLost(entry, at);
+      else if (lost.has(entry)) {
+        const [digits, read] = lost.get(entry)!;
+        bigIntegers.push({ path: at.join("."), digits, value: read, at: node.keys?.get(String(key)) ?? entry });
+      }
+    }
+  };
+  if (lost.size > 0) findLost(root, []);
+  return { ok: true, value, positions, authoredOrder, comments, bigIntegers };
 }

@@ -525,7 +525,9 @@ function walk(
 
       for (const key of Object.keys(value)) {
         if (key.startsWith("x-")) continue; // x-* extension keys are always allowed
-        const fieldSchema = shape[key];
+        // Own keys only: `shape[key]` finds Object.prototype's `constructor`
+        // and `__proto__`, which made both keys read as known (ml-xjk).
+        const fieldSchema = Object.hasOwn(shape, key) ? shape[key] : undefined;
         if (fieldSchema) {
           walk(value[key], fieldSchema, [...path, key], ctx);
         } else if (!open) {
@@ -942,6 +944,14 @@ export function hashCommentMessage(finding: HashCommentValue): string {
   return looksLikeColour
     ? `Colours starting with # must be quoted: ${fix}. Without quotes, YAML reads # as the start of a comment, so this value is empty.`
     : `This value is empty because YAML reads an unquoted # as the start of a comment. Put it in quotes: ${fix}`;
+}
+
+/** The warning for an integer written as `digits` that reads as `value` (ml-4cn.12). */
+export function bigIntegerMessage(digits: string, value: number): string {
+  return (
+    `${digits} is beyond the integers a number keeps exactly (2^53), so it reads as ${value}. ` +
+    `Write it as a string ("${digits}") if it's an id.`
+  );
 }
 
 /**

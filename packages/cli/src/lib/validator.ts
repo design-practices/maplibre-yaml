@@ -6,6 +6,7 @@ import { readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { resolve } from 'pathe';
 import {
+  bigIntegerWarnings,
   parseDocumentText,
   stripBom,
   type DocumentFormat,
@@ -85,6 +86,14 @@ export async function validateFile(filePath: string): Promise<ValidationResult> 
     severity: warning.kind === 'note' ? ('note' as const) : ('warning' as const),
     ...(warning.kind ? { kind: warning.kind } : {}),
   }));
+  // Integers past 2^53 that read as other digits (ml-4cn.12). The parser
+  // warns for TOML's (in the browser too); YAML's and JSON's are found here
+  // only, so the CDN entry doesn't carry the walk.
+  if (format !== 'toml') {
+    for (const { path, message, line, column } of bigIntegerWarnings(content)) {
+      warnings.push({ path, message, line, column, severity: 'warning' });
+    }
+  }
 
   if (result.success) {
     return {

@@ -38,6 +38,11 @@ export type { ReadDocumentValueOptions, DocumentValueResult } from './document-v
 // Whether JSON or TOML text is a map or story document, judged from the text
 // (the rule `mlym validate` picks a folder's .json and .toml files by).
 export { looksLikeDocumentText } from './document-marks';
+// Integers past 2^53 in YAML or JSON text, which read as other digits:
+// tooling only (`mlym validate`); the elements don't import it, so the CDN
+// entry doesn't carry it. TOML's warn in every parse.
+export { bigIntegerWarnings } from './big-integers';
+export type { ValidationWarning } from './validation-utils';
 export type {
   DocumentFormat,
   DocumentKind,
