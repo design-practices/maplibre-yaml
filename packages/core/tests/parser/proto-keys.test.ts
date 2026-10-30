@@ -8,7 +8,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { parseDocumentText } from "../../src";
+import { parseDocumentText } from "../../src/parser/index";
 
 const STYLE = "https://demotiles.maplibre.org/style.json";
 

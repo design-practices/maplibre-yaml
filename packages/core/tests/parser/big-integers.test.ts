@@ -13,7 +13,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { bigIntegerWarnings, parseDocumentText, YAMLParser } from "../../src";
+import { bigIntegerWarnings, parseDocumentText, YAMLParser } from "../../src/parser/index";
 import { readToml } from "../../src/parser/toml/index";
 
 const STYLE = "https://demotiles.maplibre.org/style.json";
