@@ -52,7 +52,7 @@ with `config.mapStyle`, in one of four forms:
 
 | Form | Example | Use it for |
 |---|---|---|
-| A style URL | `mapStyle: "https://tiles.openfreemap.org/styles/liberty"` | A hosted basemap (OpenFreeMap, MapTiler, Stadia …) or a `style.json` on your site |
+| A style URL | `mapStyle: "https://tiles.openfreemap.org/styles/liberty"` | A hosted basemap (OpenFreeMap, MapTiler, Stadia, [Protomaps' API](/guides/host-your-own-basemap/#hosted) …) or a `style.json` on your site |
 | A style object | `mapStyle: { version: 8, sources: {…}, layers: […] }` | A small style written in the document |
 | A Protomaps basemap | `mapStyle: { pmtiles: data/nyc.pmtiles, flavor: dark }` | A full basemap from one `.pmtiles` file, with no API key or tile server |
 | A `.pmtiles` path | `mapStyle: data/nyc.pmtiles` | The same, with the default light flavor |
