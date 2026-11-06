@@ -1,5 +1,12 @@
 # @maplibre-yaml/core
 
+## 0.10.2
+
+### Patch Changes
+
+- 0148ba6: A story's map height set in a site stylesheet now takes effect in Astro. `<Scrollytelling>` loads core's `scrollytelling.css` after the site's own CSS, and its default `ml-scrollytelling { --ml-scrolly-map-height: 100vh }` won on source order, so the documented override (`ml-scrollytelling { --ml-scrolly-map-height: calc(100vh - 64px) }`, for a page under a fixed header) did nothing. The default is now declared at zero specificity (`:where(ml-scrollytelling)`), so any author rule on the element wins whichever stylesheet loads last. Stories that don't set it look exactly as before.
+- fd48b20: `@maplibre-yaml/core` and `@maplibre-yaml/effects` now accept zod 4 (`zod: ^3.25.76 || ^4.6.6`) and import zod's v3 API from `zod/v3`, which zod 3.25 and zod 4 both ship, so validation, error messages, the exported schemas and the published JSON Schema are unchanged. On a fresh install with Astro 6 or 7, or without Astro, npm now installs one zod 4 for the whole site, and `npm audit` no longer reports GHSA-mrhx-c7xc-m3w5 (high, "Zod can exhaust memory while validating oversized constrained collections") through `@maplibre-yaml/*`. Next to Astro 4 or 5, which depend on zod 3 themselves, npm keeps sharing their zod 3 as before, and the advisory is still reported there through Astro. zod fixed the advisory in its zod 4 engine; the zod 3 engine maplibre-yaml validates with (at `zod/v3`, in either package) is unchanged in that respect, so this clears the audit report rather than changing how documents are validated, and maplibre-yaml validates the map documents a site's author writes, not visitor input. If your own code imports zod to extend or infer core's schemas (`MapConfigSchema.extend(…)`, `z.infer<typeof MapBlockSchema>`), import it from `zod/v3`.
+
 ## 0.10.1
 
 ### Patch Changes

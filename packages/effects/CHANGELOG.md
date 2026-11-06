@@ -1,5 +1,11 @@
 # @maplibre-yaml/effects
 
+## 0.1.3
+
+### Patch Changes
+
+- fd48b20: `@maplibre-yaml/core` and `@maplibre-yaml/effects` now accept zod 4 (`zod: ^3.25.76 || ^4.6.6`) and import zod's v3 API from `zod/v3`, which zod 3.25 and zod 4 both ship, so validation, error messages, the exported schemas and the published JSON Schema are unchanged. On a fresh install with Astro 6 or 7, or without Astro, npm now installs one zod 4 for the whole site, and `npm audit` no longer reports GHSA-mrhx-c7xc-m3w5 (high, "Zod can exhaust memory while validating oversized constrained collections") through `@maplibre-yaml/*`. Next to Astro 4 or 5, which depend on zod 3 themselves, npm keeps sharing their zod 3 as before, and the advisory is still reported there through Astro. zod fixed the advisory in its zod 4 engine; the zod 3 engine maplibre-yaml validates with (at `zod/v3`, in either package) is unchanged in that respect, so this clears the audit report rather than changing how documents are validated, and maplibre-yaml validates the map documents a site's author writes, not visitor input. If your own code imports zod to extend or infer core's schemas (`MapConfigSchema.extend(…)`, `z.infer<typeof MapBlockSchema>`), import it from `zod/v3`.
+
 ## 0.1.2
 
 ### Patch Changes
