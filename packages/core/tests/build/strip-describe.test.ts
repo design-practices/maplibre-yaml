@@ -85,7 +85,7 @@ describe("stripDescribe (the transform)", () => {
     ["a constant", "export const S = z.string().describe(TEXT);"],
     ["a string plus a constant", 'export const S = z.string().describe("a " + TEXT);'],
   ])("throws, naming the file and line, for %s", (_, line) => {
-    expect(() => stripDescribe(`import { z } from "zod";\n${line}\n`, "synthetic.schema.ts")).toThrow(/synthetic\.schema\.ts:2 /);
+    expect(() => stripDescribe(`import { z } from "zod/v3";\n${line}\n`, "synthetic.schema.ts")).toThrow(/synthetic\.schema\.ts:2 /);
   });
 
   it("the plugin reads only src/schemas/*.ts", () => {

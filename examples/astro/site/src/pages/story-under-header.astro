@@ -1,0 +1,13 @@
+---
+// The site stylesheet first, then the component: <Scrollytelling>'s own CSS
+// lands after this file's rules in the page, as in a typical site.
+import "../styles/story-under-header.css";
+import Base from "../layouts/Base.astro";
+import { Scrollytelling } from "@maplibre-yaml/astro";
+---
+
+<Base title="Story under the header">
+  <!-- Not `bleed`: the header stays in the flow, and the story map sticks
+       below it at the height the site stylesheet sets. -->
+  <Scrollytelling src="/stories/cascadia.yaml" />
+</Base>

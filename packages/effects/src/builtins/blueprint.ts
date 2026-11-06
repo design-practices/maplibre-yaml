@@ -10,7 +10,7 @@
  * taken from the face normal. Draws the layer's true heights.
  */
 
-import { z } from "zod";
+import { z } from "zod/v3";
 import type { EffectDefinition } from "../contract";
 import { extrusions } from "../backends/extrusions/backend";
 

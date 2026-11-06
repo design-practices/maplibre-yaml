@@ -12,6 +12,7 @@ import {
   getSimpleMapSchema,
   extendSchema,
 } from "../../src/utils/collections";
+import { ChapterSchema, MapConfigSchema } from "@maplibre-yaml/core";
 
 describe("getMapSchema", () => {
   it("returns a valid Zod schema", () => {
@@ -172,11 +173,13 @@ describe("getScrollytellingSchema", () => {
 });
 
 describe("getChapterSchema", () => {
-  it("returns a valid Zod schema", () => {
+  it("returns core's zod-3 schema itself on a zod-3 host", () => {
     const schema = getChapterSchema();
 
-    expect(schema).toBeDefined();
-    expect(schema instanceof z.ZodType).toBe(true);
+    // Not `instanceof z.ZodType`: core's zod may be a different copy from
+    // the host's (see "core schemas on a zod-3 host" below).
+    expect(schema).toBe(ChapterSchema);
+    expect((schema as unknown as { _def: { typeName: string } })._def.typeName).toBe("ZodObject");
   });
 
   it("validates correct chapter configuration", () => {
@@ -256,11 +259,13 @@ describe("getChapterSchema", () => {
 });
 
 describe("getSimpleMapSchema", () => {
-  it("returns a valid Zod schema", () => {
+  it("returns core's zod-3 schema itself on a zod-3 host", () => {
     const schema = getSimpleMapSchema();
 
-    expect(schema).toBeDefined();
-    expect(schema instanceof z.ZodType).toBe(true);
+    // Not `instanceof z.ZodType`: core's zod may be a different copy from
+    // the host's (see "core schemas on a zod-3 host" below).
+    expect(schema).toBe(MapConfigSchema);
+    expect((schema as unknown as { _def: { typeName: string } })._def.typeName).toBe("ZodObject");
   });
 
   it("validates simple map config", () => {
@@ -512,5 +517,42 @@ describe("collection entries are normalized like loaded documents", () => {
     expect(result.success).toBe(true);
     expect((result.data as any).config.locale).toEqual({ "Popup.Close": "Cerrar" });
     expect((result.data as any).chapters[0].description).toBe("1883-08-27");
+  });
+});
+
+// Core's schemas are built on `zod/v3`, which zod 3.25 and zod 4 both ship.
+// Next to Astro 4/5 (zod 3) a package manager usually installs ONE zod 3 for
+// both, but it may install zod 4 for core beside the host's zod 3 -- as this
+// workspace does (core: zod 4, astro/zod: zod 3). The two copies run each
+// other's schemas; these pin that down.
+describe("core schemas on a zod-3 host (Astro 4/5)", () => {
+  const cases: unknown[] = [
+    { center: [0, 0], zoom: 2, mapStyle: "https://x/style.json", extra: 1 },
+    { center: [999, 0], zoom: 99 },
+    { center: "x" },
+    null,
+  ];
+
+  it("a core schema nested in a host z.object parses as core does", () => {
+    const host = z.object({ title: z.string(), map: getSimpleMapSchema() });
+    for (const value of cases) {
+      const nested = host.safeParse({ title: "t", map: value });
+      const own = MapConfigSchema.safeParse(value);
+      expect(nested.success).toBe(own.success);
+      if (nested.success && own.success) expect(nested.data.map).toEqual(own.data);
+      if (!nested.success && !own.success) {
+        expect(nested.error.issues).toEqual(own.error.issues.map((i) => ({ ...i, path: ["map", ...i.path] })));
+      }
+    }
+  });
+
+  it("extendSchema on a core schema keeps core's parsing and adds the host fields", () => {
+    const schema = extendSchema(getSimpleMapSchema(), { featured: z.boolean().default(false) });
+    for (const value of cases) {
+      const extended = schema.safeParse(value);
+      const own = MapConfigSchema.safeParse(value);
+      expect(extended.success).toBe(own.success);
+      if (extended.success && own.success) expect(extended.data).toEqual({ ...own.data, featured: false });
+    }
   });
 });

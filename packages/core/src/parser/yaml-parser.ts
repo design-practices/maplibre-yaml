@@ -264,7 +264,7 @@ function toJSSafe(doc: Document): { value: unknown } | { error: ParseError } {
     };
   }
 }
-import { ZodError, type ZodIssue } from "zod";
+import { ZodError, type ZodIssue } from "zod/v3";
 import {
   expandSugarInMapBlock,
   expandSugarInRoot,
@@ -278,7 +278,7 @@ import { RootSchema } from "../schemas/page.schema";
 import { MapBlockSchema } from "../schemas/map.schema";
 import { MapBlockV2Schema, type MapBlockV2 } from "../schemas/map-v2.schema";
 import { ScrollytellingBlockSchema } from "../schemas/scrollytelling.schema";
-import type { z } from "zod";
+import type { z } from "zod/v3";
 import {
   collectWarnings,
   findHashCommentValues,

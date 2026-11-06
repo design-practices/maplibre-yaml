@@ -37,7 +37,7 @@
  * MapLibre `MapOptions` passthrough (mirroring v1's `config:`).
  */
 
-import { z } from "zod";
+import { z } from "zod/v3";
 import {
   MapConfigSchema,
   ControlsConfigSchema,

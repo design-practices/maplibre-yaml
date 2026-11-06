@@ -39,7 +39,7 @@ import { installEffectsHost } from "./host";
 // registerEffect() hooks the registry into core (idempotent).
 setOnRegister(installEffectsHost);
 
-export { z } from "zod";
+export { z } from "zod/v3";
 export { registerEffect, effectRegistry, EffectRegistry } from "./registry";
 export { backends, extrusions } from "./backends";
 export {

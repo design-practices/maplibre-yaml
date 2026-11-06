@@ -4,7 +4,7 @@
  */
 
 import type { Map as MapLibreMap, LngLat } from "maplibre-gl";
-import type { z } from "zod";
+import type { z } from "zod/v3";
 import { LayerSchema, PopupContentSchema } from "../schemas";
 import { PopupBuilder, mapLanguage } from "./popup-builder";
 import type { CapabilityPolicy } from "../capabilities";

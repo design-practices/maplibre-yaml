@@ -42,7 +42,7 @@
  * same technique {@link MapBlockSchema}/{@link MapBlockV2Schema} use.
  */
 
-import { z } from "zod";
+import { z } from "zod/v3";
 
 /**
  * Maximum GeometryCollection nesting depth accepted under v2.

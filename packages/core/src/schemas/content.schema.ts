@@ -12,7 +12,7 @@
  * ```
  */
 
-import { z } from "zod";
+import { z } from "zod/v3";
 
 /**
  * Valid HTML tag names for content elements.

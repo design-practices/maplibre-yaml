@@ -23,7 +23,7 @@
  * `classify/checks.ts`, which the parser runs after the schema.
  */
 
-import { z } from "zod";
+import { z } from "zod/v3";
 import { ColorSchema } from "./base.schema";
 import { colorProblem } from "./css-colors";
 import {

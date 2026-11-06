@@ -12,7 +12,7 @@
  * ```
  */
 
-import { z } from "zod";
+import { z } from "zod/v3";
 import { LngLatSchema } from "./base.schema";
 import { markOpenSchema } from "../parser/validation-utils";
 

@@ -12,7 +12,7 @@
  */
 
 import type { Map as MapLibreMap, LngLat } from "maplibre-gl";
-import type { z } from "zod";
+import type { z } from "zod/v3";
 import { PopupContentSchema, InteractiveConfigSchema } from "../schemas";
 import type { CapabilityPolicy } from "../capabilities";
 

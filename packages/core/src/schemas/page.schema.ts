@@ -12,7 +12,7 @@
  * ```
  */
 
-import { z } from "zod";
+import { z } from "zod/v3";
 import { LngLatSchema } from "./base.schema";
 import { ContentBlockSchema } from "./content.schema";
 import { MapBlockSchema, MapFullPageBlockSchema } from "./map.schema";

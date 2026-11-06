@@ -6,7 +6,7 @@
 import { suggest } from "../utils/suggest";
 import { absolutizeSourceUrls, absolutizeTileTemplate, absolutizeVectorTiles } from "../utils/tile-url";
 import type { Map as MapLibreMap, GeoJSONSource } from "maplibre-gl";
-import type { z } from "zod";
+import type { z } from "zod/v3";
 import type { FeatureCollection } from "geojson";
 import {
   LayerSchema,
