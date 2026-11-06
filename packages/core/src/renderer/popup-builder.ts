@@ -3,7 +3,7 @@
  * @module @maplibre-yaml/core/renderer
  */
 
-import type { z } from "zod";
+import type { z } from "zod/v3";
 import { PopupContentSchema, PopupContentItemSchema } from "../schemas";
 import {
   escapeHtml,

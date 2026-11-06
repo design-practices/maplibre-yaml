@@ -12,7 +12,7 @@
  * ```
  */
 
-import { z } from "zod";
+import { z } from "zod/v3";
 import { LngLatSchema, LngLatBoundsLikeSchema, ExpressionSchema } from "./base.schema";
 import { MapConfigSchema, MapBlockSchema, LegendConfigSchema, ControlPositionSchema } from "./map.schema";
 import { LayerOrReferenceSchema } from "./layer.schema";

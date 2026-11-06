@@ -12,7 +12,7 @@
 
 import { describe, it, expect } from "vitest";
 import { validateStyleMin } from "@maplibre/maplibre-gl-style-spec";
-import { z } from "zod";
+import { z } from "zod/v3";
 import { ExtensionRegistry } from "../../src/extensions";
 import { projectStyle } from "../../src/emitter";
 import { normalizeMapBlock } from "../../src/model";

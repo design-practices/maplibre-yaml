@@ -13,7 +13,7 @@ import {
   GlobeControl,
   TerrainControl,
 } from "./maplibre-interop";
-import type { z } from "zod";
+import type { z } from "zod/v3";
 import { ControlsConfigSchema } from "../schemas";
 import { sanitizeCustomAttribution } from "../utils/attribution";
 import type { TerrainConfig } from "../schemas/map.schema";

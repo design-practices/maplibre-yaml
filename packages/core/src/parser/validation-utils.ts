@@ -18,7 +18,7 @@
  *   hard validation errors.
  */
 
-import { z } from "zod";
+import { z } from "zod/v3";
 import type { Document, LineCounter } from "yaml";
 import { isMap } from "yaml";
 import { ExpressionSchema } from "../schemas/base.schema";

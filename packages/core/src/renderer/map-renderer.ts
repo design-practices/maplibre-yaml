@@ -10,7 +10,7 @@ import { installAttributionGuard, type AttributionGuard } from './attribution-gu
 import { sanitizeCustomAttribution, sanitizeSourcesAttribution } from '../utils/attribution';
 import { createImageRefs, noteImageValue, noteLayerImageRefs } from '../utils/image-refs';
 import { suggest } from '../utils/suggest';
-import type { z } from 'zod';
+import type { z } from 'zod/v3';
 import { MapConfigSchema, LayerSchema, LayerSourceSchema, ControlsConfigSchema, LegendConfigSchema } from '../schemas';
 import {
   LayerManager,

@@ -3,7 +3,7 @@
  * @module @maplibre-yaml/core/renderer
  */
 
-import type { z } from 'zod';
+import type { z } from 'zod/v3';
 import { LayerSchema, LegendConfigSchema, LegendItemSchema } from '../schemas';
 import { escapeHtml } from '../utils/html';
 import { defaultStrings, elementLanguage, type Strings } from '../i18n';

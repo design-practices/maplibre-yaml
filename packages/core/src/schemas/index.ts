@@ -64,7 +64,7 @@
  * @example
  * Type inference from schemas
  * ```typescript
- * import { z } from 'zod';
+ * import { z } from 'zod/v3';
  * import { LayerSchema, PageSchema } from '@maplibre-yaml/core/schemas';
  *
  * type Layer = z.infer<typeof LayerSchema>;

@@ -52,6 +52,11 @@ function importsOf(code: string): string[] {
   return [...found];
 }
 
+/** The package a bare specifier names: `zod/v3` -> `zod`, `@scope/pkg/x` -> `@scope/pkg`. */
+function packageOf(spec: string): string {
+  return spec.split("/").slice(0, spec.startsWith("@") ? 2 : 1).join("/");
+}
+
 describe("install footprint", () => {
   it("the decoders are not runtime dependencies", () => {
     const deps = Object.keys(pkg.dependencies ?? {});
@@ -70,7 +75,8 @@ describe("install footprint", () => {
     expect(NODE_FILES.length).toBeGreaterThan(NODE_ENTRIES.length);
     for (const file of NODE_FILES) {
       const imports = importsOf(readFileSync(file, "utf8")).filter((s) => !s.startsWith("."));
-      expect(imports.filter((s) => !allowed.has(s)), file).toEqual([]);
+      // A dependency's subpath (`zod/v3`) is that dependency.
+      expect(imports.filter((s) => !allowed.has(packageOf(s))), file).toEqual([]);
     }
   });
 

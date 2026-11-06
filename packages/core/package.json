@@ -72,7 +72,7 @@
   "dependencies": {
     "@bokuweb/zstd-wasm": "0.0.27",
     "yaml": "^2.4.0",
-    "zod": "^3.23.0"
+    "zod": "^3.25.76 || ^4.6.6"
   },
   "devDependencies": {
     "@geomatico/maplibre-cog-protocol": "0.10.0",

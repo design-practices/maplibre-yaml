@@ -16,7 +16,7 @@
  * crosshatch classic ships Tangram's `hatch.png` (blocks/filter/imgs).
  */
 
-import { z } from "zod";
+import { z } from "zod/v3";
 import type { EffectDefinition } from "../contract";
 import { extrusions } from "../backends/extrusions/backend";
 

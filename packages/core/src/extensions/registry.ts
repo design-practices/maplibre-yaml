@@ -28,7 +28,7 @@
  * the extensions" that drift.
  */
 
-import type { z } from "zod";
+import type { z } from "zod/v3";
 
 /**
  * How a registered namespace is validated and shaped.

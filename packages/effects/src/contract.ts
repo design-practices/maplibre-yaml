@@ -13,7 +13,7 @@
  * renders as authored.
  */
 
-import type { ZodType, ZodTypeDef } from "zod";
+import type { ZodType, ZodTypeDef } from "zod/v3";
 import type { Map as MapLibreMap } from "maplibre-gl";
 
 /**
