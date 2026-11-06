@@ -1,0 +1,10 @@
+/*
+ * The docs' "under a fixed header" story override, as a site stylesheet.
+ * story-under-header.astro imports it before <Scrollytelling>, so the
+ * component's own stylesheet (core's scrollytelling.css) loads after it:
+ * author CSS must still win (ml-uo9.1).
+ */
+ml-scrollytelling {
+  --ml-scrolly-map-top: var(--header-h);
+  --ml-scrolly-map-height: calc(100vh - var(--header-h));
+}

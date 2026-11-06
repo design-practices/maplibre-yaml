@@ -445,6 +445,32 @@ test.describe("runtime story: <Scrollytelling src> (ml-euv)", () => {
   });
 });
 
+test.describe("story: a site stylesheet sets the map's size (ml-uo9.1)", () => {
+  test("the documented under-a-header override wins over the component's CSS @dev", async ({ page }) => {
+    const errors = await guard(page);
+    await page.goto("/story-under-header/", { waitUntil: "domcontentloaded" });
+    const story = page.locator("ml-scrollytelling");
+    const container = page.locator("ml-scrollytelling > .scrolly-map-container");
+    await expect(container).toHaveCount(1);
+    // src/styles/story-under-header.css, imported before <Scrollytelling>.
+    // (Before 0.10.2 core's own `ml-scrollytelling { --ml-scrolly-map-height: 100vh }`,
+    // loaded later at equal specificity, won.)
+    expect(await story.evaluate((el) => getComputedStyle(el).getPropertyValue("--ml-scrolly-map-height").trim())).toBe(
+      "calc(100vh - 56px)"
+    );
+    const box = await container.evaluate((el) => {
+      const s = getComputedStyle(el);
+      return { height: el.getBoundingClientRect().height, top: s.top, viewport: window.innerHeight };
+    });
+    expect(box.top).toBe("56px");
+    expect(box.height).toBe(box.viewport - 56);
+    // Stuck below the header once the story scrolls.
+    await page.evaluate(() => window.scrollBy(0, 600));
+    await expect.poll(() => container.evaluate((el) => Math.round(el.getBoundingClientRect().top))).toBe(56);
+    expect(errors).toEqual([]);
+  });
+});
+
 test.describe("story: the shared <ml-scrollytelling> engine (ml-aot.1)", () => {
   const MAP = ".scrollytelling-container ml-map";
 

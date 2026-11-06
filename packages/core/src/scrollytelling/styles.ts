@@ -26,8 +26,14 @@
  */
 
 export const SCROLLYTELLING_CSS = `
-ml-scrollytelling {
+/* The custom properties' defaults, at zero specificity: any author rule on
+   ml-scrollytelling sets them, whether its stylesheet loads before this one
+   (Astro's <Scrollytelling> imports this file after the site's CSS) or after. */
+:where(ml-scrollytelling) {
   --ml-scrolly-map-height: 100vh;
+}
+
+ml-scrollytelling {
   display: block;
   position: relative;
   width: 100%;
