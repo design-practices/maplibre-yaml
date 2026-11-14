@@ -303,6 +303,7 @@ import { checkDocument, chapterLabel, checkLocaleKeys, missingBasemapWarning, pm
 import { SOURCE_RUNTIME_KEYS } from "../model/normalize";
 import { checkSourceFormats } from "./format-checks";
 import { applyCogDefaults, checkCogSources } from "./cog-checks";
+import { checkGridSources } from "./grid-checks";
 import { reservedPrefixWarnings } from "./reserved-prefix";
 import { boundsProblem } from "../utils/bounds";
 import { explainIndentationError, explainQuoteError } from "./yaml-errors";
@@ -2058,8 +2059,13 @@ function withFormatChecks<T>(
   const cog = checkCogSources(value, version, positions);
   if (result.success) applyCogDefaults(result.data, value, version);
   checks.errors.push(...cog.errors);
-  // A specific colorRamp warning replaces the generic "Unknown key" one.
-  const specific = new Set(cog.warnings.map((w) => w.path));
+  // Grid sources (ml-nb1.2): geometry, range, nodata, bands, `format:`, and
+  // a layer drawn over a grid.
+  const grid = checkGridSources(value, version, positions);
+  checks.errors.push(...grid.errors);
+  // A specific colorRamp warning, or a grid error (`format:` on a grid),
+  // replaces the generic "Unknown key" one at the same key.
+  const specific = new Set([...cog.warnings, ...grid.errors].map((w) => w.path));
   result = { ...result, warnings: result.warnings.filter((w) => !specific.has(w.path)) };
   checks.warnings.push(...cog.warnings);
   if (checks.errors.length === 0 && checks.warnings.length === 0) return result;
@@ -2504,16 +2510,28 @@ function isSourceTypeLiteralIssue(issue: ZodIssue): boolean {
 
 /**
  * In the source union, the matching branch's first issue when it is a key of
- * the wrong type inside the source (`load.overviews: "no"`), so it is
- * reported at that key, not at the source; undefined otherwise.
+ * the wrong type inside the source (`load.overviews: "no"`), or a required
+ * key missing while a sibling is a likely misspelling of it (`encodng:` on a
+ * grid), so it is reported at that key, not at the source; undefined
+ * otherwise.
  */
 function sourceKeyTypeIssue(err: ZodIssue & { code: "invalid_union" }, value: unknown): ZodIssue | undefined {
   const typePath = findSourceTypeIssuePath(err.unionErrors);
   if (!typePath || typePath.length !== err.path.length + 1) return undefined;
   if (!(SOURCE_TYPES as readonly string[]).includes(valueAtPath(value, typePath) as string)) return undefined;
   const issue = findMatchingSourceBranch(err.unionErrors)?.errors[0];
-  const wrongType = issue?.code === "invalid_union" || (issue?.code === "invalid_type" && issue.received !== "undefined");
-  return wrongType && issue!.path.length > err.path.length ? issue : undefined;
+  if (!issue || issue.path.length <= err.path.length) return undefined;
+  if (issue.code === "invalid_union") return issue;
+  if (issue.code !== "invalid_type") return undefined;
+  if (issue.received !== "undefined") return issue;
+  // Missing: only when a sibling key is its misspelling (misspelledKeyError
+  // then reports the typo); a plainly absent key stays reported at the source.
+  const parent = valueAtPath(value, issue.path.slice(0, -1));
+  const missing = String(issue.path[issue.path.length - 1]);
+  return parent !== null && typeof parent === "object" && !Array.isArray(parent) &&
+    Object.keys(parent).some((key) => isLikelyMisspelling(key, missing))
+    ? issue
+    : undefined;
 }
 
 /**

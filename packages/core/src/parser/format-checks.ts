@@ -154,6 +154,9 @@ export function checkSourceFormats(
 
   for (const { source, path, runtime, runtimePath } of sourcesOf(value, version)) {
     const type = source["type"];
+    // A grid is read by maplibre-yaml, not through a cloud-native format;
+    // grid-checks.ts owns its keys (`format:` there points at `encoding:`).
+    if (type === "grid") continue;
     const url = source["url"];
     const declared = runtime["format"];
     const fromUrl = formatFromUrl(url);

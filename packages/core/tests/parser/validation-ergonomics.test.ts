@@ -119,7 +119,7 @@ pages:
 `);
     expect(result.success).toBe(false);
     expect(result.errors[0].message).toBe(
-      'Unknown source type "geojsn". Valid types: geojson, vector, raster, raster-dem, image, video. Did you mean "geojson"?'
+      'Unknown source type "geojsn". Valid types: geojson, vector, raster, raster-dem, image, video, grid. Did you mean "geojson"?'
     );
   });
 
@@ -133,7 +133,7 @@ pages:
     const err = result.errors.find((e) => e.message.includes("source type"));
     expect(err).toBeDefined();
     expect(err!.message).toBe(
-      'Unknown source type "geojsn". Valid types: geojson, vector, raster, raster-dem, image, video. Did you mean "geojson"?'
+      'Unknown source type "geojsn". Valid types: geojson, vector, raster, raster-dem, image, video, grid. Did you mean "geojson"?'
     );
   });
 
@@ -268,7 +268,7 @@ pages:
     expect(result.success).toBe(false);
     const err = result.errors.find((e) => e.message.includes("source type"));
     expect(err!.message).toBe(
-      'Unknown source type "geojsn". Valid types: geojson, vector, raster, raster-dem, image, video. Did you mean "geojson"?'
+      'Unknown source type "geojsn". Valid types: geojson, vector, raster, raster-dem, image, video, grid. Did you mean "geojson"?'
     );
   });
 });

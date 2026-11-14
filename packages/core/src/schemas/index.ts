@@ -96,6 +96,8 @@ export {
   RasterDEMSourceSchema,
   ImageSourceSchema,
   VideoSourceSchema,
+  GridSourceSchema,
+  GRID_ENCODINGS,
   LayerSourceSchema,
 } from "./source.schema";
 

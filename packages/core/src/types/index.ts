@@ -33,6 +33,7 @@ import type {
   RasterDEMSourceSchema,
   ImageSourceSchema,
   VideoSourceSchema,
+  GridSourceSchema,
   LayerSourceSchema,
 
   // Layer types
@@ -81,6 +82,7 @@ export type RasterSourceConfig = z.infer<typeof RasterSourceSchema>;
 export type RasterDEMSourceConfig = z.infer<typeof RasterDEMSourceSchema>;
 export type ImageSourceConfig = z.infer<typeof ImageSourceSchema>;
 export type VideoSourceConfig = z.infer<typeof VideoSourceSchema>;
+export type GridSourceConfig = z.infer<typeof GridSourceSchema>;
 export type LayerSource = z.infer<typeof LayerSourceSchema>;
 
 // Layer types

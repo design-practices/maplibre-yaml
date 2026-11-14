@@ -107,6 +107,7 @@ export const SOURCE_TYPES = [
   "raster-dem",
   "image",
   "video",
+  "grid",
 ] as const;
 
 /** Valid top-level block `type` values for the block dispatcher. */

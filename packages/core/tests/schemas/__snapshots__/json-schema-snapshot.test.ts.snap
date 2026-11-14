@@ -1171,6 +1171,181 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                       "coordinates"
                     ],
                     "additionalProperties": true
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "const": "grid",
+                        "description": "Source type"
+                      },
+                      "url": {
+                        "type": "string",
+                        "pattern": "^(?:[a-zA-Z][a-zA-Z\\\\d+\\\\-.]*:|\\\\/|\\\\.\\\\.?\\\\/|[^\\\\s:/?#][^:/?#]*(?:[/?#]|$))",
+                        "description": "URL of the grid file (an image, a JSON header, or a GeoTIFF)"
+                      },
+                      "encoding": {
+                        "type": "string",
+                        "enum": [
+                          "rg-uv",
+                          "scalar-r",
+                          "nullschool-json",
+                          "geotiff"
+                        ],
+                        "description": "How values are packed: rg-uv (two components in the red and green bytes), scalar-r (one value in the red byte), nullschool-json (header plus data arrays), geotiff (one or two bands)"
+                      },
+                      "bounds": {
+                        "type": "array",
+                        "minItems": 4,
+                        "maxItems": 4,
+                        "items": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "number"
+                          }
+                        ],
+                        "description": "Cell edges as [west, south, east, north], for an image encoding (or use grid:)"
+                      },
+                      "grid": {
+                        "type": "object",
+                        "properties": {
+                          "nx": {
+                            "type": "number",
+                            "description": "Columns (nodes along a row)"
+                          },
+                          "ny": {
+                            "type": "number",
+                            "description": "Rows"
+                          },
+                          "lo1": {
+                            "type": "number",
+                            "description": "Longitude of the first node (centre of node 0, 0)"
+                          },
+                          "la1": {
+                            "type": "number",
+                            "description": "Latitude of the first node (the top row)"
+                          },
+                          "dx": {
+                            "type": "number",
+                            "description": "Spacing between columns in degrees, eastward; positive"
+                          },
+                          "dy": {
+                            "type": "number",
+                            "description": "Spacing between rows in degrees, southward from la1; positive"
+                          }
+                        },
+                        "required": [
+                          "nx",
+                          "ny",
+                          "lo1",
+                          "la1",
+                          "dx",
+                          "dy"
+                        ],
+                        "additionalProperties": false,
+                        "description": "Node geometry, for an image encoding (or use bounds:)",
+                        "patternProperties": {
+                          "^x-": {}
+                        }
+                      },
+                      "range": {
+                        "type": "array",
+                        "minItems": 2,
+                        "maxItems": 2,
+                        "items": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "number"
+                          }
+                        ],
+                        "description": "[lo, hi]: the values bytes 0 and 255 stand for (rg-uv and scalar-r only)"
+                      },
+                      "units": {
+                        "type": "string",
+                        "description": "Unit of the values, as a label (K, m/s, m …)"
+                      },
+                      "nodata": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "channel": {
+                                "type": "string",
+                                "enum": [
+                                  "r",
+                                  "g",
+                                  "b",
+                                  "a"
+                                ],
+                                "description": "The channel the rule reads"
+                              },
+                              "below": {
+                                "type": "number",
+                                "description": "A node is missing when the byte is below this"
+                              },
+                              "above": {
+                                "type": "number",
+                                "description": "A node is missing when the byte is above this"
+                              },
+                              "equals": {
+                                "type": "number",
+                                "description": "A node is missing when the byte equals this"
+                              }
+                            },
+                            "required": [
+                              "channel"
+                            ],
+                            "additionalProperties": false,
+                            "patternProperties": {
+                              "^x-": {}
+                            }
+                          }
+                        ],
+                        "description": "Which nodes carry no value: { channel, below | above | equals } for an image encoding, a number for geotiff"
+                      },
+                      "bands": {
+                        "type": "array",
+                        "items": {
+                          "type": "number"
+                        },
+                        "description": "GeoTIFF band indices to read: [value] or [u, v] (geotiff only)"
+                      },
+                      "attribution": {
+                        "type": "string",
+                        "description": "Attribution text for the data"
+                      },
+                      "loading": {
+                        "$ref": "#/$defs/any/oneOf/0/properties/sources/additionalProperties/anyOf/0/properties/loading",
+                        "description": "Deprecated, no effect: no per-source loading overlay is drawn. The map shows \\"Loading map…\\" while it starts"
+                      },
+                      "cache": {
+                        "$ref": "#/$defs/any/oneOf/0/properties/sources/additionalProperties/anyOf/0/properties/cache",
+                        "description": "Cache configuration"
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "url",
+                      "encoding"
+                    ],
+                    "additionalProperties": false,
+                    "patternProperties": {
+                      "^x-": {}
+                    }
                   }
                 ]
               },
@@ -5774,6 +5949,181 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                   "coordinates"
                 ],
                 "additionalProperties": true
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "grid",
+                    "description": "Source type"
+                  },
+                  "url": {
+                    "type": "string",
+                    "pattern": "^(?:[a-zA-Z][a-zA-Z\\\\d+\\\\-.]*:|\\\\/|\\\\.\\\\.?\\\\/|[^\\\\s:/?#][^:/?#]*(?:[/?#]|$))",
+                    "description": "URL of the grid file (an image, a JSON header, or a GeoTIFF)"
+                  },
+                  "encoding": {
+                    "type": "string",
+                    "enum": [
+                      "rg-uv",
+                      "scalar-r",
+                      "nullschool-json",
+                      "geotiff"
+                    ],
+                    "description": "How values are packed: rg-uv (two components in the red and green bytes), scalar-r (one value in the red byte), nullschool-json (header plus data arrays), geotiff (one or two bands)"
+                  },
+                  "bounds": {
+                    "type": "array",
+                    "minItems": 4,
+                    "maxItems": 4,
+                    "items": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ],
+                    "description": "Cell edges as [west, south, east, north], for an image encoding (or use grid:)"
+                  },
+                  "grid": {
+                    "type": "object",
+                    "properties": {
+                      "nx": {
+                        "type": "number",
+                        "description": "Columns (nodes along a row)"
+                      },
+                      "ny": {
+                        "type": "number",
+                        "description": "Rows"
+                      },
+                      "lo1": {
+                        "type": "number",
+                        "description": "Longitude of the first node (centre of node 0, 0)"
+                      },
+                      "la1": {
+                        "type": "number",
+                        "description": "Latitude of the first node (the top row)"
+                      },
+                      "dx": {
+                        "type": "number",
+                        "description": "Spacing between columns in degrees, eastward; positive"
+                      },
+                      "dy": {
+                        "type": "number",
+                        "description": "Spacing between rows in degrees, southward from la1; positive"
+                      }
+                    },
+                    "required": [
+                      "nx",
+                      "ny",
+                      "lo1",
+                      "la1",
+                      "dx",
+                      "dy"
+                    ],
+                    "additionalProperties": false,
+                    "description": "Node geometry, for an image encoding (or use bounds:)",
+                    "patternProperties": {
+                      "^x-": {}
+                    }
+                  },
+                  "range": {
+                    "type": "array",
+                    "minItems": 2,
+                    "maxItems": 2,
+                    "items": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ],
+                    "description": "[lo, hi]: the values bytes 0 and 255 stand for (rg-uv and scalar-r only)"
+                  },
+                  "units": {
+                    "type": "string",
+                    "description": "Unit of the values, as a label (K, m/s, m …)"
+                  },
+                  "nodata": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "channel": {
+                            "type": "string",
+                            "enum": [
+                              "r",
+                              "g",
+                              "b",
+                              "a"
+                            ],
+                            "description": "The channel the rule reads"
+                          },
+                          "below": {
+                            "type": "number",
+                            "description": "A node is missing when the byte is below this"
+                          },
+                          "above": {
+                            "type": "number",
+                            "description": "A node is missing when the byte is above this"
+                          },
+                          "equals": {
+                            "type": "number",
+                            "description": "A node is missing when the byte equals this"
+                          }
+                        },
+                        "required": [
+                          "channel"
+                        ],
+                        "additionalProperties": false,
+                        "patternProperties": {
+                          "^x-": {}
+                        }
+                      }
+                    ],
+                    "description": "Which nodes carry no value: { channel, below | above | equals } for an image encoding, a number for geotiff"
+                  },
+                  "bands": {
+                    "type": "array",
+                    "items": {
+                      "type": "number"
+                    },
+                    "description": "GeoTIFF band indices to read: [value] or [u, v] (geotiff only)"
+                  },
+                  "attribution": {
+                    "type": "string",
+                    "description": "Attribution text for the data"
+                  },
+                  "loading": {
+                    "$ref": "#/$defs/map/properties/sources/additionalProperties/anyOf/0/properties/loading",
+                    "description": "Deprecated, no effect: no per-source loading overlay is drawn. The map shows \\"Loading map…\\" while it starts"
+                  },
+                  "cache": {
+                    "$ref": "#/$defs/map/properties/sources/additionalProperties/anyOf/0/properties/cache",
+                    "description": "Cache configuration"
+                  }
+                },
+                "required": [
+                  "type",
+                  "url",
+                  "encoding"
+                ],
+                "additionalProperties": false,
+                "patternProperties": {
+                  "^x-": {}
+                }
               }
             ]
           },
@@ -9275,6 +9625,181 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                               "coordinates"
                             ],
                             "additionalProperties": true
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "type": {
+                                "type": "string",
+                                "const": "grid",
+                                "description": "Source type"
+                              },
+                              "url": {
+                                "type": "string",
+                                "pattern": "^(?:[a-zA-Z][a-zA-Z\\\\d+\\\\-.]*:|\\\\/|\\\\.\\\\.?\\\\/|[^\\\\s:/?#][^:/?#]*(?:[/?#]|$))",
+                                "description": "URL of the grid file (an image, a JSON header, or a GeoTIFF)"
+                              },
+                              "encoding": {
+                                "type": "string",
+                                "enum": [
+                                  "rg-uv",
+                                  "scalar-r",
+                                  "nullschool-json",
+                                  "geotiff"
+                                ],
+                                "description": "How values are packed: rg-uv (two components in the red and green bytes), scalar-r (one value in the red byte), nullschool-json (header plus data arrays), geotiff (one or two bands)"
+                              },
+                              "bounds": {
+                                "type": "array",
+                                "minItems": 4,
+                                "maxItems": 4,
+                                "items": [
+                                  {
+                                    "type": "number"
+                                  },
+                                  {
+                                    "type": "number"
+                                  },
+                                  {
+                                    "type": "number"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ],
+                                "description": "Cell edges as [west, south, east, north], for an image encoding (or use grid:)"
+                              },
+                              "grid": {
+                                "type": "object",
+                                "properties": {
+                                  "nx": {
+                                    "type": "number",
+                                    "description": "Columns (nodes along a row)"
+                                  },
+                                  "ny": {
+                                    "type": "number",
+                                    "description": "Rows"
+                                  },
+                                  "lo1": {
+                                    "type": "number",
+                                    "description": "Longitude of the first node (centre of node 0, 0)"
+                                  },
+                                  "la1": {
+                                    "type": "number",
+                                    "description": "Latitude of the first node (the top row)"
+                                  },
+                                  "dx": {
+                                    "type": "number",
+                                    "description": "Spacing between columns in degrees, eastward; positive"
+                                  },
+                                  "dy": {
+                                    "type": "number",
+                                    "description": "Spacing between rows in degrees, southward from la1; positive"
+                                  }
+                                },
+                                "required": [
+                                  "nx",
+                                  "ny",
+                                  "lo1",
+                                  "la1",
+                                  "dx",
+                                  "dy"
+                                ],
+                                "additionalProperties": false,
+                                "description": "Node geometry, for an image encoding (or use bounds:)",
+                                "patternProperties": {
+                                  "^x-": {}
+                                }
+                              },
+                              "range": {
+                                "type": "array",
+                                "minItems": 2,
+                                "maxItems": 2,
+                                "items": [
+                                  {
+                                    "type": "number"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ],
+                                "description": "[lo, hi]: the values bytes 0 and 255 stand for (rg-uv and scalar-r only)"
+                              },
+                              "units": {
+                                "type": "string",
+                                "description": "Unit of the values, as a label (K, m/s, m …)"
+                              },
+                              "nodata": {
+                                "anyOf": [
+                                  {
+                                    "type": "number"
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "channel": {
+                                        "type": "string",
+                                        "enum": [
+                                          "r",
+                                          "g",
+                                          "b",
+                                          "a"
+                                        ],
+                                        "description": "The channel the rule reads"
+                                      },
+                                      "below": {
+                                        "type": "number",
+                                        "description": "A node is missing when the byte is below this"
+                                      },
+                                      "above": {
+                                        "type": "number",
+                                        "description": "A node is missing when the byte is above this"
+                                      },
+                                      "equals": {
+                                        "type": "number",
+                                        "description": "A node is missing when the byte equals this"
+                                      }
+                                    },
+                                    "required": [
+                                      "channel"
+                                    ],
+                                    "additionalProperties": false,
+                                    "patternProperties": {
+                                      "^x-": {}
+                                    }
+                                  }
+                                ],
+                                "description": "Which nodes carry no value: { channel, below | above | equals } for an image encoding, a number for geotiff"
+                              },
+                              "bands": {
+                                "type": "array",
+                                "items": {
+                                  "type": "number"
+                                },
+                                "description": "GeoTIFF band indices to read: [value] or [u, v] (geotiff only)"
+                              },
+                              "attribution": {
+                                "type": "string",
+                                "description": "Attribution text for the data"
+                              },
+                              "loading": {
+                                "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/source/anyOf/0/anyOf/0/properties/loading",
+                                "description": "Deprecated, no effect: no per-source loading overlay is drawn. The map shows \\"Loading map…\\" while it starts"
+                              },
+                              "cache": {
+                                "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/source/anyOf/0/anyOf/0/properties/cache",
+                                "description": "Cache configuration"
+                              }
+                            },
+                            "required": [
+                              "type",
+                              "url",
+                              "encoding"
+                            ],
+                            "additionalProperties": false,
+                            "patternProperties": {
+                              "^x-": {}
+                            }
                           }
                         ]
                       },
@@ -14105,6 +14630,181 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                                   "coordinates"
                                 ],
                                 "additionalProperties": true
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "type": {
+                                    "type": "string",
+                                    "const": "grid",
+                                    "description": "Source type"
+                                  },
+                                  "url": {
+                                    "type": "string",
+                                    "pattern": "^(?:[a-zA-Z][a-zA-Z\\\\d+\\\\-.]*:|\\\\/|\\\\.\\\\.?\\\\/|[^\\\\s:/?#][^:/?#]*(?:[/?#]|$))",
+                                    "description": "URL of the grid file (an image, a JSON header, or a GeoTIFF)"
+                                  },
+                                  "encoding": {
+                                    "type": "string",
+                                    "enum": [
+                                      "rg-uv",
+                                      "scalar-r",
+                                      "nullschool-json",
+                                      "geotiff"
+                                    ],
+                                    "description": "How values are packed: rg-uv (two components in the red and green bytes), scalar-r (one value in the red byte), nullschool-json (header plus data arrays), geotiff (one or two bands)"
+                                  },
+                                  "bounds": {
+                                    "type": "array",
+                                    "minItems": 4,
+                                    "maxItems": 4,
+                                    "items": [
+                                      {
+                                        "type": "number"
+                                      },
+                                      {
+                                        "type": "number"
+                                      },
+                                      {
+                                        "type": "number"
+                                      },
+                                      {
+                                        "type": "number"
+                                      }
+                                    ],
+                                    "description": "Cell edges as [west, south, east, north], for an image encoding (or use grid:)"
+                                  },
+                                  "grid": {
+                                    "type": "object",
+                                    "properties": {
+                                      "nx": {
+                                        "type": "number",
+                                        "description": "Columns (nodes along a row)"
+                                      },
+                                      "ny": {
+                                        "type": "number",
+                                        "description": "Rows"
+                                      },
+                                      "lo1": {
+                                        "type": "number",
+                                        "description": "Longitude of the first node (centre of node 0, 0)"
+                                      },
+                                      "la1": {
+                                        "type": "number",
+                                        "description": "Latitude of the first node (the top row)"
+                                      },
+                                      "dx": {
+                                        "type": "number",
+                                        "description": "Spacing between columns in degrees, eastward; positive"
+                                      },
+                                      "dy": {
+                                        "type": "number",
+                                        "description": "Spacing between rows in degrees, southward from la1; positive"
+                                      }
+                                    },
+                                    "required": [
+                                      "nx",
+                                      "ny",
+                                      "lo1",
+                                      "la1",
+                                      "dx",
+                                      "dy"
+                                    ],
+                                    "additionalProperties": false,
+                                    "description": "Node geometry, for an image encoding (or use bounds:)",
+                                    "patternProperties": {
+                                      "^x-": {}
+                                    }
+                                  },
+                                  "range": {
+                                    "type": "array",
+                                    "minItems": 2,
+                                    "maxItems": 2,
+                                    "items": [
+                                      {
+                                        "type": "number"
+                                      },
+                                      {
+                                        "type": "number"
+                                      }
+                                    ],
+                                    "description": "[lo, hi]: the values bytes 0 and 255 stand for (rg-uv and scalar-r only)"
+                                  },
+                                  "units": {
+                                    "type": "string",
+                                    "description": "Unit of the values, as a label (K, m/s, m …)"
+                                  },
+                                  "nodata": {
+                                    "anyOf": [
+                                      {
+                                        "type": "number"
+                                      },
+                                      {
+                                        "type": "object",
+                                        "properties": {
+                                          "channel": {
+                                            "type": "string",
+                                            "enum": [
+                                              "r",
+                                              "g",
+                                              "b",
+                                              "a"
+                                            ],
+                                            "description": "The channel the rule reads"
+                                          },
+                                          "below": {
+                                            "type": "number",
+                                            "description": "A node is missing when the byte is below this"
+                                          },
+                                          "above": {
+                                            "type": "number",
+                                            "description": "A node is missing when the byte is above this"
+                                          },
+                                          "equals": {
+                                            "type": "number",
+                                            "description": "A node is missing when the byte equals this"
+                                          }
+                                        },
+                                        "required": [
+                                          "channel"
+                                        ],
+                                        "additionalProperties": false,
+                                        "patternProperties": {
+                                          "^x-": {}
+                                        }
+                                      }
+                                    ],
+                                    "description": "Which nodes carry no value: { channel, below | above | equals } for an image encoding, a number for geotiff"
+                                  },
+                                  "bands": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "number"
+                                    },
+                                    "description": "GeoTIFF band indices to read: [value] or [u, v] (geotiff only)"
+                                  },
+                                  "attribution": {
+                                    "type": "string",
+                                    "description": "Attribution text for the data"
+                                  },
+                                  "loading": {
+                                    "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/source/anyOf/0/anyOf/0/properties/loading",
+                                    "description": "Deprecated, no effect: no per-source loading overlay is drawn. The map shows \\"Loading map…\\" while it starts"
+                                  },
+                                  "cache": {
+                                    "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/source/anyOf/0/anyOf/0/properties/cache",
+                                    "description": "Cache configuration"
+                                  }
+                                },
+                                "required": [
+                                  "type",
+                                  "url",
+                                  "encoding"
+                                ],
+                                "additionalProperties": false,
+                                "patternProperties": {
+                                  "^x-": {}
+                                }
                               }
                             ]
                           },
