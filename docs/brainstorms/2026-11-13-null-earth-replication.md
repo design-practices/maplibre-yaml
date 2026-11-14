@@ -124,7 +124,7 @@ sources:
     type: grid
     url: /data/gfs/{time}/wind-10m.png     # see R4 for {time}
     encoding: rg-uv                        # | band-uv | nullschool-json | scalar-png
-    bounds: [-180, 90, 180, -90]
+    bounds: [-180, -90, 180, 90]           # cell edges, [west, south, east, north]; or grid: { nx, ny, lo1, la1, dx, dy } for node geometry
     range: [-40, 40]                       # m/s, the min/max the bytes map to
     units: m/s
 ```
@@ -198,6 +198,8 @@ canvas renderer (its mask-canvas approach only works with D3 projections).
    only when the encoding changes. No hosted sample set is required.
 4. `mlym emit` behaviour for grid-backed layers and the URL-hash sync
    question (R7) stay open for the R2/R3 plans.
+5. `bounds` follows MapLibre's `[west, south, east, north]`; the example in
+   R2 was corrected.
 
 ## 7. Sources
 

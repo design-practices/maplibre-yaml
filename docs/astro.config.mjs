@@ -224,6 +224,7 @@ export default defineConfig({
                 { label: "Cloud Optimized GeoTIFF (COG)", link: "/guides/cog/" },
               ],
             },
+            { label: "Grid sources", link: "/guides/grid-sources/" },
             { label: "Host your own basemap", link: "/guides/host-your-own-basemap/" },
             { label: "Live data & streaming", link: "/guides/live-data/" },
             { label: "Layers & styling", link: "/guides/layers/" },
