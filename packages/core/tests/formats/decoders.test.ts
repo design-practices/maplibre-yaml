@@ -10,6 +10,7 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 // fresh module graph the test then imports.
 const CHUNK_URL = "https://example.org/site/js/maplibre-yaml/chunks/";
 const FGB_LIB = "../../src/formats/lib/flatgeobuf";
+const GRID_LIB = "../../src/formats/lib/grid";
 function offline() {
   vi.resetModules();
   vi.doMock("pmtiles", () => {
@@ -18,10 +19,14 @@ function offline() {
   vi.doMock(FGB_LIB, () => {
     throw new TypeError("Importing a module script failed.");
   });
+  vi.doMock(GRID_LIB, () => {
+    throw new TypeError(`Failed to fetch dynamically imported module: ${CHUNK_URL}grid.js`);
+  });
 }
 function online() {
   vi.doUnmock("pmtiles");
   vi.doUnmock(FGB_LIB);
+  vi.doUnmock(GRID_LIB);
   vi.resetModules();
 }
 
@@ -38,6 +43,13 @@ describe("getDecoder", () => {
     expect(getDecoder("pmtiles")).toBe(a);
     expect(typeof (await a).Protocol).toBe("function");
     expect(typeof (await getDecoder("flatgeobuf")).deserialize).toBe("function");
+  });
+
+  it("loads the grid source's decoders on demand (grid source U2)", async () => {
+    const grid = await getDecoder("grid");
+    expect(typeof grid.decodeGrid).toBe("function");
+    expect(grid.GRID_MAX_CELLS).toBe(16_000_000);
+    expect(await getDecoder("grid")).toBe(grid);
   });
 
   it("knows which formats it has a reader for", () => {
@@ -62,6 +74,15 @@ describe("getDecoder", () => {
     expect(message).toContain("copy the whole `dist/` folder");
     expect(message).toContain("load it from the CDN");
     expect(message).toContain("Other layers are unaffected.");
+  });
+
+  it("grid: the chunk that couldn't be downloaded is a FormatError of format grid, worded as the grid reader (grid source U2)", async () => {
+    offline();
+    const { getDecoder: fresh } = await import("../../src/formats/decoders");
+    const error = await fresh("grid").catch((e: unknown) => e);
+    expect(isFormatError(error) && error.failure).toMatchObject({ code: "chunk", format: "grid", url: `${CHUNK_URL}grid.js` });
+    expect((error as Error).message).toContain(`The grid reader (\`${CHUNK_URL}grid.js\`) couldn't be downloaded.`);
+    expect((error as Error).message).toContain("copy the whole `dist/` folder");
   });
 
   it("names the chunk by its file in dist/ when the browser doesn't say (Safari)", async () => {

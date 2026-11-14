@@ -373,6 +373,9 @@ importers:
       fzstd:
         specifier: ^0.1.1
         version: 0.1.1
+      geotiff:
+        specifier: 3.0.5
+        version: 3.0.5
       hyparquet:
         specifier: ^1.31.5
         version: 1.31.5

@@ -56,13 +56,24 @@ export type FormatFailureCode =
    * maplibre-yaml without its `chunks/` folder. `url` is that file.
    */
   | "chunk"
+  /**
+   * A grid image whose size differs from the `grid:` the document declares
+   * (`gridSize` carries both).
+   */
+  | "dimensions"
   /** Anything else the reader reported while decoding. */
   | "read";
+
+/**
+ * What a failure is about: a cloud-native format, or a grid source (any
+ * encoding — the `expected` and `image` facts say which file kind).
+ */
+export type FailureFormat = CloudFormat | "grid";
 
 /** The facts behind one failure; the message is built from these. */
 export interface FormatFailure {
   code: FormatFailureCode;
-  format: CloudFormat;
+  format: FailureFormat;
   /** The file as the page requested it (base already applied). */
   url: string;
   status?: number;
@@ -77,8 +88,21 @@ export interface FormatFailure {
    * whether `size` is the whole file rather than the columns a map reads.
    */
   decoded?: number | undefined;
-  limits?: { features?: number; bytes?: number; decoded?: number } | undefined;
+  limits?: { features?: number; bytes?: number; decoded?: number; cells?: number } | undefined;
   sizeIsFile?: boolean | undefined;
+  /** `too-large`: a grid's cells (`nx * ny`), when that is what made it too large (wins over `size`). */
+  cells?: number | undefined;
+  /** `not-format`: what the bytes should have been, when the format alone doesn't say ("PNG", "GeoTIFF", "JSON"). */
+  expected?: string | undefined;
+  /**
+   * `encoding` on a grid image: the image's shape, when it isn't one the
+   * reader decodes (8-bit, not interlaced, 1 to 4 channels) or has too few
+   * channels for the encoding. `colorType` is the PNG color type's name
+   * ("palette"); `channels` the image's, when the encoding needs more.
+   */
+  image?: { bitDepth?: number; colorType?: string; interlaced?: boolean; channels?: number } | undefined;
+  /** `dimensions`: the grid the document declares and the image's own, each `[nx, ny]`. */
+  gridSize?: { declared: readonly [number, number]; actual: readonly [number, number] } | undefined;
   /**
    * `too-large`: why the file can't be read by view instead — no `bbox`
    * column, unsorted row groups, no spatial index, a server without range

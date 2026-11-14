@@ -87,6 +87,7 @@
     "fflate": "^0.8.2",
     "flatgeobuf": "^4.6.0",
     "fzstd": "^0.1.1",
+    "geotiff": "3.0.5",
     "hyparquet": "^1.31.5",
     "hyparquet-compressors": "^1.1.2",
     "jsdom": "^24.0.0",

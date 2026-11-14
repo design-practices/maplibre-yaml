@@ -68,7 +68,7 @@
  * it — see formats/pmtiles.ts.
  */
 
-import { FormatError } from "./errors";
+import { FormatError, type FailureFormat } from "./errors";
 import type { CloudFormat } from "./detect";
 
 /**
@@ -88,6 +88,10 @@ interface CogLibrary {
   handle: typeof import("./lib/cog-reader").handle;
   preflight: typeof import("./lib/cog-reader").preflight;
   classifyCogError: typeof import("./lib/cog-reader").classifyCogError;
+  // The GeoTIFF band reader (grid source, U2): what `encoding: geotiff` on a
+  // grid reads with, so one copy of geotiff.js serves the COG protocol and
+  // the grid chunk (which reaches it through its host's `getDecoder`).
+  readBands: typeof import("./lib/geotiff-bands").readBands;
 }
 
 /**
@@ -121,6 +125,10 @@ const LOADERS = {
   // strategies, awaited by `LayerManager` once a source with `refresh:` has
   // its first data on the map. A static document never asks for it.
   live: () => import("../data/live/index"),
+  // The grid source's decoders and sampler (formats/lib/grid, U2): PNG,
+  // nullschool JSON, and GeoTIFF through the `cog` chunk's band reader,
+  // awaited by the renderer for the first `type: grid` source on a page.
+  grid: () => import("./lib/grid"),
 } satisfies Record<string, () => Promise<unknown>>;
 
 /** The library module behind each on-demand name. */
@@ -200,7 +208,7 @@ export function getDecoder<F extends DecodedFormat>(name: F): Promise<Decoders[F
         if (file) failedFiles.set(name, { url: file, attempts: (failed?.attempts ?? 0) + 1 });
         throw new FormatError({
           code: "chunk",
-          format: name as CloudFormat,
+          format: name as FailureFormat,
           url: file ?? `chunks/${name}.js`,
           detail: String((error as { message?: unknown } | null)?.message ?? error),
         });
@@ -220,7 +228,7 @@ export function getDecoder<F extends DecodedFormat>(name: F): Promise<Decoders[F
 export function foreignChunk(name: DecodedFormat): FormatError {
   return new FormatError({
     code: "chunk",
-    format: name as CloudFormat,
+    format: name as FailureFormat,
     url: `chunks/${name}.js`,
     detail: "this chunks/ folder is from another maplibre-yaml version; copy the whole dist/",
   });

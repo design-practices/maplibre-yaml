@@ -97,6 +97,10 @@ const LIBRARY_MARKERS: Record<string, string[]> = {
   // merge's own errors (and the stream outage lines, ml-7qa.12) — a static
   // page downloads none of them.
   live: ["Failed to connect to SSE stream", "keeps it closed", "Interval must be at least 1000ms", "updateKey is required for merge strategy"],
+  // The grid source's decoders (formats/lib/grid, lib/png; grid source U2):
+  // the PNG reader's own wording and the nullschool header's key — the
+  // entry words the notices, so it carries none of these.
+  grid: ["no IDAT chunk", "is shorter than its scanlines need", "parameterNumber", "has no header with lo1, la1, dx, dy, nx and ny"],
 };
 
 /** geotiff's codecs, in chunks/cog-<codec>.js (ml-cnv.11): never in a main bundle either. */
@@ -134,7 +138,7 @@ function staticClosure(files: string[]): string[] {
 describe("the seam", () => {
   it("names the readers this version loads on demand", () => {
     expect([...SEAM_NAMES].sort()).toEqual(
-      ["cog", "convert", "flatgeobuf", "geoparquet", "geoparquet-brotli", "live", "pmtiles", "protomaps-basemap", "toml", "update"]
+      ["cog", "convert", "flatgeobuf", "geoparquet", "geoparquet-brotli", "grid", "live", "pmtiles", "protomaps-basemap", "toml", "update"]
     );
     // Every on-demand library has markers, so the "not in the main bundle"
     // checks below cover all of them.
@@ -254,10 +258,18 @@ describe("the seam", () => {
 
   it("the COG and PMTiles chunks' sources import core as types only (bundle headroom U5, KTD5)", () => {
     // Everything formats/lib/cog.ts and lib/pmtiles.ts reach, by path from src/.
-    const chunkFiles = ["formats/lib/cog.ts", "formats/lib/cog-reader.ts", "formats/lib/cog-first-block.ts", "formats/lib/pmtiles.ts"];
+    const chunkFiles = [
+      "formats/lib/cog.ts",
+      "formats/lib/cog-reader.ts",
+      "formats/lib/cog-first-block.ts",
+      "formats/lib/geotiff-bands.ts",
+      "formats/lib/pmtiles.ts",
+    ];
     // Leaf modules the CDN chunk carries a copy of (checked below: they import nothing).
     const leaves = ["formats/cog.ts", "formats/cog-header.ts"];
-    const libraries = ["@geomatico/maplibre-cog-protocol", "pmtiles"];
+    // geotiff: the plugin's own reader, which the grid source's band reader
+    // (lib/geotiff-bands, grid source U2) shares — one copy in the chunk.
+    const libraries = ["@geomatico/maplibre-cog-protocol", "geotiff", "pmtiles"];
     const valueImports = (file: string): string[] => {
       const code = readFileSync(join(PKG_ROOT, "src", file), "utf8").replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
       return [...code.matchAll(/^(?:import|export)\s+(?!type\b)[^;]*?from\s*["']([^"']+)["']/gm)].map((m) => m[1]!);
@@ -269,6 +281,26 @@ describe("the seam", () => {
       expect(reached.filter((f) => !chunkFiles.includes(f) && !leaves.includes(f)), file).toEqual([]);
     }
     for (const leaf of leaves) expect(valueImports(leaf), `${leaf} is no longer a leaf`).toEqual([]);
+  });
+
+  it("the grid chunk's sources import core as types only, and reach the COG chunk only through the host (grid source U2)", () => {
+    // Everything formats/lib/grid.ts reaches, by path from src/.
+    const chunkFiles = ["formats/lib/grid.ts", "formats/lib/png.ts"];
+    const libraries = ["fflate"];
+    const valueImports = (file: string): string[] => {
+      const code = readFileSync(join(PKG_ROOT, "src", file), "utf8").replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+      return [...code.matchAll(/^(?:import|export)\s+(?!type\b)[^;]*?from\s*["']([^"']+)["']/gm)].map((m) => m[1]!);
+    };
+    for (const file of chunkFiles) {
+      const reached = valueImports(file)
+        .filter((spec) => !libraries.includes(spec))
+        .map((spec) => relative(join(PKG_ROOT, "src"), resolve(PKG_ROOT, "src", dirname(file), spec)).split(sep).join("/") + ".ts");
+      expect(reached.filter((f) => !chunkFiles.includes(f)), file).toEqual([]);
+    }
+    // No `import()` of its own: the GeoTIFF band reader comes through host.getDecoder("cog").
+    for (const file of chunkFiles) expect(dynamicImports(readFileSync(join(PKG_ROOT, "src", file), "utf8")), file).toEqual([]);
+    // The host's module is types only.
+    expect(valueImports("renderer/grid-host.ts")).toEqual([]);
   });
 
   it("describes where each build puts the readers as tsup.config.ts does (ml-cnv.19)", () => {
@@ -323,7 +355,7 @@ describe.skipIf(!built)("CDN build: register.browser.js + chunks/", () => {
   });
 
   it("the cloud reader chunks carry no main-bundle wording: core reaches them through the host (KTD5)", () => {
-    for (const name of ["flatgeobuf", "geoparquet", "cog", "pmtiles"]) {
+    for (const name of ["flatgeobuf", "geoparquet", "cog", "pmtiles", "grid"]) {
       const code = read(`chunks/${name}.js`);
       // The message catalogue (the seam's own notice, a parse-time hint) stays in the entry.
       for (const marker of ["couldn't be downloaded", "A wrong path often returns a web page instead", "The document is empty. Add a map or a story to it."]) {
@@ -387,6 +419,15 @@ describe.skipIf(!built)("CDN build: register.browser.js + chunks/", () => {
     expect(read("chunks/cog-lerc.js")).toContain("LercDecode");
     expect(cog.includes("LercDecode")).toBe(false);
     expect(read("chunks/cog-jpeg.js")).toContain("JPEGTables");
+  });
+
+  it("the grid chunk is self-contained and asks for no other chunk: a GeoTIFF's reader comes through the host (grid source U2)", () => {
+    const code = read("chunks/grid.js");
+    expect(staticImports(code)).toEqual([]);
+    expect(dynamicImports(code)).toEqual([]);
+    // fflate's inflater travels with it; geotiff.js does not (it is in chunks/cog.js).
+    expect(code.includes("GDAL_NODATA")).toBe(false);
+    expect(read("chunks/cog.js").includes("GDAL_NODATA")).toBe(true);
   });
 
   it("keeps index.browser.js one file (tooling pages), readers inlined", () => {
