@@ -1,0 +1,50 @@
+# null.earth replica, the YAML half (beads ml-nb1.1 — the R1 spike).
+#
+# Everything the library covers today is declared here: the globe with a
+# dark sky and atmosphere, a coastline-only basemap from Natural Earth, the
+# globe/mercator toggle. What it cannot yet declare — the wind particles,
+# the temperature overlay, the time stepper and the value readout — is page
+# JavaScript in index.html against getMap(); each of those is a bead under
+# ml-nb1 (R2 grid source, R3 flow/field layers, R4 time, R5 readout).
+type: map
+id: null-earth
+config:
+  center: [-30, 25]
+  zoom: 1.4
+  mapStyle: "/examples/verification/configs/local-style.json"
+projection:
+  type: globe
+sky:
+  sky-color: "#03050b"
+  horizon-color: "#0a1226"
+  fog-color: "#03050b"
+  atmosphere-blend: 0.7
+controls:
+  navigation: true
+  globe: true
+  attribution:
+    compact: true
+layers:
+  - id: ocean
+    type: background
+    paint:
+      background-color: "#0c1118"
+  - id: coastline
+    type: line
+    source:
+      type: geojson
+      data: /examples/verification/null-earth/data/ne_110m_coastline.geojson
+      attribution: "Coastlines: Natural Earth (public domain)"
+    paint:
+      line-color: "#a7b0c2"
+      line-width: 0.9
+      line-opacity: 0.85
+  - id: lakes
+    type: line
+    source:
+      type: geojson
+      data: /examples/verification/null-earth/data/ne_110m_lakes.geojson
+    paint:
+      line-color: "#a7b0c2"
+      line-width: 0.6
+      line-opacity: 0.6

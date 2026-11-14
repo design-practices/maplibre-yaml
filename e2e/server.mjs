@@ -25,6 +25,11 @@
  *                                  the worker, which v6 locates relative to
  *                                  its own `import.meta.url`)
  *  - `/vendor/maplibre-gl.css`     resolved from node_modules
+ *  - `/vendor/mapbox-exif-layer.mjs`, `/vendor/exifreader.{js,mjs}`  the
+ *                                  null.earth replica's particle layers
+ *                                  (examples/verification/null-earth)
+ *  - `/vendor/dsv/*`               the Deltares streamline engine's dist, the
+ *                                  same replica's second particle engine
  *  - `/dem/{z}/{x}/{y}.png`        a synthesised elevation tile, so the
  *                                  hillshade fixture loads without S3
  *  - `/relief/{z}/{x}/{y}.png`     seamless synthetic mountains (terrarium),
@@ -72,6 +77,12 @@ const PORT = Number(process.env.VERIFY_PORT ?? 4174);
 //   VERIFY_MAPLIBRE_DIR=/tmp/ml4/node_modules/maplibre-gl VERIFY_PORT=4591 pnpm verify:browser e2e/x.spec.ts
 const MAPLIBRE_DIR =
   process.env.VERIFY_MAPLIBRE_DIR ?? dirname(require.resolve("maplibre-gl/package.json"));
+// mapbox-exif-layer's dist directory (null.earth replica, ml-nb1.1).
+const EXIF_LAYER_DIR = dirname(require.resolve("mapbox-exif-layer"));
+// @deltares/webgl-streamline-visualizer's dist directory (same spike, the
+// fade-buffer engine); served whole because the entry lazy-loads chunks.
+// (ESM-only exports map, so resolved as a module, not through require.)
+const DSV_DIR = dirname(fileURLToPath(import.meta.resolve("@deltares/webgl-streamline-visualizer")));
 
 const TYPES = {
   ".html": "text/html; charset=utf-8",
@@ -603,6 +614,27 @@ const server = createServer(async (req, res) => {
     }
     if (path === "/vendor/maplibre-gl.css") {
       return send(200, await readFile(join(MAPLIBRE_DIR, "dist/maplibre-gl.css")), TYPES[".css"]);
+    }
+    // null.earth replica (ml-nb1.1): the wind-particle / smooth-raster custom
+    // layers and their one runtime dependency, from node_modules, so the
+    // page's import map stays hermetic. exifreader ships UMD only; the .mjs
+    // shim re-exports its global as the default import the library makes.
+    if (path === "/vendor/mapbox-exif-layer.mjs") {
+      return send(200, await readFile(join(EXIF_LAYER_DIR, "index.mjs")), TYPES[".mjs"]);
+    }
+    if (path === "/vendor/exifreader.js") {
+      return send(200, await readFile(require.resolve("exifreader", { paths: [EXIF_LAYER_DIR] })), TYPES[".js"]);
+    }
+    if (path === "/vendor/exifreader.mjs") {
+      return send(200, 'import "./exifreader.js";\nexport default globalThis.ExifReader;\n', TYPES[".mjs"]);
+    }
+    // Any file of the Deltares dist, confined to that directory (the entry
+    // imports sibling chunks by relative path).
+    if (path.startsWith("/vendor/dsv/")) {
+      const rel = normalize(path.slice("/vendor/dsv/".length));
+      const file = join(DSV_DIR, rel);
+      if (rel.startsWith("..") || !file.startsWith(DSV_DIR) || !existsSync(file)) return send(404, "not found");
+      return send(200, await readFile(file), TYPES[extname(file)] ?? "application/octet-stream");
     }
     if (path.startsWith("/dem/") && path.endsWith(".png")) {
       return send(200, DEM_TILE, TYPES[".png"]);

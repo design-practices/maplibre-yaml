@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>null.earth replica — maplibre-yaml spike (ml-nb1.1)</title>
+  <!--
+    Demo AND browser fixture (e2e/null-earth.spec.ts, demos-as-regression-tests).
+
+    Build first:  pnpm --filter @maplibre-yaml/core build
+    Serve:        pnpm verify:serve        (or: node e2e/server.mjs)
+    Open:         /examples/verification/null-earth/index.html
+
+    What is YAML (null-earth.yaml): globe, dark sky + atmosphere, Natural
+    Earth coastlines and lakes, the globe/mercator toggle.
+    What is page JS, each a bead under ml-nb1: the wind particles and the
+    temperature overlay (mapbox-exif-layer custom layers added through
+    getMap(); R2/R3), stepping through GFS forecast hours (R4), the readout
+    of the wind and temperature under the pointer (R5).
+
+    Data: NOAA GFS 10 m wind and 2 m temperature, three forecast hours at 1°,
+    baked by tools/gfs-to-grid.py into data/ (see data/manifest.json).
+
+    Two particle engines, compared in the spike (ml-nb1.1):
+      engine=dsv  (default) @deltares/webgl-streamline-visualizer's
+                  GeographicStreamlineLayer: particles accumulate in a fading
+                  trail texture, the way null.earth never clears its canvas
+      engine=exif mapbox-exif-layer's NewParticleMotion: each particle plus
+                  a few point-sprite copies at its previous positions
+
+    Query params:
+      engine  = dsv (default) | exif
+      overlay = temp (default) | off
+      frame   = 0..n-1           starting forecast hour
+      count   = particles (default: the library's zoom-dependent default)
+      lng, lat, z                camera overrides
+  -->
+  <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+  <style>
+    html, body { margin: 0; height: 100%; background: #03050b; }
+    ml-map { display: block; height: 100%; }
+    #hud {
+      padding: 10px 12px; width: 300px; max-width: calc(100vw - 32px); box-sizing: border-box;
+      background: rgba(10, 14, 22, 0.86); color: #dfe5f0; border: 1px solid rgba(167, 176, 194, 0.25);
+      border-radius: 6px; font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace;
+      box-shadow: 0 1px 8px rgba(0, 0, 0, 0.5);
+    }
+    #hud .title { font: 600 13px/1.2 system-ui, sans-serif; letter-spacing: 0.02em; margin-bottom: 6px; color: #fff; }
+    #hud .title small { color: #8f9ab0; font-weight: 400; }
+    #hud .row { display: flex; justify-content: space-between; gap: 12px; }
+    #hud .row b { color: #fff; font-weight: 600; font-variant-numeric: tabular-nums; }
+    #hud .time { margin-top: 8px; display: flex; align-items: center; gap: 6px; }
+    #hud button, #hud select {
+      background: #1a2232; color: #dfe5f0; border: 1px solid #3a4660; border-radius: 4px;
+      font: inherit; padding: 2px 8px; cursor: pointer;
+    }
+    #hud button:hover { background: #26324a; }
+    #hud input[type=range] { flex: 1; accent-color: #a7b0c2; }
+    #hud .legend { margin-top: 8px; }
+    #hud .legend canvas { display: block; width: 100%; height: 8px; border-radius: 2px; }
+    #hud .legend .ticks { display: flex; justify-content: space-between; color: #8f9ab0; font-size: 10px; }
+    #hud .foot { margin-top: 6px; color: #8f9ab0; font-size: 10px; }
+    #errors { position: fixed; top: 8px; left: 8px; right: 8px; color: #fff; background: #a00; padding: 8px; font: 12px monospace; white-space: pre-wrap; z-index: 20; }
+  </style>
+  <script type="importmap">
+    {
+      "imports": {
+        "maplibre-gl": "/vendor/maplibre-gl.esm.js",
+        "mapbox-exif-layer": "/vendor/mapbox-exif-layer.mjs",
+        "exifreader": "/vendor/exifreader.mjs",
+        "@deltares/webgl-streamline-visualizer": "/vendor/dsv/webgl-streamline-visualizer.js"
+      }
+    }
+  </script>
+</head>
+<body>
+  <script type="module">
+    import "/packages/core/register.js";
+    import { SmoothRaster } from "mapbox-exif-layer";
+
+    const q = new URLSearchParams(location.search);
+    const fail = (msg) => {
+      const box = document.createElement("div");
+      box.id = "errors";
+      box.textContent = msg;
+      document.body.appendChild(box);
+      throw new Error(msg);
+    };
+
+    // ---- the YAML half -----------------------------------------------------
+    const { YAMLParser } = await import("/packages/core/dist/index.browser.js");
+    const text = await (await fetch("./null-earth.yaml")).text();
+    const parsed = YAMLParser.safeParseMapBlock(text);
+    if (!parsed.success) fail(parsed.errors.map((e) => `line ${e.line}: ${e.path}: ${e.message}`).join("\n"));
+    const doc = parsed.data;
+    if (q.has("z")) doc.config.zoom = Number(q.get("z"));
+    if (q.has("lng")) doc.config.center = [Number(q.get("lng")), Number(q.get("lat"))];
+
+    const el = document.createElement("ml-map");
+    el.id = "map";
+    el.config = doc;
+
+    // The HUD rides in the bottom-left chrome slot: a light-DOM child with
+    // slot=, adopted by the renderer's corner system (the one declarative
+    // hook for custom UI today).
+    const hud = document.createElement("div");
+    hud.id = "hud";
+    hud.setAttribute("slot", "bottom-left");
+    hud.innerHTML = `
+      <div class="title">earth <small>· GFS 10 m wind, 2 m temperature</small></div>
+      <div class="row"><span>position</span><b id="pos">—</b></div>
+      <div class="row"><span>wind</span><b id="wind">—</b></div>
+      <div class="row"><span>temp</span><b id="temp">—</b></div>
+      <div class="time">
+        <button id="prev" title="earlier">‹</button>
+        <input id="slider" type="range" min="0" max="0" value="0" />
+        <button id="next" title="later">›</button>
+      </div>
+      <div class="row"><span>valid</span><b id="valid">—</b></div>
+      <div class="row" style="margin-top:6px"><span>overlay</span>
+        <select id="overlay"><option value="temp">temperature</option><option value="off">off</option></select></div>
+      <div class="legend"><canvas id="legend" width="256" height="1"></canvas><div class="ticks" id="ticks"></div></div>
+      <div class="foot">NOAA GFS · Natural Earth · after earth.nullschool.net · <span id="engine"></span></div>`;
+    el.appendChild(hud);
+    document.body.appendChild(el);
+    const map = await el.mapReady();
+
+    // ---- the JS half: data -------------------------------------------------
+    const manifest = await (await fetch("./data/manifest.json")).json();
+    const frames = manifest.frames;
+    const enc = manifest.encodings;
+    const dataUrl = (name) => new URL(`./data/${name}`, location.href).href;
+    let frameIndex = Math.min(frames.length - 1, Math.max(0, Number(q.get("frame") ?? 0)));
+
+    // null.earth's temperature scale (products.js), kelvin -> rgb.
+    const TEMP_STOPS = [
+      [193, [37, 4, 42]], [206, [41, 10, 130]], [219, [81, 40, 40]], [233.15, [192, 37, 149]],
+      [255.65, [70, 215, 215]], [273.15, [21, 84, 187]], [275.15, [24, 132, 14]], [291, [247, 251, 59]],
+      [298, [235, 167, 21]], [311, [230, 71, 39]], [328, [88, 27, 67]],
+    ];
+    // Particle brightness by speed (m/s): dim slate for calm, white for gales.
+    const WIND_STOPS = [[0, [110, 128, 160]], [8, [170, 186, 210]], [16, [225, 232, 245]], [30, [255, 255, 255]]];
+
+    // The GPU layers take the image bounds with latitude clamped to ±90: the
+    // manifest's half-cell overshoot (90.5°) has no Mercator y. The readout
+    // below keeps the exact bounds; the layers are at most half a cell off
+    // at the poles and exact at the equator.
+    const gpuBounds = [manifest.bounds[0], Math.min(90, manifest.bounds[1]), manifest.bounds[2], Math.max(-90, manifest.bounds[3])];
+    const count = q.has("count") ? Number(q.get("count")) : undefined;
+    const engine = q.get("engine") === "exif" ? "exif" : "dsv";
+
+    // ---- readout: sample the same PNGs the GPU draws --------------------------
+    const grids = new Map(); // name -> { w, h, data }
+    async function grid(name) {
+      if (!grids.has(name)) {
+        grids.set(name, (async () => {
+          const img = new Image();
+          img.src = dataUrl(name);
+          await img.decode();
+          const c = document.createElement("canvas");
+          c.width = img.naturalWidth; c.height = img.naturalHeight;
+          const ctx = c.getContext("2d", { willReadFrequently: true });
+          ctx.drawImage(img, 0, 0);
+          return { w: c.width, h: c.height, data: ctx.getImageData(0, 0, c.width, c.height).data };
+        })());
+      }
+      return grids.get(name);
+    }
+    const { dx, dy } = manifest.grid;
+    const [minX, maxY] = manifest.bounds;
+    /** Bilinear sample of channel `ch` (0..3) at lng/lat, wrapping in longitude; bytes 0..255. */
+    function sample(g, ch, lng, lat) {
+      const fx = (((lng - minX) / dx) % g.w + g.w) % g.w - 0.5;
+      const fy = Math.min(g.h - 1, Math.max(0, (maxY - lat) / dy - 0.5));
+      const x0 = Math.floor(fx), y0 = Math.floor(fy);
+      const x1 = (x0 + 1) % g.w, y1 = Math.min(g.h - 1, y0 + 1);
+      const tx = fx - x0, ty = fy - y0;
+      const at = (x, y) => g.data[(y * g.w + ((x + g.w) % g.w)) * 4 + ch];
+      return (at(x0, y0) * (1 - tx) + at(x1, y0) * tx) * (1 - ty) + (at(x0, y1) * (1 - tx) + at(x1, y1) * tx) * ty;
+    }
+
+    // Particle brightness by speed (m/s): dim slate for calm, white for gales.
+    let wind;
+    let setWindFrame;
+    const windFrames = []; // every wind frame handed to the engine, for the spec
+    if (engine === "exif") {
+      const { NewParticleMotion } = await import("mapbox-exif-layer");
+      wind = new NewParticleMotion({
+        id: "wind-particles",
+        source: dataUrl(frames[frameIndex].wind),
+        bounds: gpuBounds,
+        readyForDisplay: true,
+        velocityRange: enc.wind.velocityRange,
+        unit: "mps",
+        color: WIND_STOPS,
+        // Density grows with zoom; the library's default (~30k) whites out a
+        // whole-globe view. Long trails with slow size decay read as strokes.
+        particleCount: count ?? ((zoom) => Math.min(40_000, Math.round(1_000 * 2 ** zoom))),
+        pointSize: 1.1,
+        velocityFactor: 0.04,
+        fadeOpacity: 0.95,
+        trailLength: 24,
+        trailSizeDecay: 0.97,
+        mapRuntime: "maplibre",
+      });
+      setWindFrame = (f) => { windFrames.push(f.wind); wind.setSource(dataUrl(f.wind), 0.5); };
+    } else {
+      const dsv = await import("@deltares/webgl-streamline-visualizer");
+      // The frame's u/v as floats on the manifest's grid: cell centres on the
+      // 1° nodes, row 0 at 90° N, wrapping in longitude. No half-cell fudge.
+      const chunkFor = async (f) => {
+        const g = await grid(f.wind);
+        const n = g.w * g.h;
+        const u = new Float32Array(n), v = new Float32Array(n);
+        const [lo, hi] = enc.wind.velocityRange;
+        for (let i = 0; i < n; i++) {
+          u[i] = lo + (g.data[i * 4] / 255) * (hi - lo);
+          v[i] = lo + (g.data[i * 4 + 1] / 255) * (hi - lo);
+        }
+        const { nx, ny, lo1, la1, dx, dy } = manifest.grid;
+        return dsv.RegularVelocityChunk.fromComponents({ crs: "EPSG:4326", nx, ny, x0: lo1, y0: la1, dx, dy: -dy }, u, v);
+      };
+      // Particles per view scale with zoom (null.earth: 7 × viewport width at
+      // globe scale); the fade and speed below were picked by eye against
+      // earth.nullschool.net on this data. Query params override each.
+      const particlesFor = (zoom) => count ?? Math.min(30_000, Math.max(2_000, Math.round(2_000 * 2 ** (zoom - 1))));
+      wind = new dsv.GeographicStreamlineLayer("wind-particles", {
+        numParticles: particlesFor(map.getZoom()),
+        colormap: new dsv.Colormap(WIND_STOPS.map(([s]) => s), WIND_STOPS.map(([, [r, g, b]]) => new dsv.Color(r, g, b))),
+        visualiserOptions: {
+          style: dsv.StreamlineStyle.ParticlesOnly,
+          particleColor: "#e8eef8",
+          particleSize: Number(q.get("size") ?? 1.3),
+          speedFactor: Number(q.get("speed") ?? 0.006),
+          fadeAmountPerSecond: Number(q.get("fade") ?? 3),
+          maxDisplacement: 1,
+          maxAge: Number(q.get("age") ?? 3),
+          speedExponent: 0.7,
+        },
+      });
+      map.on("zoomend", () => wind.setNumParticles(particlesFor(map.getZoom())));
+      setWindFrame = async (f) => { windFrames.push(f.wind); wind.setVelocityField(await chunkFor(f)); };
+    }
+    const temp = new SmoothRaster({
+      id: "temp-overlay",
+      source: dataUrl(frames[frameIndex].temp),
+      bounds: gpuBounds,
+      readyForDisplay: true,
+      scalarValueRange: enc.temp.scalarValueRange,
+      color: TEMP_STOPS,
+      opacity: 0.55,
+      mapRuntime: "maplibre",
+    });
+    // Overlay under the coastlines, particles on top of everything.
+    map.addLayer(temp, "coastline");
+    map.addLayer(wind);
+    if (engine === "dsv") {
+      await wind.waitForInitialisation();
+      await setWindFrame(frames[frameIndex]);
+    }
+    const overlaySel = hud.querySelector("#overlay");
+    overlaySel.value = q.get("overlay") === "off" ? "off" : "temp";
+    const applyOverlay = () => map.setLayoutProperty("temp-overlay", "visibility", overlaySel.value === "off" ? "none" : "visible");
+    overlaySel.addEventListener("change", applyOverlay);
+    applyOverlay();
+
+    const unscale = (b, [lo, hi]) => lo + (b / 255) * (hi - lo);
+    async function readout(lngLat) {
+      const f = frames[frameIndex];
+      const [gw, gt] = await Promise.all([grid(f.wind), grid(f.temp)]);
+      const u = unscale(sample(gw, 0, lngLat.lng, lngLat.lat), enc.wind.velocityRange);
+      const v = unscale(sample(gw, 1, lngLat.lng, lngLat.lat), enc.wind.velocityRange);
+      const speed = Math.hypot(u, v);
+      const dirFrom = (Math.atan2(-u, -v) * 180 / Math.PI + 360) % 360; // meteorological: where the wind comes from
+      const kelvin = unscale(sample(gt, 0, lngLat.lng, lngLat.lat), enc.temp.scalarValueRange);
+      return { u, v, speed, dirFrom, kelvin };
+    }
+    const fmtPos = (p) => `${Math.abs(p.lat).toFixed(2)}° ${p.lat >= 0 ? "N" : "S"}, ${Math.abs(p.lng).toFixed(2)}° ${p.lng >= 0 ? "E" : "W"}`;
+    const $ = (id) => hud.querySelector(`#${id}`);
+    let pinned = null;
+    async function show(lngLat) {
+      const r = await readout(lngLat);
+      $("pos").textContent = fmtPos(lngLat);
+      $("wind").textContent = `${r.dirFrom.toFixed(0)}° @ ${r.speed.toFixed(1)} m/s`;
+      $("temp").textContent = `${(r.kelvin - 273.15).toFixed(1)} °C`;
+      return r;
+    }
+    map.on("mousemove", (e) => { if (!pinned) show(e.lngLat); });
+    map.on("click", (e) => { pinned = pinned ? null : e.lngLat; show(e.lngLat); });
+
+    // ---- time ----------------------------------------------------------------
+    const slider = $("slider");
+    slider.max = String(frames.length - 1);
+    function setFrame(i) {
+      frameIndex = Math.min(frames.length - 1, Math.max(0, i));
+      slider.value = String(frameIndex);
+      const f = frames[frameIndex];
+      $("valid").textContent = `${f.valid.replace("T", " ")} (+${f.hour} h)`;
+      setWindFrame(f);
+      temp.setSource(dataUrl(f.temp));
+      if (pinned) show(pinned);
+    }
+    slider.addEventListener("input", () => setFrame(Number(slider.value)));
+    $("prev").addEventListener("click", () => setFrame(frameIndex - 1));
+    $("next").addEventListener("click", () => setFrame(frameIndex + 1));
+    $("valid").textContent = `${frames[frameIndex].valid.replace("T", " ")} (+${frames[frameIndex].hour} h)`;
+
+    // ---- legend --------------------------------------------------------------
+    {
+      const c = $("legend"), ctx = c.getContext("2d");
+      const [lo, hi] = enc.temp.scalarValueRange;
+      const g = ctx.createLinearGradient(0, 0, c.width, 0);
+      for (const [k, [r, gg, b]] of TEMP_STOPS) g.addColorStop((k - lo) / (hi - lo), `rgb(${r},${gg},${b})`);
+      ctx.fillStyle = g; ctx.fillRect(0, 0, c.width, c.height);
+      $("ticks").innerHTML = [-80, -40, 0, 40].map((t) => `<span>${t}°C</span>`).join("");
+    }
+
+    // ---- instrumentation for the spec ------------------------------------------
+    function sampleFps(ms = 3000) {
+      return new Promise((resolve) => {
+        let renders = 0;
+        const onRender = () => renders++;
+        map.on("render", onRender);
+        const start = performance.now();
+        setTimeout(() => {
+          map.off("render", onRender);
+          resolve((renders * 1000) / (performance.now() - start));
+        }, ms);
+      });
+    }
+    window.__nullEarth = {
+      el, map, frames, wind, temp, readout, setFrame, sampleFps, engine, windFrames,
+      manifest, gpuBounds, dataUrl, SmoothRaster, TEMP_STOPS, WIND_STOPS,
+      get frameIndex() { return frameIndex; },
+    };
+    hud.querySelector("#engine").textContent = engine === "dsv" ? "deltares streamlines" : "exif particles";
+    document.documentElement.dataset.ready = "1";
+  </script>
+</body>
+</html>
