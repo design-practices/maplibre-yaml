@@ -21,6 +21,17 @@ export const ObjectConfig = () => (
       console.error(event.detail.error ?? event.detail.errors)
     }
     onml-map:parameter-change={(event) => console.log(event.detail.key)}
+    onml-map:source-loaded={(event) => {
+      const id: string = event.detail.sourceId;
+      console.log(id);
+    }}
+  />
+);
+
+export const WrongGridDetail = () => (
+  <ml-map
+    // @ts-expect-error source-loaded carries sourceId, not layerId
+    onml-map:source-loaded={(event) => console.log(event.detail.layerId)}
   />
 );
 

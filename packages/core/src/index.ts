@@ -179,6 +179,11 @@ export { decodeFlatGeobuf, decodeGeoParquet } from "./renderer/cloud-sources";
 // any AsyncBuffer (large data round 2 U6, KTD12): Node-safe, on demand too.
 export { readFlatGeobufFacts, readGeoParquetFacts } from "./renderer/cloud-sources";
 export type { AsyncBuffer, FlatGeobufFacts, GeoParquetFacts, GeoParquetLevelFacts } from "./renderer/cloud-sources";
+// Grid sources (grid source, U4): the field page code samples, and
+// `decodeGrid` for tooling — a thin async wrapper over the `grid` on-demand
+// module, so the entry never imports the chunk (formats/grid.ts).
+export type { GridField, ScalarGridField, VectorGridField, GridPosition, VectorSample, GridGeometry } from "./renderer/grid-host";
+export { decodeGrid } from "./formats/grid";
 // The producer commands the browser's large-file hints name, so `mlym prepare`
 // prints the same command per route (large data round 2 U7).
 export {

@@ -31,7 +31,9 @@
  * - `onml-map:*` event props (React 19 only; React 18 ignores them), each
  *   typed with its `CustomEvent` detail from {@link MLMapEventMap} — the
  *   live-document ones included: `onml-map:update-applied`,
- *   `onml-map:update-rejected` and `onml-map:state-change`.
+ *   `onml-map:update-rejected` and `onml-map:state-change`, and
+ *   `onml-map:source-loaded` (a `type: grid` source's field is in; read it
+ *   with `ref.current.getGrid(sourceId)`).
  * - `children` — slot children (`<div slot="top-right">`) and an inline
  *   `<script type="text/yaml">` (or `application/yaml`, `application/json`,
  *   `application/toml`),

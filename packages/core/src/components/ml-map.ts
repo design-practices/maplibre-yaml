@@ -118,6 +118,7 @@ import { cogUrl } from "../formats/cog-spec.js";
 import { fileUrlOf } from "../formats/cog.js";
 import { readCogHeaderAhead } from "../formats/cog-protocol.js";
 import { absoluteUrl } from "../renderer/cloud-sources.js";
+import type { GridField } from "../renderer/grid-host.js";
 import { CHROME_CORNERS, type ChromeCorner } from "../renderer/chrome-layout.js";
 import { displayPath } from "../parser/validation-utils.js";
 import {
@@ -179,6 +180,7 @@ export interface MLMapEventMap {
   "ml-map:update-applied": CustomEvent<MapRendererEvents["update:applied"]>;
   "ml-map:update-rejected": CustomEvent<MapRendererEvents["update:rejected"]>;
   "ml-map:state-change": CustomEvent<MapRendererEvents["state:change"]>;
+  "ml-map:source-loaded": CustomEvent<MapRendererEvents["source:loaded"]>;
 }
 
 /**
@@ -423,6 +425,7 @@ function startCogFitPrefetch(sourceId: string, source: { url: string }): FitPref
  * @fires ml-map:update-applied - A changed document was applied to the running map (detail: summary; `summary.rebuild` when a basemap change rebuilt it)
  * @fires ml-map:update-rejected - A changed document was refused and the running map kept (detail: kind, errors)
  * @fires ml-map:state-change - The document's `state:` values changed (detail: values, changed)
+ * @fires ml-map:source-loaded - A `type: grid` source was decoded and `getGrid(sourceId)` answers: on the first load and after every swap (detail: sourceId)
  */
 // eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging -- the interface below only adds typed addEventListener overloads
 export class MLMap extends BaseElement {
@@ -2154,6 +2157,17 @@ export class MLMap extends BaseElement {
     // download) loaded on a retry: its line goes, as a layer's does above.
     renderer.on("source:retried", ({ sourceId }) => this.withdrawNotices(`source:${sourceId}`));
 
+    // A grid source's field is in (grid source, U4): the first decode and
+    // every swap a live update makes. `getGrid(sourceId)` answers from now.
+    renderer.on("source:loaded", ({ sourceId }) => {
+      this.dispatchEvent(
+        new CustomEvent("ml-map:source-loaded", {
+          bubbles: true,
+          detail: { sourceId },
+        })
+      );
+    });
+
     // Layer data error — also on the page: the layer is silently empty
     // otherwise, and nothing reached the console either (ml-aot.15).
     renderer.on("layer:data-error", ({ layerId, error }) => {
@@ -2643,6 +2657,57 @@ export class MLMap extends BaseElement {
       this.addEventListener("ml-map:error", onError);
       this.addEventListener("ml-map:update-rejected", onRejected);
     });
+  }
+
+  /**
+   * A `type: grid` source's field (grid source, R14): the decoded, sampleable
+   * field once it is in, `undefined` before that and for any other source.
+   * Never mutated: a live update that changes the source hands out a new
+   * one, and `ml-map:source-loaded` says when.
+   *
+   * @example
+   * ```javascript
+   * const field = el.getGrid("elevation");
+   * if (field) readout.textContent = `${field.sample(map.getCenter())} ${field.units}`;
+   * ```
+   */
+  getGrid(sourceId: string): GridField | undefined {
+    return this.renderer?.getGrid(sourceId);
+  }
+
+  /**
+   * Resolve with a `type: grid` source's field once it is decoded (R14), at
+   * once if it already is. Separate from {@link mapReady}: the map opens
+   * without waiting for its grids, and this does not wait for the layers.
+   * Rejects when the applied document has no grid source of that id, when
+   * its file fails to load (the map's notice says why; a later `reload()`
+   * gives new callers a fresh promise) and when the source is removed.
+   * Called before the map exists it waits for the map to load and asks
+   * then; across a basemap rebuild (KTD8) it answers from the map that took
+   * over, the way `mapReady()` resolves with that map.
+   *
+   * @example
+   * ```javascript
+   * const field = await document.querySelector("ml-map").gridReady("elevation");
+   * const metres = field.sample({ lng: 10, lat: 45 });
+   * ```
+   */
+  async gridReady(sourceId: string): Promise<GridField> {
+    for (;;) {
+      // A fallback rebuild in flight (KTD8): the next map is the one to ask, as mapReady() resolves with it.
+      const renderer = this.swap?.renderer ?? this.renderer;
+      if (!renderer) {
+        await this.mapReady();
+        continue;
+      }
+      try {
+        return await renderer.gridReady(sourceId);
+      } catch (error) {
+        // The map asked was replaced meanwhile (a rebuild committed or failed, a fresh render): ask the one that took its place.
+        if ((this.swap?.renderer ?? this.renderer) !== renderer) continue;
+        throw error;
+      }
+    }
   }
 
   /**

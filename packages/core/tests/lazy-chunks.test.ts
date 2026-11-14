@@ -301,6 +301,9 @@ describe("the seam", () => {
     for (const file of chunkFiles) expect(dynamicImports(readFileSync(join(PKG_ROOT, "src", file), "utf8")), file).toEqual([]);
     // The host's module is types only.
     expect(valueImports("renderer/grid-host.ts")).toEqual([]);
+    // The package entry's `decodeGrid` (formats/grid.ts, U4) reaches the chunk through the seam only: no static or dynamic import of lib/grid.
+    expect(valueImports("formats/grid.ts")).not.toContain("./lib/grid");
+    expect(dynamicImports(readFileSync(join(PKG_ROOT, "src", "formats/grid.ts"), "utf8"))).toEqual([]);
   });
 
   it("describes where each build puts the readers as tsup.config.ts does (ml-cnv.19)", () => {
