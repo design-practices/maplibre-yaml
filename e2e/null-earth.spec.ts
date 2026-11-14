@@ -13,11 +13,19 @@
  *  2. the particles move: two captures a moment apart differ over the globe;
  *  3. the temperature overlay paints: hiding it changes the picture;
  *  4. time stepping swaps both layers' sources and the HUD's valid time;
- *  5. the readout samples the grid: a known land point reads a plausible
- *     temperature and wind, and bilinear sampling wraps across the date line;
+ *  5. the readout reads core's fields (`type: grid` sources, ml-nb1.2):
+ *     through `getGrid` the Sahara is warm and the Antarctic plateau cold
+ *     (AE2), the temperature samples to a number and the wind to
+ *     `{ u, v, speed }` (R9), and sampling wraps across the date line within
+ *     a byte step (AE1);
  *  6. a frame-rate sample is recorded (SwiftShader, so a floor, not a budget);
  *  7. the second engine (mapbox-exif-layer point sprites, `?engine=exif`)
- *     still loads and moves, so the comparison in the spike stays runnable.
+ *     still loads and moves, so the comparison in the spike stays runnable;
+ *  8. a time step is a document update (AE4, R16): until
+ *     `ml-map:source-loaded` fires for `wind`, `getGrid('wind')` is the old
+ *     field and the HUD's pinned value is unchanged; after it, the field is
+ *     another object, the value differs, and the engine was handed the new
+ *     frame's URL.
  *
  * The default engine is @deltares/webgl-streamline-visualizer's geographic
  * layer, which accumulates particles in a fading trail texture the way
@@ -175,27 +183,44 @@ test("4 time stepping swaps both sources and the valid time", async ({ page }) =
   expect(errors).toEqual([]);
 });
 
-test("5 the readout samples the grid (plausible values, date-line wrap)", async ({ page }) => {
+test("5 the readout reads core's fields (AE1, AE2, R9: plausible values, number vs vector, date-line wrap)", async ({ page }) => {
   const errors = await open(page);
   const r = await page.evaluate(async () => {
-    const { readout } = (window as any).__nullEarth;
+    const ne = (window as any).__nullEarth;
+    const { wind, temp } = ne.fields();
+    const probes = { sahara: { lng: 10, lat: 25 }, antarctica: { lng: 90, lat: -80 }, westOfLine: { lng: 179.9, lat: 0 }, eastOfLine: { lng: -179.9, lat: 0 } };
+    const at = (p: { lng: number; lat: number }) => ({ kelvin: temp.sample(p), wind: wind.sample(p), readout: ne.readout(p) });
     return {
-      sahara: await readout({ lng: 10, lat: 25 }),
-      antarctica: await readout({ lng: 90, lat: -80 }),
-      westOfLine: await readout({ lng: 179.9, lat: 0 }),
-      eastOfLine: await readout({ lng: -179.9, lat: 0 }),
+      fields: { wind: { kind: wind.kind, units: wind.units, wraps: wind.wraps, range: [...wind.range] }, temp: { kind: temp.kind, units: temp.units, wraps: temp.wraps, range: [...temp.range] } },
+      sahara: at(probes.sahara),
+      antarctica: at(probes.antarctica),
+      westOfLine: at(probes.westOfLine),
+      eastOfLine: at(probes.eastOfLine),
     };
   });
-  // Mid-November: the Sahara is warmer than the Antarctic plateau by a wide margin.
+  expect(r.fields).toEqual({
+    wind: { kind: "vector", units: "m/s", wraps: true, range: [-40, 40] },
+    temp: { kind: "scalar", units: "K", wraps: true, range: [193, 328] },
+  });
+  // AE2: mid-November, the Sahara is warmer than the Antarctic plateau by a wide margin — and both are numbers, not objects.
+  expect(typeof r.sahara.kelvin).toBe("number");
+  expect(typeof r.antarctica.kelvin).toBe("number");
   expect(r.sahara.kelvin).toBeGreaterThan(280);
   expect(r.antarctica.kelvin).toBeLessThan(265);
   expect(r.sahara.kelvin - r.antarctica.kelvin).toBeGreaterThan(30);
-  for (const v of Object.values(r) as Array<{ speed: number }>) {
-    expect(v.speed).toBeGreaterThanOrEqual(0);
-    expect(v.speed).toBeLessThan(40);
+  // R9: the vector field samples to { u, v, speed }; the HUD's readout is built from the two samples.
+  for (const v of [r.sahara, r.antarctica, r.westOfLine, r.eastOfLine]) {
+    expect(Object.keys(v.wind).sort()).toEqual(["speed", "u", "v"]);
+    expect(v.wind.speed).toBeCloseTo(Math.hypot(v.wind.u, v.wind.v), 9);
+    expect(v.wind.speed).toBeLessThan(40);
+    expect(v.readout.kelvin).toBe(v.kelvin);
+    expect(v.readout.speed).toBe(v.wind.speed);
   }
-  // 0.2° apart across the date line: the bilinear sample is continuous.
-  expect(Math.abs(r.westOfLine.kelvin - r.eastOfLine.kelvin)).toBeLessThan(2);
+  // AE1: 0.2° apart across the date line, the grid wraps — the speeds and the temperatures differ by less than a byte step.
+  const windStep = (r.fields.wind.range[1] - r.fields.wind.range[0]) / 255;
+  const tempStep = (r.fields.temp.range[1] - r.fields.temp.range[0]) / 255;
+  expect(Math.abs(r.westOfLine.wind.speed - r.eastOfLine.wind.speed)).toBeLessThan(windStep);
+  expect(Math.abs(r.westOfLine.kelvin - r.eastOfLine.kelvin)).toBeLessThan(tempStep);
   // Hovering fills the HUD.
   const box = (await page.locator("ml-map canvas.maplibregl-canvas").first().boundingBox())!;
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
@@ -223,5 +248,63 @@ test("7 the point-sprite engine (?engine=exif) still loads and moves", async ({ 
   const moved = diffPixels(a, b);
   console.log(`[null-earth] exif engine pixels changed: ${moved}`);
   expect(moved).toBeGreaterThan(300);
+  expect(errors).toEqual([]);
+});
+
+test("8 a time step is a document update: the old field answers until source-loaded, then the HUD changes (AE4)", async ({ page }) => {
+  const errors = await open(page);
+  const point = { lng: -30, lat: 25 }; // mid-Atlantic, where the wind changes between the hours
+  // Everything that must be read BEFORE the swap lands is read in the same
+  // task that starts it: nothing can land in between.
+  const r = await page.evaluate(async (pt) => {
+    const ne = (window as any).__nullEarth;
+    const el = ne.el;
+    const hud = () => el.querySelector("#wind").textContent;
+    ne.pin(pt);
+    const before = ne.fields().wind;
+    const hudBefore = hud();
+    const speedBefore = before.sample(pt).speed;
+    const framesBefore = ne.windFrames.length;
+    const events: string[] = [];
+    el.addEventListener("ml-map:source-loaded", (e: CustomEvent<{ sourceId: string }>) => events.push(e.detail.sourceId));
+    const swapped = ne.setFrame(ne.frameIndex + 1); // the #next button's handler
+    // Synchronously after the update was asked for: the old field, the old HUD value.
+    const during = {
+      sameField: ne.fields().wind === before,
+      hud: hud(),
+      speed: ne.fields().wind.sample(pt).speed,
+      events: [...events],
+      windFramesGrew: ne.windFrames.length > framesBefore,
+      valid: el.querySelector("#valid").textContent,
+    };
+    await swapped;
+    const after = ne.fields().wind;
+    return {
+      hudBefore,
+      speedBefore,
+      during,
+      after: { sameField: after === before, hud: hud(), speed: after.sample(pt).speed, events: [...events], oldStillAnswers: before.sample(pt).speed },
+      windFrames: [...ne.windFrames],
+      url: el.getDocument().sources.wind.url,
+    };
+  }, point);
+  // While the swap is in flight: nothing changed, and the HUD still answers.
+  expect(r.during.sameField).toBe(true);
+  expect(r.during.hud).toBe(r.hudBefore);
+  expect(r.during.speed).toBe(r.speedBefore);
+  expect(r.during.events).toEqual([]);
+  expect(r.during.windFramesGrew).toBe(false);
+  expect(r.during.valid).toContain("+3 h");
+  // After source-loaded: a new field object, a new value, the old field untouched.
+  expect(r.after.sameField).toBe(false);
+  expect(r.after.events).toContain("wind");
+  expect(r.after.events).toContain("temp");
+  expect(r.after.speed).not.toBe(r.speedBefore);
+  expect(r.after.hud).not.toBe(r.hudBefore);
+  expect(r.after.oldStillAnswers).toBe(r.speedBefore);
+  // The engine was handed the new frame (the document's URL for it).
+  expect(r.url).toContain("f003-wind-10m.png");
+  expect(r.windFrames.at(-1)).toContain("f003-wind-10m.png");
+  await page.waitForTimeout(500);
   expect(errors).toEqual([]);
 });

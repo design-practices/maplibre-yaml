@@ -1,17 +1,46 @@
-# null.earth replica, the YAML half (beads ml-nb1.1 — the R1 spike).
+# null.earth replica, the YAML half (beads ml-nb1.1 — the R1 spike; ml-nb1.2
+# — the R2 grid source).
 #
 # Everything the library covers today is declared here: the globe with a
 # dark sky and atmosphere, a coastline-only basemap from Natural Earth, the
-# globe/mercator toggle. What it cannot yet declare — the wind particles,
-# the temperature overlay, the time stepper and the value readout — is page
-# JavaScript in index.html against getMap(); each of those is a bead under
-# ml-nb1 (R2 grid source, R3 flow/field layers, R4 time, R5 readout).
+# globe/mercator toggle, and the two data fields as `type: grid` sources —
+# decoded and sampled by the library, read by page code through
+# getGrid()/gridReady(). What it cannot yet declare — the wind particles and
+# the temperature overlay (layers over a grid, R3), the time stepper (R4) and
+# the readout control (R5) — is page JavaScript in index.html; each is a bead
+# under ml-nb1. Stepping through forecast hours is a document update that
+# changes the two `url:`s below (index.html, el.update()).
 type: map
 id: null-earth
 config:
   center: [-30, 25]
   zoom: 1.4
   mapStyle: "/examples/verification/configs/local-style.json"
+sources:
+  # 10 m wind: u in the red byte, v in the green, both over -40..40 m/s.
+  # Pixel centres are the 1° nodes, row 0 at 90° N, 360 columns from 180° W,
+  # so the grid wraps in longitude. The converter writes B = 255 for every
+  # valid cell; a lower blue byte marks a cell with no data.
+  wind:
+    type: grid
+    url: /examples/verification/null-earth/data/2026111400-f000-wind-10m.png
+    encoding: rg-uv
+    grid: { nx: 360, ny: 181, lo1: -180, la1: 90, dx: 1, dy: 1 }
+    range: [-40, 40]
+    units: m/s
+    nodata: { channel: b, below: 128 }
+    attribution: "NOAA GFS (public domain)"
+  # 2 m temperature: the red byte over 193..328 K; a blue byte above 153
+  # marks a cell with no data (the converter writes 0).
+  temp:
+    type: grid
+    url: /examples/verification/null-earth/data/2026111400-f000-temp-2m.png
+    encoding: scalar-r
+    grid: { nx: 360, ny: 181, lo1: -180, la1: 90, dx: 1, dy: 1 }
+    range: [193, 328]
+    units: K
+    nodata: { channel: b, above: 153 }
+    attribution: "NOAA GFS (public domain)"
 projection:
   type: globe
 sky:

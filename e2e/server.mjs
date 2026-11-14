@@ -47,6 +47,13 @@
  *                                  GeoJSON updates for the streaming fixture
  *                                  (examples/verification/stream-sse.html);
  *                                  see `streamPoints`
+ *  - `/grid-fixtures/16bit.png`    a generated 4x4 16-bit grayscale PNG, and
+ *    `/grid-fixtures/huge-header.png`  a PNG that is only its header (IHDR says
+ *                                  5000x4000, 20 M cells, no image data): the
+ *                                  `type: grid` source's bit-depth and
+ *                                  cell-cap notices (grid source U6,
+ *                                  e2e/grid-sources.spec.ts), without
+ *                                  committing a bad binary; see `gridFixture`
  *  - `/my-repo/*`                  examples/verification/base-path/site, as
  *                                  GitHub Pages serves a project site
  *                                  (ml-aot.30); `/my-repo/cloud-native/*`
@@ -255,26 +262,64 @@ function encodeRgbTile(color) {
     }
   }
 
-  const chunk = (type, data) => {
-    const len = Buffer.alloc(4);
-    len.writeUInt32BE(data.length);
-    const body = Buffer.concat([Buffer.from(type, "ascii"), data]);
-    const crc = Buffer.alloc(4);
-    crc.writeUInt32BE(crc32(body) >>> 0);
-    return Buffer.concat([len, body, crc]);
-  };
+  return pngFile({ width: size, height: size, bitDepth: 8, colorType: 6 }, raw);
+}
 
+/** One PNG chunk: length, type, data, CRC. */
+function pngChunk(type, data) {
+  const len = Buffer.alloc(4);
+  len.writeUInt32BE(data.length);
+  const body = Buffer.concat([Buffer.from(type, "ascii"), data]);
+  const crc = Buffer.alloc(4);
+  crc.writeUInt32BE(crc32(body) >>> 0);
+  return Buffer.concat([len, body, crc]);
+}
+
+/**
+ * A PNG file from its header fields and filtered scanlines (`raw`: one
+ * filter byte then the row's bytes, per row); `raw` null writes a file that
+ * is only its signature, IHDR and IEND — a header with nothing behind it.
+ */
+function pngFile({ width, height, bitDepth, colorType }, raw) {
   const ihdr = Buffer.alloc(13);
-  ihdr.writeUInt32BE(size, 0);
-  ihdr.writeUInt32BE(size, 4);
-  ihdr[8] = 8; // bit depth
-  ihdr[9] = 6; // colour type: RGBA
+  ihdr.writeUInt32BE(width, 0);
+  ihdr.writeUInt32BE(height, 4);
+  ihdr[8] = bitDepth;
+  ihdr[9] = colorType;
   return Buffer.concat([
     Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
-    chunk("IHDR", ihdr),
-    chunk("IDAT", deflateSync(raw)),
-    chunk("IEND", Buffer.alloc(0)),
+    pngChunk("IHDR", ihdr),
+    ...(raw ? [pngChunk("IDAT", deflateSync(raw))] : []),
+    pngChunk("IEND", Buffer.alloc(0)),
   ]);
+}
+
+/**
+ * The grid source's bad-image fixtures (grid source U6), generated so no
+ * bad binary is committed:
+ *  - `16bit.png`        a valid 4x4 16-bit grayscale PNG (a ramp): the reader
+ *                       refuses it by bit depth, naming "16-bit grayscale";
+ *  - `huge-header.png`  signature, an IHDR claiming 5000x4000 RGB, IEND — no
+ *                       image data at all, so only the header's cell count
+ *                       (20 M, over the 16 M cap) can be what the notice
+ *                       reports: the guard reads the header before inflating.
+ */
+function gridFixture(name) {
+  if (name === "16bit.png") {
+    const size = 4;
+    const raw = Buffer.alloc((size * 2 + 1) * size);
+    let o = 0;
+    for (let y = 0; y < size; y++) {
+      raw[o++] = 0; // filter: none
+      for (let x = 0; x < size; x++) {
+        raw.writeUInt16BE(((y * size + x) * 65535) / (size * size - 1), o);
+        o += 2;
+      }
+    }
+    return pngFile({ width: size, height: size, bitDepth: 16, colorType: 0 }, raw);
+  }
+  if (name === "huge-header.png") return pngFile({ width: 5000, height: 4000, bitDepth: 8, colorType: 2 }, null);
+  return null;
 }
 
 let CRC_TABLE;
@@ -635,6 +680,11 @@ const server = createServer(async (req, res) => {
       const file = join(DSV_DIR, rel);
       if (rel.startsWith("..") || !file.startsWith(DSV_DIR) || !existsSync(file)) return send(404, "not found");
       return send(200, await readFile(file), TYPES[extname(file)] ?? "application/octet-stream");
+    }
+    const gridFix = /^\/grid-fixtures\/([\w-]+\.png)$/.exec(path);
+    if (gridFix) {
+      const png = gridFixture(gridFix[1]);
+      return png ? send(200, png, TYPES[".png"]) : send(404, "not found", "text/plain");
     }
     if (path.startsWith("/dem/") && path.endsWith(".png")) {
       return send(200, DEM_TILE, TYPES[".png"]);
