@@ -69,6 +69,7 @@ then what doesn't export.
 | `layer.interactive` | `no-export` | Popups, hover and highlight are behaviour. [`attachInteractions`](/guides/export/#reattachment-attachinteractions) puts them back. |
 | `layer.legend` / `layer.label` / `layer.toggleable` | `no-export` | Legend entries and the layer panel are page furniture; the layer exports with its written visibility. |
 | `source.refresh` / `source.stream` / `source.cache` / `source.loading` / `source.prefetchedData` / `source.fetchStrategy` / `source.refreshInterval` / `source.updateStrategy` / `source.updateKey` | `no-export` | Live data. The exported source has the data present at export: inline `data`, or a GeoJSON `url:` written as `data: <url>`, loaded once. With neither, it is `lossy`. |
+| `source.grid` | `no-export` | A grid source is not a MapLibre source, so it is left out of `sources`; its declaration is kept under `metadata["maplibre-yaml:grid-sources"]`, keyed by id, for maplibre-yaml renderers. A `contract` warning, so `--strict` passes. No layer type draws a grid; a layer over one is dropped (`lossy`). |
 | `source.load` / `source.columns` | `no-export` | How the browser reads a FlatGeobuf or GeoParquet file; the exported source already holds its features. |
 | `map.options` | `no-export` | MapLibre `Map` options are the page's choice; the exported style uses MapLibre's defaults. |
 | `controls` | `no-export` | The exported map gets MapLibre's default controls only. |

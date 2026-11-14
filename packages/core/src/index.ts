@@ -109,9 +109,12 @@ export {
   DEFAULT_PIN_HEIGHT,
   lowerSourceFormat,
   attachSourceData,
+  lowerGridSource,
+  GRID_SOURCES_METADATA_KEY,
 } from "./emitter";
 export type {
   EmitDataRef,
+  GridLowering,
   EmitAsset,
   EmitImageRef,
   HatchTileOptions,

@@ -28,6 +28,7 @@ import {
   FLATGEOBUF_ON_EMIT,
   GEOPARQUET_ON_EMIT,
 } from "../emitter/lower-formats";
+import { GRID_ON_EMIT } from "../emitter/lower-grid";
 
 /**
  * The default registry every emit path consults.
@@ -169,6 +170,12 @@ exportClasses.register("source.colorRamp", {
     "A COG's colour ramp is compiled into its cog:// URL (the COG protocol's #color: " +
     "fragment, with the palette written out as colours); the key does not appear in style.json.",
 });
+
+// A grid source (ml-nb1.2): a raster field maplibre-yaml samples itself, never
+// a MapLibre source. The projection drops it from `sources` and stashes the
+// declaration under metadata["maplibre-yaml:grid-sources"] (lower-grid.ts);
+// no-export, because nothing MapLibre draws depends on it.
+exportClasses.register("source.grid", { class: "no-export", onEmit: GRID_ON_EMIT });
 
 exportClasses.register("format.pmtiles", { class: "exports", onEmit: PMTILES_ON_EMIT });
 
