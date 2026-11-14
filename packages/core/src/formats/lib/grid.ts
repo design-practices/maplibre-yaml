@@ -39,6 +39,7 @@ import type {
   GridField,
   GridGeometry,
   GridHost,
+  GridLoadHost,
   GridPosition,
   ScalarGridField,
   VectorGridField,
@@ -46,7 +47,7 @@ import type {
 } from "../../renderer/grid-host";
 import { decodePng, PngError, readPngHeader } from "./png";
 
-export type { GridField, GridGeometry, GridHost, GridPosition, ScalarGridField, VectorGridField, VectorSample };
+export type { GridField, GridGeometry, GridHost, GridLoadHost, GridPosition, ScalarGridField, VectorGridField, VectorSample };
 
 /**
  * Cells (`nx * ny`) above which a grid isn't decoded: a 0.25° global grid is
@@ -109,6 +110,13 @@ const EDGE_EPSILON = 1e-9;
  * 255 stand for (byte encodings); a rescale builds another field over the
  * same decode with another range.
  */
+/**
+ * What each field was built from, so {@link refitGrid} can hand out the same
+ * data under another `range:` or `units:` with no decode. Weak: a field page
+ * code drops takes its bytes with it.
+ */
+const DECODED = new WeakMap<GridField, Decoded>();
+
 function makeField(d: Decoded, units: string | undefined, range: readonly [number, number] | undefined): GridField {
   const geometry = Object.freeze({ ...d.geometry });
   const { nx, ny, lo1, la1, dx, dy } = geometry;
@@ -218,6 +226,7 @@ function makeField(d: Decoded, units: string | undefined, range: readonly [numbe
       },
       values: () => (cached ??= { u: materialize(0), v: materialize(1), missing }),
     };
+    DECODED.set(field, d);
     return Object.freeze(field);
   }
   let cached: { value: Float32Array; missing: Uint8Array } | undefined;
@@ -227,6 +236,7 @@ function makeField(d: Decoded, units: string | undefined, range: readonly [numbe
     sample: (position: GridPosition): number | null => (locate(position) ? blend(0) : null),
     values: () => (cached ??= { value: materialize(0), missing }),
   };
+  DECODED.set(field, d);
   return Object.freeze(field);
 }
 
@@ -482,4 +492,111 @@ export async function decodeGrid(bytes: ArrayBuffer | ArrayBufferView, spec: Gri
   }
   const range = decoded.bytes ? (spec.range ?? [0, 255]) : undefined;
   return makeField(decoded, spec.units, range);
+}
+
+// ---------------------------------------------------------------------------
+// Loading: fetch, cache, decode — the source manager's body (renderer/grid-sources is its shell)
+// ---------------------------------------------------------------------------
+
+/**
+ * The keys that decide what a file decodes to, beside its URL. `range` and
+ * `units` are not among them: they refit a decoded field ({@link refitGrid}).
+ */
+const DECODE_KEYS = ["encoding", "bounds", "grid", "nodata", "bands"] as const;
+
+/** How many decoded fields the page keeps: a 1° global frame is 1 MB of bytes; sixteen is a day of forecast hours. */
+const CACHE_ENTRIES = 16;
+
+/**
+ * Decoded fields by the file and decode keys they came from, most recently
+ * used last. Module level, so it outlives a renderer rebuilt for a
+ * `mapStyle` change, and a second source over the same file — or the same
+ * frame asked for again — costs no network.
+ */
+const cache = new Map<string, { field: Promise<GridField>; expires: number }>();
+
+function cacheKey(url: string, spec: GridSource): string {
+  return `${url}\0${JSON.stringify(DECODE_KEYS.map((key) => spec[key] ?? null))}`;
+}
+
+/**
+ * Drop every cached field.
+ *
+ * @internal Tests.
+ */
+export function clearGridCache(): void {
+  cache.clear();
+}
+
+/**
+ * `field` as `spec` declares it: itself when its `range:` and `units:`
+ * already match, else a new field over the same retained bytes (no decode,
+ * no fetch). The field given is never changed.
+ */
+export function refitGrid(field: GridField, spec: GridSource): GridField {
+  const d = DECODED.get(field);
+  if (!d) return field;
+  const range = d.bytes ? (spec.range ?? [0, 255]) : undefined;
+  const sameRange = range && field.range ? range[0] === field.range[0] && range[1] === field.range[1] : range === field.range;
+  if (sameRange && field.units === spec.units) return field;
+  return makeField(d, spec.units, range);
+}
+
+/** Download `url` whole under the byte cap, then decode it for `spec`. */
+async function fetchAndDecode(url: string, spec: GridSource, host: GridLoadHost): Promise<GridField> {
+  const fail: Fail = (failure) => {
+    throw host.formatError({ format: "grid", url: spec.url, ...failure } as FormatFailure);
+  };
+  const bytes = await host.fetchWhole(url, { maxWholeBytes: host.limits?.bytes }).then(
+    (whole) => whole.bytes,
+    (error: unknown) => {
+      const e = error as { name?: unknown; size?: unknown; status?: unknown; message?: unknown };
+      if (e.name === "BodyTooLarge") fail({ code: "too-large", size: Number(e.size), sizeIsFile: true, limits: { bytes: host.limits?.bytes } });
+      if (typeof e.status === "number") fail({ code: "http", status: e.status });
+      return fail({ code: "cors", detail: String(e.message ?? error) });
+    }
+  );
+  return decodeGrid(bytes, spec, host);
+}
+
+/**
+ * The field for `spec`: fetched whole (under the byte cap), decoded, and
+ * kept for the next request of the same file and decode keys (`cache:` on
+ * the source is honoured as on other sources: `enabled: false` bypasses it,
+ * `ttl` expires it). A cached field with another `range:` or `units:` is
+ * refit rather than fetched again.
+ *
+ * @throws {FormatError} (format `grid`): `http` for an error status, `cors`
+ *   when the request never completed, `too-large` over the byte cap (before
+ *   anything is decoded), and whatever {@link decodeGrid} raises.
+ */
+export function loadGrid(spec: GridSource, host: GridLoadHost): Promise<GridField> {
+  const safe = host.safeUrl(spec.url);
+  if (safe === null) {
+    return Promise.reject(host.formatError({ format: "grid", url: spec.url, code: "read", detail: "a page can't fetch a URL with this scheme" }));
+  }
+  const url = host.absoluteUrl(safe);
+  const cached = spec.cache?.enabled !== false;
+  const key = cacheKey(url, spec);
+  const now = Date.now();
+  const hit = cached ? cache.get(key) : undefined;
+  if (hit && hit.expires > now) {
+    cache.delete(key);
+    cache.set(key, hit);
+    return hit.field.then((field) => refitGrid(field, spec));
+  }
+  const field = fetchAndDecode(url, spec, host);
+  if (cached) {
+    const entry = { field, expires: spec.cache?.ttl ? now + spec.cache.ttl : Infinity };
+    cache.set(key, entry);
+    // A failure is not kept: the next request (a `reload()`) asks again.
+    field.catch(() => {
+      if (cache.get(key) === entry) cache.delete(key);
+    });
+    for (const stale of cache.keys()) {
+      if (cache.size <= CACHE_ENTRIES) break;
+      cache.delete(stale);
+    }
+  }
+  return field;
 }

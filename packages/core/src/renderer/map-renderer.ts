@@ -96,6 +96,7 @@ import {
 import { elementLanguage } from '../i18n/strings';
 import { geoParquetColumns } from '../formats/columns';
 import { namedSourcesNeedingIds } from './highlight-paint';
+import type { GridField } from './grid-host';
 
 /** The document's source ids (named, and `<layer>-source` for inline ones) that read `format`. */
 function sourceIdsReading(
@@ -507,8 +508,14 @@ export interface MapRendererEvents {
   'layer:data-loading': { layerId: string };
   'layer:data-loaded': { layerId: string; featureCount: number };
   'layer:data-error': { layerId: string; error: Error };
-  /** A tile or image source whose TileJSON or image request failed loaded on a later try (a `reload()`). */
+  /** A tile or image source whose TileJSON or image request failed loaded on a later try (a `reload()`); or a grid whose last load failed is in. */
   'source:retried': { sourceId: string };
+  /**
+   * A grid source's field is in (grid source, R15): decoded, swapped for a
+   * changed file, or refit for a changed `range:` / `units:`. `getGrid` and
+   * `gridReady` answer with it from now on.
+   */
+  'source:loaded': { sourceId: string };
   'layer:click': { layerId: string; feature: any; lngLat: LngLat };
   'layer:hover': { layerId: string; feature: any; lngLat: LngLat };
   'markers:added': { count: number };
@@ -1007,6 +1014,11 @@ export class MapRenderer {
       onSourceError: (sourceId, error) => {
         console.warn(`[maplibre-yaml] ${consoleText(error.message)}`);
         options.onError?.(error, false, { kind: 'source', sourceId });
+      },
+      // A grid's field is in (grid source, U3); one that had failed takes its notice with it.
+      onSourceLoaded: (sourceId, recovered) => {
+        if (recovered) this.emit('source:retried', { sourceId });
+        this.emit('source:loaded', { sourceId });
       },
       // A `before:` naming no layer: the layer was added on top (ml-aot.119).
       onLayerHint: (layerId, message) => {
@@ -2368,6 +2380,35 @@ export class MapRenderer {
   /** The sources whose last load failed, for `hints.failedSources` (KTD11): `reload()` retries them. */
   failedSources(): ReadonlySet<string> {
     return this.layerManager.failedSources();
+  }
+
+  /**
+   * A grid source's field (grid source, R14): the decoded, sampleable field
+   * once it is in, `undefined` before that and for any other id. Never
+   * mutated: a live update that changes the source hands out a new one
+   * (`source:loaded` says when).
+   */
+  getGrid(sourceId: string): GridField | undefined {
+    return this.layerManager.getGrid(sourceId);
+  }
+
+  /**
+   * A grid source's field once it is in (R14). Rejects with an Error naming
+   * the id when the applied document has no grid source of that id; with
+   * the source's `FormatError` when its load fails (a later `reload()`
+   * gives new callers a fresh promise); and when the source is removed or
+   * the renderer destroyed while the load is in flight. Does not wait for
+   * `mapReady()`'s layers — only for the style load that registers sources.
+   */
+  async gridReady(sourceId: string): Promise<GridField> {
+    const destroyed = () => new Error(`Grid source "${sourceId}": the map was destroyed, so there is no field to wait for.`);
+    if (this.destroyed) throw destroyed();
+    // Before the style loads nothing is registered yet: wait for the load (or for `destroy()`, which releases the waiters too).
+    if (!this.layersAdded && !this.layerManager.hasGrid(sourceId)) {
+      await new Promise<void>((resolve) => this.loadWaiters.push(resolve));
+      if (this.destroyed) throw destroyed();
+    }
+    return this.layerManager.gridReady(sourceId);
   }
 
   /** Stop this map's pipelines (polling, by-view loaders): a fallback rebuild is replacing it (KTD8). */

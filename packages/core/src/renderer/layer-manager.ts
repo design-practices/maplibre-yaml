@@ -53,6 +53,9 @@ import {
   type ReaderFormat,
 } from "./cloud-sources";
 import type { StartedOpen, StartedTail } from "./cloud-host";
+import { GridSourceManager } from "./grid-sources";
+import type { GridField } from "./grid-host";
+import type { GridSource } from "../schemas/source.schema";
 
 type Layer = z.infer<typeof LayerSchema>;
 type GeoJSONSourceConfig = z.infer<typeof GeoJSONSourceSchema>;
@@ -146,6 +149,11 @@ function loaderShape(config: GeoJSONSourceConfig): string {
 }
 
 /** Structural equality of two JSON-shaped values. */
+/** Whether a source spec is a `type: grid` source (grid source, U3). */
+function isGrid(spec: unknown): spec is GridSource {
+  return (spec as { type?: unknown } | null)?.type === "grid";
+}
+
 function sameJson(a: unknown, b: unknown): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
 }
@@ -246,6 +254,12 @@ export interface LayerManagerCallbacks {
    * rather than fail one by one.
    */
   onSourceError?: (sourceId: string, error: Error) => void;
+  /**
+   * A grid source's field was decoded, or refit for a `range:` / `units:`
+   * change (grid source, U3): `getGrid(sourceId)` answers with it from now
+   * on. `recovered` when its last load had failed (the notice can go).
+   */
+  onSourceLoaded?: (sourceId: string, recovered: boolean) => void;
   /**
    * An author hint about one layer that was still added (a `before:` naming
    * no layer on the map: the layer goes on top instead of being dropped).
@@ -371,6 +385,8 @@ export class LayerManager {
   private keylessWarned = new Set<string>();
   /** FlatGeobuf / GeoParquet readers by source id (ml-cnv.3/.4), stopped with their source. */
   private formatLoaders = new Map<string, FormatLoader>();
+  /** The document's `type: grid` sources (grid source, U3), null until the first one: they never reach MapLibre. */
+  private grids: GridSourceManager | null = null;
   /** Whole-column scans by reader and column set (see `wholeColumns`); they go with their reader. */
   private columnScans = new WeakMap<FormatLoader, Map<string, Promise<FeatureCollection>>>();
   /** Whether the page registered a URL protocol itself (see LayerManagerDataOptions). */
@@ -461,6 +477,11 @@ export class LayerManager {
       if (!spec || typeof spec !== "object") continue;
       this.namedSources.set(id, spec as Record<string, unknown>);
       this.sourceSpecs.set(id, spec as Record<string, unknown>);
+      // A grid is read by this library, never by MapLibre (grid source, U3).
+      if (isGrid(spec)) {
+        this.gridSources().update(id, spec);
+        continue;
+      }
       // Its refresh starts once the first data is in: the chunk comes alongside.
       if (startsLive(spec as unknown as GeoJSONSourceConfig)) prefetchDecoder("live");
 
@@ -698,8 +719,9 @@ export class LayerManager {
    * being rebuilt: its reader, data, failure state, pending load and spec.
    * The generation moves on, so any load still in flight for it is dropped.
    */
-  private forgetSource(sourceId: string): void {
+  private forgetSource(sourceId: string, keepGrid = false): void {
     this.nextGeneration(sourceId);
+    if (!keepGrid) this.grids?.remove(sourceId);
     this.formatLoaders.get(sourceId)?.destroy();
     this.formatLoaders.delete(sourceId);
     this.sourceData.delete(sourceId);
@@ -719,6 +741,32 @@ export class LayerManager {
    */
   failedSources(): ReadonlySet<string> {
     return new Set([...this.failed, ...this.liveUnavailable, ...this.tileJsonFailed]);
+  }
+
+  /** The grid sources' manager (grid source, U3), created for the first grid; its outcomes feed the callbacks and the failed set. */
+  private gridSources(): GridSourceManager {
+    return (this.grids ??= new GridSourceManager({
+      onLoaded: (sourceId) => this.callbacks.onSourceLoaded?.(sourceId, this.failed.delete(sourceId)),
+      onError: (sourceId, error) => {
+        this.failed.add(sourceId);
+        this.callbacks.onSourceError?.(sourceId, error);
+      },
+    }));
+  }
+
+  /** Whether `sourceId` is a grid source this manager holds (decoded or not). */
+  hasGrid(sourceId: string): boolean {
+    return this.grids?.has(sourceId) ?? false;
+  }
+
+  /** A grid source's field once decoded (grid source, R14); undefined before, or for any other id. */
+  getGrid(sourceId: string): GridField | undefined {
+    return this.grids?.get(sourceId);
+  }
+
+  /** A grid source's field once it is in (R14); see `GridSourceManager.ready` for what rejects. */
+  gridReady(sourceId: string): Promise<GridField> {
+    return this.gridSources().ready(sourceId);
   }
 
   /** The next generation for a source's loads (see `sourceGenerations`). */
@@ -803,6 +851,14 @@ export class LayerManager {
    *   the source instead.
    */
   async setSourceUrl(sourceId: string, next: Record<string, unknown>): Promise<boolean> {
+    // A grid is not on the map (grid source, U3): a changed file or decode
+    // key fetches again (the current field answers until the new one is
+    // in), `range:` / `units:` refit the field, a failed last load retries.
+    if (isGrid(next)) {
+      this.rememberSpec(sourceId, next);
+      this.gridSources().update(sourceId, next);
+      return true;
+    }
     const source = this.map.getSource(sourceId) as
       | { setUrl?: (url: string) => unknown; updateImage?: (options: { url: string }) => unknown }
       | undefined;
@@ -973,7 +1029,8 @@ export class LayerManager {
       this.map.removeLayer(id);
     }
     this.stopPipeline(sourceId);
-    this.forgetSource(sourceId);
+    // A grid rebuilt as a grid (an `encoding:` change) keeps its field until the new one decodes.
+    this.forgetSource(sourceId, isGrid(next));
     if (this.map.getSource(sourceId)) this.map.removeSource(sourceId);
     this.registerSources({ [sourceId]: next });
   }
@@ -1278,6 +1335,12 @@ export class LayerManager {
     const source = layer.source as { type: string };
     this.sourceSpecs.set(sourceId, source as unknown as Record<string, unknown>);
 
+    // The parser refuses a layer over a grid (U1); a hand-built document's
+    // grid still goes to its manager rather than MapLibre.
+    if (isGrid(source)) {
+      this.gridSources().update(sourceId, source);
+      return;
+    }
     if (source.type === "geojson") {
       const geojsonSource = source as unknown as GeoJSONSourceConfig;
       // Its refresh starts once the first data is in: the chunk comes alongside.
@@ -2156,6 +2219,8 @@ export class LayerManager {
     this.live = null;
     for (const loader of this.formatLoaders.values()) loader.destroy();
     this.formatLoaders.clear();
+    this.grids?.destroy();
+    this.grids = null;
 
     // Clear data references
     this.sourceData.clear();

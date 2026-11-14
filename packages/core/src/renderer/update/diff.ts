@@ -97,6 +97,14 @@ const GEOJSON_SETTABLE_KEYS = new Set<string>(["data", "url"]);
 
 /** Image and video keys with a setter path. */
 const MEDIA_SETTABLE_KEYS = new Set<string>(["url", "urls"]);
+/**
+ * A grid source (grid source, U3): its own kind, never on the map. `url`
+ * fetches the new file in place (the field swaps once decoded); `range` and
+ * `units` refit the retained bytes without a fetch; `encoding`, `bounds`,
+ * `grid`, `nodata` and `bands` decide what the file decodes to, so they
+ * replace (which re-decodes).
+ */
+const GRID_SETTABLE_KEYS = new Set<string>(["url", "range", "units"]);
 
 /** A document source with the layers that draw it. */
 interface SourceNode {
@@ -167,6 +175,7 @@ function bearsTiles(source: LayerSource): boolean {
 function isSettableSourceKey(type: string, key: string): boolean {
   if (SOURCE_PIPELINE_KEYS.has(key)) return true;
   if (type === "geojson") return GEOJSON_SETTABLE_KEYS.has(key);
+  if (type === "grid") return GRID_SETTABLE_KEYS.has(key);
   if (TILE_SOURCE_TYPES.has(type)) return key === "tiles" || key === "url";
   return MEDIA_SETTABLE_KEYS.has(key);
 }

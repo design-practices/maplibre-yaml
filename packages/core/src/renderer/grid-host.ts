@@ -104,10 +104,15 @@ export interface VectorGridField extends GridFieldBase {
 /** A decoded grid, ready to sample. */
 export type GridField = ScalarGridField | VectorGridField;
 
-/** The size guards a grid is decoded under (tests pass smaller ones). */
+/** The size guards a grid is loaded under (tests pass smaller ones). */
 export interface GridLimits {
   /** Cells (`nx * ny`) above which a grid isn't decoded (`GRID_MAX_CELLS`). */
   cells: number;
+  /**
+   * Bytes above which a grid file isn't downloaded (the whole-file cap the
+   * cloud readers apply, `WHOLE_FILE_MAX_BYTES`); absent, no cap.
+   */
+  bytes: number;
 }
 
 /** Everything the grid chunk uses from core. */
@@ -124,4 +129,22 @@ export interface GridHost {
   getDecoder(name: "cog"): Promise<Decoders["cog"]>;
   /** The size guards in force; the chunk's defaults where absent. */
   limits?: Partial<GridLimits> | undefined;
+}
+
+/**
+ * What the chunk's `loadGrid` — the source manager's body: fetch, cache,
+ * decode — uses from core beyond decoding: the fetch helpers the main
+ * bundle already carries for the cloud readers.
+ */
+export interface GridLoadHost extends GridHost {
+  /**
+   * formats/http `fetchWhole`: one `GET`, the body read up to
+   * `maxWholeBytes`. Throws the `HTTP <status>` shape (`status` set),
+   * whatever `fetch` threw, or `BodyTooLarge` (`name`, `size`).
+   */
+  fetchWhole(url: string, options: { maxWholeBytes?: number | undefined }): Promise<{ bytes: ArrayBuffer }>;
+  /** `url` resolved against the page: the cache key. */
+  absoluteUrl(url: string): string;
+  /** `url` when a page may fetch it, else null (utils/html `safeUrl`). */
+  safeUrl(url: string): string | null;
 }
