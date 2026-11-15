@@ -349,6 +349,12 @@ export class MLScrollytelling extends BaseElement {
     return el && typeof el.getGrid === "function" ? el.getGrid(sourceId) : undefined;
   }
 
+  /** Whether the story's map has a `type: grid` source of this id (decoded or not); false before the map has loaded. */
+  hasGrid(sourceId: string): boolean {
+    const el = this.mapElement;
+    return el && typeof el.hasGrid === "function" ? el.hasGrid(sourceId) : false;
+  }
+
   /**
    * Resolve with a `type: grid` source's field on the story's map once it
    * is decoded (R14); before the story has rendered, once it has a map.

@@ -42,13 +42,24 @@ export const gridHost: GridLoadHost = {
 };
 
 /**
- * The keys whose change means another fetch and decode. `range` and `units`
- * are not among them: they refit the field in place.
+ * The keys whose change means another fetch and decode: `url` and the
+ * chunk's decode keys (`GRID_DECODE_KEYS`; a test holds the two lists
+ * together). `range` and `units` are not among them: they refit the field in
+ * place.
+ *
+ * @internal
  */
-const FETCH_KEYS = ["url", "encoding", "bounds", "grid", "nodata", "bands"] as const;
+export const FETCH_KEYS = ["url", "encoding", "bounds", "grid", "nodata", "bands"] as const;
+
+/** `value` as JSON with every object's keys sorted: a `grid:` re-spelled in another key order is the same grid. */
+function canonical(value: unknown): string {
+  return JSON.stringify(value ?? null, (_key, v: unknown) =>
+    v && typeof v === "object" && !Array.isArray(v) ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, (v as Record<string, unknown>)[k]])) : v
+  );
+}
 
 function sameFetchKeys(a: GridSource, b: GridSource): boolean {
-  return FETCH_KEYS.every((key) => JSON.stringify(a[key] ?? null) === JSON.stringify(b[key] ?? null));
+  return FETCH_KEYS.every((key) => canonical(a[key]) === canonical(b[key]));
 }
 
 /** What the manager tells its owner (the layer manager, which routes both to the renderer). */
@@ -73,6 +84,8 @@ interface Entry {
   failure?: Error | undefined;
   /** The load in flight, and whoever waits on it. */
   pending?: Waiters | undefined;
+  /** Aborts the current load's download when the source moves on (an uncached load only; see `loadGrid`). */
+  abort?: AbortController | undefined;
 }
 
 function waiters(): Waiters {
@@ -140,11 +153,13 @@ export class GridSourceManager {
     current.spec = spec;
     const generation = ++current.generation;
     const pending = (current.pending ??= waiters());
+    current.abort?.abort();
+    const controller = (current.abort = new AbortController());
     const live = () => !this.destroyed && this.entries.get(sourceId) === current && current.generation === generation;
     getDecoder("grid")
       .then((chunk) => {
         this.chunk = chunk;
-        return chunk.loadGrid(spec, this.host).then((field) => chunk.refitGrid(field, current.spec));
+        return chunk.loadGrid(spec, this.host, controller.signal).then((field) => chunk.refitGrid(field, current.spec));
       })
       .then(
         (field) => {
@@ -194,6 +209,7 @@ export class GridSourceManager {
     if (!entry) return;
     this.entries.delete(sourceId);
     entry.generation++;
+    entry.abort?.abort();
     entry.pending?.reject(new Error(`Grid source "${sourceId}" ${why}, so its field is gone.`));
     entry.pending = undefined;
   }

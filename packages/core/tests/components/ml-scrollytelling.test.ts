@@ -62,8 +62,9 @@ vi.mock("../../src/renderer/map-renderer", () => ({
       // A base change that moves `mapStyle` is a basemap change: a rebuild (KTD8).
       pause: vi.fn(),
       rebuildSeed: () => ({ initialState: {}, initialVisibility: {} }),
-      // Grid sources (U4): the story forwards getGrid / gridReady to its map.
+      // Grid sources (U4): the story forwards getGrid / hasGrid / gridReady to its map.
       getGrid: vi.fn(() => undefined),
+      hasGrid: vi.fn(() => false),
       gridReady: vi.fn(async (sourceId: string) => ({ kind: "scalar", sourceId })),
     };
     return renderer;
@@ -594,10 +595,11 @@ describe("map hand-off", () => {
     expect(el.getMap()).toBe(fakeMaps[0]);
   });
 
-  it("getGrid and gridReady forward to the story's map; a gridReady before the story has rendered waits for it (grid source, U4)", async () => {
+  it("getGrid, hasGrid and gridReady forward to the story's map; a gridReady before the story has rendered waits for it (grid source, U4)", async () => {
     const el = inline(STORY_YAML);
     // Before the story has rendered (connecting renders it): nothing to answer with, and the promise waits for its map.
     expect(el.getGrid("field")).toBeUndefined();
+    expect(el.hasGrid("field")).toBe(false);
     const early = el.gridReady("field");
     document.body.appendChild(el);
     await settle();
@@ -607,6 +609,9 @@ describe("map hand-off", () => {
     renderer.gridReady.mockResolvedValue(field);
     expect(el.getGrid("field")).toBe(field);
     expect(renderer.getGrid).toHaveBeenCalledWith("field");
+    renderer.hasGrid.mockReturnValue(true);
+    expect(el.hasGrid("field")).toBe(true);
+    expect(renderer.hasGrid).toHaveBeenCalledWith("field");
     renderer.handlers.get("load")();
     await expect(early).resolves.toBe(field);
     await expect(el.gridReady("field")).resolves.toBe(field);

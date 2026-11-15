@@ -11,6 +11,8 @@
 
 // Schemas
 export * from "./schemas";
+// The grid source's declaration type (grid source, ml-nb1.2), inferred from GridSourceSchema.
+export type { GridSourceConfig } from "./types";
 
 // Parser
 export * from "./parser";
@@ -172,7 +174,7 @@ export {
   type CloudFormat,
 } from "./formats/detect";
 export { FormatError, isFormatError } from "./formats/errors";
-export type { FormatFailure, FormatFailureCode } from "./formats/errors";
+export type { FailureFormat, FormatFailure, FormatFailureCode } from "./formats/errors";
 // Thin async wrappers: the readers are on-demand modules (bundle headroom, U5).
 export { decodeFlatGeobuf, decodeGeoParquet } from "./renderer/cloud-sources";
 // The facts `mlym prepare` reports, from a footer or header alone, through

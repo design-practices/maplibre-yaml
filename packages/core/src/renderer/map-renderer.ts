@@ -2393,6 +2393,16 @@ export class MapRenderer {
   }
 
   /**
+   * Whether the applied document has a `type: grid` source of this id,
+   * decoded or not: tells "not decoded yet" from "no such source" without
+   * awaiting `gridReady`. False before the style load registers the
+   * document's sources, after the source is removed, and once destroyed.
+   */
+  hasGrid(sourceId: string): boolean {
+    return this.layerManager.hasGrid(sourceId);
+  }
+
+  /**
    * A grid source's field once it is in (R14). Rejects with an Error naming
    * the id when the applied document has no grid source of that id; with
    * the source's `FormatError` when its load fails (a later `reload()`

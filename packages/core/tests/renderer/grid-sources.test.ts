@@ -73,6 +73,8 @@ import type { GridSource, LayerSource } from "../../src/schemas/source.schema";
 import type { AppliedDocument, DiffHints } from "../../src/renderer/update/types";
 import type { GridField, VectorGridField } from "../../src/renderer/grid-host";
 import { WHOLE_FILE_MAX_BYTES } from "../../src/renderer/cloud-sources";
+import { FETCH_KEYS } from "../../src/renderer/grid-sources";
+import { clearGridCache, GRID_CACHE_MAX_BYTES, GRID_DECODE_KEYS, setGridCacheLimits } from "../../src/formats/lib/grid";
 
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "../../../../examples/verification/null-earth/data");
 const F000 = "2026111400-f000-wind-10m.png";
@@ -187,6 +189,8 @@ afterEach(() => {
   for (const renderer of renderers.splice(0)) renderer.destroy();
   fetchSpy?.mockRestore();
   fetchSpy = undefined;
+  vi.restoreAllMocks();
+  setGridCacheLimits();
   document.body.innerHTML = "";
 });
 
@@ -329,6 +333,31 @@ describe("live updates (R16, AE4)", () => {
     expect(h.loaded).toEqual(["field"]);
     expect(fetchSpy).toHaveBeenCalledTimes(1);
   });
+
+  it("a `grid:` or `nodata:` re-spelled in another key order is the same source: no fetch, no event", async () => {
+    fetchSpy = serve();
+    const h = up(render({ field: wind(F000) }));
+    const first = await h.renderer.gridReady("field");
+    const reordered = wind(F000, {
+      grid: { dy: 1, dx: 1, la1: 90, lo1: -180, ny: 181, nx: 360 },
+      nodata: { below: 128, channel: "b" },
+    });
+    const result = await h.renderer.update({ ...h.doc, sources: { field: reordered } }, NO_HINTS);
+    expect(result.outcome).toBe("applied");
+    expect(h.renderer.getGrid("field")).toBe(first);
+    expect(h.loaded).toEqual(["field"]);
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    // A rebuilt renderer over the re-spelled source hits the chunk's cache under the same key.
+    h.renderer.destroy();
+    const again = up(render({ field: reordered }));
+    expect((await again.renderer.gridReady("field")).kind).toBe("vector");
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("the manager's fetch keys are `url` plus the chunk's decode keys, so the two lists cannot drift", () => {
+    expect(FETCH_KEYS[0]).toBe("url");
+    expect([...FETCH_KEYS.slice(1)]).toEqual([...GRID_DECODE_KEYS]);
+  });
 });
 
 describe("the byte cache (R7): one fetch per file", () => {
@@ -371,6 +400,88 @@ describe("the byte cache (R7): one fetch per file", () => {
     const again = up(render({ field: spec }));
     await again.renderer.gridReady("field");
     expect(fetchSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it("cache: { ttl } expires an entry: a request within the ttl costs no network, one after it fetches again", async () => {
+    fetchSpy = serve();
+    const start = Date.now();
+    const now = vi.spyOn(Date, "now").mockReturnValue(start);
+    const spec = wind(F000, { cache: { ttl: 1000 } });
+    const h = up(render({ field: spec }));
+    await h.renderer.gridReady("field");
+    h.renderer.destroy();
+    now.mockReturnValue(start + 999);
+    const within = up(render({ field: spec }));
+    await within.renderer.gridReady("field");
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    within.renderer.destroy();
+    now.mockReturnValue(start + 1001);
+    const after = up(render({ field: spec }));
+    expect((await after.renderer.gridReady("field")).kind).toBe("vector");
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    // The refetched entry is fresh for another ttl.
+    after.renderer.destroy();
+    now.mockReturnValue(start + 1500);
+    const fresh = up(render({ field: spec }));
+    await fresh.renderer.gridReady("field");
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it("holds sixteen files: the seventeenth evicts the least recently used, which is fetched again when asked for", async () => {
+    clearGridCache();
+    fetchSpy = serve();
+    const at = (i: number) => wind(F000, { url: `data/${run}/${i}/${F000}` });
+    const sources: Record<string, GridSource> = {};
+    for (let i = 0; i < 16; i++) sources[`g${i}`] = at(i);
+    const h = up(render(sources));
+    await Promise.all(Object.keys(sources).map((id) => h.renderer.gridReady(id)));
+    expect(fetchSpy).toHaveBeenCalledTimes(16);
+    h.renderer.destroy();
+    // Touch g1 so g0 is the least recently used, then bring in a seventeenth.
+    const touch = up(render({ g1: at(1) }));
+    await touch.renderer.gridReady("g1");
+    touch.renderer.destroy();
+    const seventeenth = up(render({ g16: at(16) }));
+    await seventeenth.renderer.gridReady("g16");
+    seventeenth.renderer.destroy();
+    expect(fetchSpy).toHaveBeenCalledTimes(17);
+    // g1 is still held; g0 went.
+    const again = up(render({ g1: at(1), g0: at(0) }));
+    await Promise.all([again.renderer.gridReady("g1"), again.renderer.gridReady("g0")]);
+    expect(fetchSpy).toHaveBeenCalledTimes(18);
+    expect(fetchSpy.mock.calls.map((c) => String(c[0])).filter((u) => u.endsWith(`/${run}/0/${F000}`))).toHaveLength(2);
+  });
+
+  it("budgets the decoded bytes it retains (GRID_CACHE_MAX_BYTES): over the budget, the least recently used field goes whatever the count", async () => {
+    clearGridCache();
+    expect(GRID_CACHE_MAX_BYTES).toBe(256 * 1024 * 1024);
+    // A 360 × 181 RGBA field retains its 4 channel bytes and 1 mask byte per node: 325,800 bytes; room for one, not two.
+    const retained = 360 * 181 * 5;
+    setGridCacheLimits({ bytes: retained + 1000 });
+    fetchSpy = serve();
+    const at = (i: number) => wind(F000, { url: `data/${run}/${i}/${F000}` });
+    const h = up(render({ a: at(0) }));
+    await h.renderer.gridReady("a");
+    h.renderer.destroy();
+    const b = up(render({ b: at(1) }));
+    await b.renderer.gridReady("b");
+    b.renderer.destroy();
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    // b is held (one field fits); a was evicted for it.
+    const again = up(render({ b: at(1), a: at(0) }));
+    await Promise.all([again.renderer.gridReady("b"), again.renderer.gridReady("a")]);
+    expect(fetchSpy).toHaveBeenCalledTimes(3);
+    expect(fetchSpy.mock.calls.map((c) => String(c[0])).filter((u) => u.endsWith(`/${run}/0/${F000}`))).toHaveLength(2);
+    // Under the default budget the two fit side by side.
+    setGridCacheLimits();
+    clearGridCache();
+    again.renderer.destroy();
+    const both = up(render({ a: at(0), b: at(1) }));
+    await Promise.all([both.renderer.gridReady("a"), both.renderer.gridReady("b")]);
+    both.renderer.destroy();
+    const back = up(render({ a: at(0), b: at(1) }));
+    await Promise.all([back.renderer.gridReady("a"), back.renderer.gridReady("b")]);
+    expect(fetchSpy).toHaveBeenCalledTimes(5);
   });
 });
 
@@ -467,6 +578,54 @@ describe("failures (R13, R17): the format-failure vocabulary, through the per-so
     expect((await rejection(h.renderer.gridReady("field"))).message).toContain("field");
   });
 
+  it("an uncached load abandoned mid-flight (the source removed) aborts its download, and reports no notice", async () => {
+    const g = gate();
+    fetchSpy = serve({ gate: { [F000]: g } });
+    const h = up(render({ field: wind(F000, { cache: { enabled: false } }) }));
+    await h.load;
+    await new Promise((resolve) => setTimeout(resolve, 20)); // the chunk loads, then the request goes out
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    const signal = (fetchSpy.mock.calls[0]![1] as RequestInit | undefined)?.signal;
+    expect(signal).toBeInstanceOf(AbortSignal);
+    expect(signal!.aborted).toBe(false);
+    await h.renderer.update({ ...h.doc, sources: {} }, NO_HINTS);
+    expect(signal!.aborted).toBe(true);
+    g.open();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(h.onError).not.toHaveBeenCalled();
+    expect(h.loaded).toEqual([]);
+  });
+
+  it("a superseded uncached load (a URL change) aborts the earlier download; a cached load carries no signal, since others may share it", async () => {
+    const g = gate();
+    fetchSpy = serve({ gate: { [F000]: g } });
+    const h = up(render({ field: wind(F000, { cache: { enabled: false } }) }));
+    await h.load;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const first = (fetchSpy.mock.calls[0]![1] as RequestInit | undefined)?.signal;
+    expect(first?.aborted).toBe(false);
+    await h.renderer.update({ ...h.doc, sources: { field: wind(F003, { cache: { enabled: false } }) } }, NO_HINTS);
+    expect(first?.aborted).toBe(true);
+    expect((await h.renderer.gridReady("field")).kind).toBe("vector");
+    g.open();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(h.onError).not.toHaveBeenCalled();
+    expect(h.loaded).toEqual(["field"]);
+    // Cached: no signal on the request, and removing the source leaves the shared download alone.
+    const g2 = gate();
+    fetchSpy.mockRestore();
+    fetchSpy = serve({ gate: { [F000]: g2 } });
+    const c = up(render({ field: wind(F000) }));
+    await c.load;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect((fetchSpy.mock.calls[0]![1] as RequestInit | undefined)?.signal).toBeUndefined();
+    await c.renderer.update({ ...c.doc, sources: {} }, NO_HINTS);
+    g2.open();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(c.onError).not.toHaveBeenCalled();
+  });
+
   it("destroy() during an in-flight fetch rejects waiters and fires no callback afterwards", async () => {
     const g = gate();
     fetchSpy = serve({ gate: { [F000]: g } });
@@ -514,6 +673,8 @@ describe("integration", () => {
     expect(field.ny).toBe(181);
     expect(field.bounds).toEqual([-180.5, -90.5, 179.5, 90.5]);
     expect(typeof field.isMissing(0, 0)).toBe("boolean");
+    expect(field.contains({ lng: 10, lat: 50 })).toBe(true);
+    expect(field.contains([NaN, 0])).toBe(false);
     expect(field.values().missing.length).toBe(360 * 181);
     expect(field.rescale([-1, 1]).range).toEqual([-1, 1]);
   });

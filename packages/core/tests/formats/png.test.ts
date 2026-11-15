@@ -6,10 +6,11 @@
  */
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
+import { deflateSync } from "node:zlib";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { PNG } from "pngjs";
-import { buildPng, plainScanlines } from "../helpers/png-bytes";
+import { buildPng, concat, plainScanlines } from "../helpers/png-bytes";
 import { decodePng, readPngHeader } from "../../src/formats/lib/png";
 
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "../../../../examples/verification/null-earth/data");
@@ -126,5 +127,27 @@ describe("decodePng — value-exact, against pngjs", () => {
     expect(() => decodePng(headerOnly)).toThrow(expect.objectContaining({ reason: "corrupt" }));
     const badFilter = buildPng({ width: 1, height: 1, colorType: 0, scanlines: [Uint8Array.of(7, 1)] });
     expect(() => decodePng(badFilter)).toThrow(expect.objectContaining({ reason: "corrupt" }));
+  });
+
+  it("inflates into a buffer of the scanlines' size: a stream that inflates to far more than the image needs decodes to the image alone", () => {
+    // 4 × 3 RGBA needs 51 bytes of scanlines; this IDAT inflates to a mebibyte past them.
+    const data = pixels(4, 3, 4);
+    const raw = concat([...plainScanlines(data, 4, 3, 4), new Uint8Array(1 << 20)]);
+    const bomb = buildPng({ width: 4, height: 3, colorType: 6, idat: new Uint8Array(deflateSync(raw)) });
+    expect(raw.length).toBeGreaterThan(20 * 51);
+    const decoded = decodePng(bomb);
+    expect(decoded).toMatchObject({ width: 4, height: 3, channels: 4 });
+    expect(decoded.data).toEqual(data);
+    expect(decoded.data.length).toBe(48);
+  });
+
+  it("is 'corrupt' for a chunk whose declared length runs past the file, and for an IDAT that isn't a zlib stream", () => {
+    const data = pixels(4, 3, 4);
+    const overrun = buildPng({ width: 4, height: 3, colorType: 6, scanlines: plainScanlines(data, 4, 3, 4) });
+    // The IDAT chunk follows the 33-byte signature + IHDR; its length field says it is far longer than the file.
+    new DataView(overrun.buffer, overrun.byteOffset).setUint32(33, 0x7fffffff);
+    expect(() => decodePng(overrun)).toThrow(expect.objectContaining({ reason: "corrupt", message: expect.stringContaining("ends inside a chunk") }));
+    const garbage = buildPng({ width: 4, height: 3, colorType: 6, idat: new TextEncoder().encode("this is not a zlib stream, not at all") });
+    expect(() => decodePng(garbage)).toThrow(expect.objectContaining({ reason: "corrupt", message: expect.stringContaining("won't inflate") }));
   });
 });

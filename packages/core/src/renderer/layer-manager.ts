@@ -55,7 +55,7 @@ import {
 import type { StartedOpen, StartedTail } from "./cloud-host";
 import { GridSourceManager } from "./grid-sources";
 import type { GridField } from "./grid-host";
-import type { GridSource } from "../schemas/source.schema";
+import { isGridSource } from "../schemas/source.schema";
 
 type Layer = z.infer<typeof LayerSchema>;
 type GeoJSONSourceConfig = z.infer<typeof GeoJSONSourceSchema>;
@@ -149,11 +149,6 @@ function loaderShape(config: GeoJSONSourceConfig): string {
 }
 
 /** Structural equality of two JSON-shaped values. */
-/** Whether a source spec is a `type: grid` source (grid source, U3). */
-function isGrid(spec: unknown): spec is GridSource {
-  return (spec as { type?: unknown } | null)?.type === "grid";
-}
-
 function sameJson(a: unknown, b: unknown): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
 }
@@ -478,7 +473,7 @@ export class LayerManager {
       this.namedSources.set(id, spec as Record<string, unknown>);
       this.sourceSpecs.set(id, spec as Record<string, unknown>);
       // A grid is read by this library, never by MapLibre (grid source, U3).
-      if (isGrid(spec)) {
+      if (isGridSource(spec)) {
         this.gridSources().update(id, spec);
         continue;
       }
@@ -854,7 +849,7 @@ export class LayerManager {
     // A grid is not on the map (grid source, U3): a changed file or decode
     // key fetches again (the current field answers until the new one is
     // in), `range:` / `units:` refit the field, a failed last load retries.
-    if (isGrid(next)) {
+    if (isGridSource(next)) {
       this.rememberSpec(sourceId, next);
       this.gridSources().update(sourceId, next);
       return true;
@@ -1030,7 +1025,7 @@ export class LayerManager {
     }
     this.stopPipeline(sourceId);
     // A grid rebuilt as a grid (an `encoding:` change) keeps its field until the new one decodes.
-    this.forgetSource(sourceId, isGrid(next));
+    this.forgetSource(sourceId, isGridSource(next));
     if (this.map.getSource(sourceId)) this.map.removeSource(sourceId);
     this.registerSources({ [sourceId]: next });
   }
@@ -1337,7 +1332,7 @@ export class LayerManager {
 
     // The parser refuses a layer over a grid (U1); a hand-built document's
     // grid still goes to its manager rather than MapLibre.
-    if (isGrid(source)) {
+    if (isGridSource(source)) {
       this.gridSources().update(sourceId, source);
       return;
     }

@@ -974,6 +974,14 @@ function describeGridProjection(failure: FormatFailure): string {
       `Georeference it in longitude/latitude: \`gdal_translate -a_srs EPSG:4326 -a_ullr west north east south ${name} out.tif\`.`
     );
   }
+  // A label that isn't an EPSG code ("user-defined"): the file may already be
+  // in longitude/latitude and only lack the code, so don't tell it to reproject.
+  if (!failure.crs.startsWith("EPSG:")) {
+    return (
+      `${file} is in a coordinate system it doesn't name (${failure.crs}); a grid must be in longitude/latitude (EPSG:4326). ` +
+      `If it already is, label it: \`gdal_translate -a_srs EPSG:4326 ${name} out.tif\`; else reproject it with gdalwarp.`
+    );
+  }
   return `${file} is in ${failure.crs}; a grid must be in longitude/latitude (EPSG:4326). Reproject it: \`gdalwarp -t_srs EPSG:4326 ${name} out.tif\`.`;
 }
 
@@ -982,11 +990,17 @@ function describeGridImage(failure: FormatFailure): string {
   const file = `\`${failure.url}\``;
   const image = failure.image ?? {};
   if (image.channels !== undefined) {
-    const encoding = failure.encoding ?? "rg-uv";
+    const count = `${image.channels} channel${image.channels === 1 ? "" : "s"}`;
+    // A `nodata:` rule on a channel the layout lacks (the detail is the rule).
+    if (failure.detail?.startsWith("nodata:")) {
+      return (
+        `${file} has ${count}, so \`${failure.detail}\` names one it doesn't have (grayscale has r; grayscale with alpha ` +
+        "r and a; RGB r, g and b). Name a channel the image has, or write the image as RGBA."
+      );
+    }
     return (
-      `${file} has ${image.channels} channel${image.channels === 1 ? "" : "s"}; \`encoding: ${encoding}\` reads two ` +
-      "(u from the first, v from the second). Use `encoding: scalar-r` for a one-channel image, or write " +
-      "the components into the red and green channels."
+      `${file} has ${count}; \`encoding: ${failure.encoding ?? "rg-uv"}\` reads u from red and v from green, so it needs ` +
+      "an RGB or RGBA image. Use `encoding: scalar-r` for a one-channel image, or write the components into the red and green channels."
     );
   }
   const shape = `${image.interlaced ? "an interlaced " : "a "}${image.bitDepth !== undefined ? `${image.bitDepth}-bit ` : ""}${image.colorType ?? ""} PNG`;

@@ -36,10 +36,8 @@ export const GRID_ON_EMIT =
   "for maplibre-yaml renderers to read. No layer type draws a grid, so nothing the " +
   "map shows is lost (a layer over a grid is dropped, lossy).";
 
-/** Whether a source spec (named or inline) declares a grid. */
-export function isGridSource(spec: unknown): spec is Obj & { type: "grid" } {
-  return typeof spec === "object" && spec !== null && !Array.isArray(spec) && (spec as Obj)["type"] === "grid";
-}
+/** Whether a source spec (named or inline) declares a grid: the schema's predicate, the renderer's too. */
+export { isGridSource } from "../schemas/source.schema";
 
 /** The result of lowering one grid source. */
 export interface GridLowering {

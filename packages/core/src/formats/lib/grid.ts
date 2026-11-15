@@ -146,18 +146,26 @@ function makeField(d: Decoded, units: string | undefined, range: readonly [numbe
    * allocates nothing.
    */
   const cell = new Float64Array(6); // i00, i10, i01, i11, tx, ty
+
+  /**
+   * The fractional column `lng` falls on, or -1 when it lies outside a
+   * non-wrapping grid. Any longitude names one place, so it is first brought
+   * to the grid's own turn of the globe. The one test of "outside" the
+   * field has: `contains` and `locate` both ask it.
+   */
+  function columnOf(lng: number): number {
+    const fx = (lng - lo1) / dx;
+    if (wraps) return ((fx % period) + period) % period;
+    const turned = ((fx % globe) + globe) % globe;
+    if (turned > nx - 1 + EDGE_EPSILON) return -1;
+    return turned > nx - 1 ? nx - 1 : turned;
+  }
+
   function locate(position: GridPosition): boolean {
     const lngLat = lngLatOf(position);
     if (!lngLat) return false;
-    let fx = (lngLat[0] - lo1) / dx;
-    if (wraps) {
-      fx = ((fx % period) + period) % period;
-    } else {
-      // Any longitude names one place: bring it to the grid's own turn of the globe.
-      fx = ((fx % globe) + globe) % globe;
-      if (fx > nx - 1 + EDGE_EPSILON) return false;
-      if (fx > nx - 1) fx = nx - 1;
-    }
+    const fx = columnOf(lngLat[0]);
+    if (fx < 0) return false;
     const fy = Math.min(Math.max((la1 - lngLat[1]) / dy, 0), ny - 1);
     const x0 = Math.floor(fx);
     const y0 = Math.floor(fy);
@@ -207,6 +215,10 @@ function makeField(d: Decoded, units: string | undefined, range: readonly [numbe
     ny,
     range: range ? (Object.freeze([range[0], range[1]]) as readonly [number, number]) : undefined,
     isMissing: (col: number, row: number) => col < 0 || row < 0 || col >= nx || row >= ny || missing[row * nx + col] === 1,
+    contains(position: GridPosition): boolean {
+      const lngLat = lngLatOf(position);
+      return lngLat !== undefined && columnOf(lngLat[0]) >= 0;
+    },
     rescale(next: readonly [number, number]): GridField {
       if (!bytes) throw new Error("maplibre-yaml: this grid carries physical values, so it has no range: to change");
       return makeField(d, units, next);
@@ -224,7 +236,8 @@ function makeField(d: Decoded, units: string | undefined, range: readonly [numbe
         const v = blend(1);
         return { u, v, speed: Math.hypot(u, v) };
       },
-      values: () => (cached ??= { u: materialize(0), v: materialize(1), missing }),
+      // The mask is copied: page code may write to what values() hands out, and the field's own must stay as decoded.
+      values: () => (cached ??= { u: materialize(0), v: materialize(1), missing: missing.slice() }),
     };
     DECODED.set(field, d);
     return Object.freeze(field);
@@ -234,7 +247,7 @@ function makeField(d: Decoded, units: string | undefined, range: readonly [numbe
     ...base,
     kind: "scalar",
     sample: (position: GridPosition): number | null => (locate(position) ? blend(0) : null),
-    values: () => (cached ??= { value: materialize(0), missing }),
+    values: () => (cached ??= { value: materialize(0), missing: missing.slice() }),
   };
   DECODED.set(field, d);
   return Object.freeze(field);
@@ -273,23 +286,36 @@ function checkCells(cells: number, host: GridHost, fail: Fail): void {
   if (cells > cap) fail({ code: "too-large", cells, limits: { cells: cap } });
 }
 
-const CHANNEL_INDEX = { r: 0, g: 1, b: 2, a: 3 } as const;
+/**
+ * Where channel `letter` sits in a pixel of `channels` interleaved bytes, or
+ * -1 when the layout has no such channel: grayscale has `r`; grayscale with
+ * alpha `r` and `a`; RGB `r`, `g`, `b`; RGBA all four. Alpha is always the
+ * last channel, so a rule on `a` never reads a gray+alpha image's alpha as
+ * blue, nor an RGB image's nothing.
+ */
+function channelIndex(letter: "r" | "g" | "b" | "a", channels: number): number {
+  if (letter === "a") return channels === 2 || channels === 4 ? channels - 1 : -1;
+  const index = { r: 0, g: 1, b: 2 }[letter];
+  return index === 0 || channels >= 3 ? index : -1;
+}
 
-/** The missing mask for an image: alpha 0 (when the image has alpha) and the document's `nodata:` rule. */
-function imageMissing(data: Uint8Array, channels: number, nodes: number, nodata: GridSource["nodata"]): Uint8Array {
+/**
+ * The missing mask for an image: alpha 0 (when the image has alpha) and the
+ * document's `nodata:` rule. A rule naming a channel the layout lacks is an
+ * `encoding` failure (the `detail` names the rule, `image.channels` the layout).
+ */
+function imageMissing(data: Uint8Array, channels: number, nodes: number, nodata: GridSource["nodata"], fail: Fail): Uint8Array {
   const missing = new Uint8Array(nodes);
-  const alpha = channels === 2 || channels === 4 ? channels - 1 : -1;
+  const alpha = channelIndex("a", channels);
   if (alpha >= 0) for (let i = 0; i < nodes; i++) if (data[i * channels + alpha] === 0) missing[i] = 1;
   if (nodata && typeof nodata === "object") {
-    const channel = CHANNEL_INDEX[nodata.channel];
-    // A rule on a channel the image lacks marks nothing.
-    if (channel < channels) {
-      const { below, above, equals } = nodata;
-      for (let i = 0; i < nodes; i++) {
-        const byte = data[i * channels + channel]!;
-        if ((below !== undefined && byte < below) || (above !== undefined && byte > above) || (equals !== undefined && byte === equals)) {
-          missing[i] = 1;
-        }
+    const channel = channelIndex(nodata.channel, channels);
+    if (channel < 0) fail({ code: "encoding", image: { channels }, detail: `nodata: channel: ${nodata.channel}` });
+    const { below, above, equals } = nodata;
+    for (let i = 0; i < nodes; i++) {
+      const byte = data[i * channels + channel]!;
+      if ((below !== undefined && byte < below) || (above !== undefined && byte > above) || (equals !== undefined && byte === equals)) {
+        missing[i] = 1;
       }
     }
   }
@@ -312,14 +338,16 @@ function decodeImage(bytes: Uint8Array, spec: GridSource, host: GridHost, fail: 
     if (error instanceof PngError && error.reason === "not-png") return fail({ code: "not-format", expected: "PNG" });
     return fail({ code: "read", detail: String((error as Error).message ?? error) });
   }
-  if (image.channels < components) {
+  // `rg-uv` reads red and green: an RGB or RGBA image. A gray+alpha image's
+  // second channel is alpha, never v.
+  if (components === 2 && image.channels < 3) {
     fail({ code: "encoding", encoding: spec.encoding, image: { channels: image.channels } });
   }
   const geometry = imageGeometry(spec, image.width, image.height, fail);
   return {
     geometry,
     components,
-    missing: imageMissing(image.data, image.channels, image.width * image.height, spec.nodata),
+    missing: imageMissing(image.data, image.channels, image.width * image.height, spec.nodata, fail),
     bytes: { data: image.data, channels: image.channels },
   };
 }
@@ -345,9 +373,14 @@ function nullschoolHeader(record: unknown, n: number, fail: Fail): NullschoolHea
   if (!isObject(header) || !keys.every((k) => finite(header[k]))) {
     return fail({ code: "read", detail: `record ${n} has no header with lo1, la1, dx, dy, nx and ny` });
   }
-  const h = header as Record<(typeof keys)[number], number> & { parameterNumber?: unknown };
+  const h = header as Record<(typeof keys)[number], number> & { la2?: unknown; parameterNumber?: unknown };
   if (!(Number.isInteger(h.nx) && h.nx > 0 && Number.isInteger(h.ny) && h.ny > 0 && h.dx > 0 && h.dy !== 0)) {
     return fail({ code: "read", detail: `record ${n}'s header has nx ${h.nx}, ny ${h.ny}, dx ${h.dx}, dy ${h.dy}; counts must be positive whole numbers and spacings non-zero` });
+  }
+  // The rows are read from la1 southward. A header whose la2 lies north of
+  // la1 scanned the other way; reading it as-is would turn the field upside down.
+  if (finite(h.la2) && h.la2 > h.la1) {
+    return fail({ code: "read", detail: `record ${n}'s rows run south to north (la1 ${h.la1}, la2 ${h.la2}); a grid's first row must be its northern edge` });
   }
   return {
     lo1: h.lo1,
@@ -426,7 +459,8 @@ async function decodeGeoTiff(bytes: Uint8Array, buffer: ArrayBuffer, spec: GridS
   if (header === "not-tiff") fail({ code: "not-format", expected: "GeoTIFF" });
   if (header === "truncated") fail({ code: "read", detail: "the file ends before its image directory" });
   checkCells(header.width * header.height, host, fail);
-  if (header.crs !== "EPSG:4326") fail({ code: "crs", ...(header.crs ? { crs: header.crs } : {}) });
+  // The header reader labels a geographic model with no GeographicTypeGeoKey "longitude/latitude": the cells are placed the same way.
+  if (header.crs !== "EPSG:4326" && header.crs !== "longitude/latitude") fail({ code: "crs", ...(header.crs ? { crs: header.crs } : {}) });
   let read: Awaited<ReturnType<typeof cog.readBands>>;
   try {
     read = await cog.readBands(buffer, spec.bands);
@@ -501,11 +535,30 @@ export async function decodeGrid(bytes: ArrayBuffer | ArrayBufferView, spec: Gri
 /**
  * The keys that decide what a file decodes to, beside its URL. `range` and
  * `units` are not among them: they refit a decoded field ({@link refitGrid}).
+ * The source manager's fetch keys (renderer/grid-sources) are these plus `url`.
  */
-const DECODE_KEYS = ["encoding", "bounds", "grid", "nodata", "bands"] as const;
+export const GRID_DECODE_KEYS = ["encoding", "bounds", "grid", "nodata", "bands"] as const;
 
 /** How many decoded fields the page keeps: a 1° global frame is 1 MB of bytes; sixteen is a day of forecast hours. */
 const CACHE_ENTRIES = 16;
+
+/**
+ * The decoded bytes the cache retains over all its entries — each field's
+ * channel bytes or Float32 components plus its missing mask — past which the
+ * least recently used fields are dropped, whatever their count: the
+ * counterpart of the cloud readers' decoded-bytes cap. Sixteen 1° RGBA
+ * frames are 5 MB; sixteen quarter-degree two-component GeoTIFFs 150 MB.
+ * (`values()` materializations are not counted: they are retained with the
+ * field that built them, for as long as page code holds it.)
+ */
+export const GRID_CACHE_MAX_BYTES = 256 * 1024 * 1024;
+
+interface CacheEntry {
+  field: Promise<GridField>;
+  expires: number;
+  /** The bytes the field retains, once it has resolved (0 while it loads). */
+  bytes: number;
+}
 
 /**
  * Decoded fields by the file and decode keys they came from, most recently
@@ -513,10 +566,42 @@ const CACHE_ENTRIES = 16;
  * `mapStyle` change, and a second source over the same file — or the same
  * frame asked for again — costs no network.
  */
-const cache = new Map<string, { field: Promise<GridField>; expires: number }>();
+const cache = new Map<string, CacheEntry>();
+/** The sum of the entries' `bytes`. */
+let cacheBytes = 0;
+let cacheLimits = { entries: CACHE_ENTRIES, bytes: GRID_CACHE_MAX_BYTES };
+
+/** `value` as JSON with every object's keys in sorted order, so two spellings of one `grid:` or `nodata:` compare equal. */
+function canonical(value: unknown): string {
+  return JSON.stringify(value ?? null, (_key, v: unknown) =>
+    v && typeof v === "object" && !Array.isArray(v) ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, (v as Record<string, unknown>)[k]])) : v
+  );
+}
 
 function cacheKey(url: string, spec: GridSource): string {
-  return `${url}\0${JSON.stringify(DECODE_KEYS.map((key) => spec[key] ?? null))}`;
+  return `${url}\0${GRID_DECODE_KEYS.map((key) => canonical(spec[key])).join("\0")}`;
+}
+
+/** The bytes a field retains: its channel bytes or Float32 components, plus the missing mask. */
+function retainedBytes(field: GridField): number {
+  const d = DECODED.get(field);
+  if (!d) return 0;
+  return d.missing.byteLength + (d.bytes ? d.bytes.data.byteLength : d.floats!.reduce((n, f) => n + f.byteLength, 0));
+}
+
+function dropCached(key: string): void {
+  const entry = cache.get(key);
+  if (!entry) return;
+  cache.delete(key);
+  cacheBytes -= entry.bytes;
+}
+
+/** Drop the least recently used entries while the cache is over either budget. */
+function evictCached(): void {
+  for (const key of cache.keys()) {
+    if (cache.size <= cacheLimits.entries && cacheBytes <= cacheLimits.bytes) break;
+    dropCached(key);
+  }
 }
 
 /**
@@ -526,6 +611,17 @@ function cacheKey(url: string, spec: GridSource): string {
  */
 export function clearGridCache(): void {
   cache.clear();
+  cacheBytes = 0;
+}
+
+/**
+ * Lower the cache's budgets; with no argument, restore the defaults
+ * ({@link GRID_CACHE_MAX_BYTES} and sixteen entries).
+ *
+ * @internal Tests.
+ */
+export function setGridCacheLimits(limits: Partial<{ entries: number; bytes: number }> = {}): void {
+  cacheLimits = { entries: limits.entries ?? CACHE_ENTRIES, bytes: limits.bytes ?? GRID_CACHE_MAX_BYTES };
 }
 
 /**
@@ -542,15 +638,17 @@ export function refitGrid(field: GridField, spec: GridSource): GridField {
   return makeField(d, spec.units, range);
 }
 
-/** Download `url` whole under the byte cap, then decode it for `spec`. */
-async function fetchAndDecode(url: string, spec: GridSource, host: GridLoadHost): Promise<GridField> {
+/** Download `url` whole under the byte cap (abandoned when `signal` aborts), then decode it for `spec`. */
+async function fetchAndDecode(url: string, spec: GridSource, host: GridLoadHost, signal: AbortSignal | undefined): Promise<GridField> {
   const fail: Fail = (failure) => {
     throw host.formatError({ format: "grid", url: spec.url, ...failure } as FormatFailure);
   };
-  const bytes = await host.fetchWhole(url, { maxWholeBytes: host.limits?.bytes }).then(
+  const bytes = await host.fetchWhole(url, { maxWholeBytes: host.limits?.bytes, signal }).then(
     (whole) => whole.bytes,
     (error: unknown) => {
       const e = error as { name?: unknown; size?: unknown; status?: unknown; message?: unknown };
+      // Abandoned on purpose: not a failure to word.
+      if (e.name === "AbortError") throw error;
       if (e.name === "BodyTooLarge") fail({ code: "too-large", size: Number(e.size), sizeIsFile: true, limits: { bytes: host.limits?.bytes } });
       if (typeof e.status === "number") fail({ code: "http", status: e.status });
       return fail({ code: "cors", detail: String(e.message ?? error) });
@@ -566,11 +664,16 @@ async function fetchAndDecode(url: string, spec: GridSource, host: GridLoadHost)
  * `ttl` expires it). A cached field with another `range:` or `units:` is
  * refit rather than fetched again.
  *
+ * @param signal - Aborts the download when the load bypasses the cache
+ *   (`cache: { enabled: false }`). A cached load is shared with other sources
+ *   and later requests of the same file, so it is never aborted: the signal
+ *   is ignored.
  * @throws {FormatError} (format `grid`): `http` for an error status, `cors`
  *   when the request never completed, `too-large` over the byte cap (before
- *   anything is decoded), and whatever {@link decodeGrid} raises.
+ *   anything is decoded), and whatever {@link decodeGrid} raises. An aborted
+ *   download rejects with the `AbortError` itself.
  */
-export function loadGrid(spec: GridSource, host: GridLoadHost): Promise<GridField> {
+export function loadGrid(spec: GridSource, host: GridLoadHost, signal?: AbortSignal): Promise<GridField> {
   const safe = host.safeUrl(spec.url);
   if (safe === null) {
     return Promise.reject(host.formatError({ format: "grid", url: spec.url, code: "read", detail: "a page can't fetch a URL with this scheme" }));
@@ -585,18 +688,25 @@ export function loadGrid(spec: GridSource, host: GridLoadHost): Promise<GridFiel
     cache.set(key, hit);
     return hit.field.then((field) => refitGrid(field, spec));
   }
-  const field = fetchAndDecode(url, spec, host);
+  const field = fetchAndDecode(url, spec, host, cached ? undefined : signal);
   if (cached) {
-    const entry = { field, expires: spec.cache?.ttl ? now + spec.cache.ttl : Infinity };
+    const entry: CacheEntry = { field, expires: spec.cache?.ttl ? now + spec.cache.ttl : Infinity, bytes: 0 };
+    // An expired entry under this key goes, with its place in the order.
+    dropCached(key);
     cache.set(key, entry);
-    // A failure is not kept: the next request (a `reload()`) asks again.
-    field.catch(() => {
-      if (cache.get(key) === entry) cache.delete(key);
-    });
-    for (const stale of cache.keys()) {
-      if (cache.size <= CACHE_ENTRIES) break;
-      cache.delete(stale);
-    }
+    field.then(
+      (resolved) => {
+        if (cache.get(key) !== entry) return;
+        entry.bytes = retainedBytes(resolved);
+        cacheBytes += entry.bytes;
+        evictCached();
+      },
+      // A failure is not kept: the next request (a `reload()`) asks again.
+      () => {
+        if (cache.get(key) === entry) dropCached(key);
+      }
+    );
+    evictCached();
   }
   return field;
 }

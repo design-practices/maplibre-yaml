@@ -126,6 +126,16 @@ describe("the sampler, on a synthetic wrapping 4 × 3 grid (nx * dx = 360)", () 
     expect(f.sample([0, Infinity])).toBeNull();
   });
 
+  it("contains: a wrapping grid is never left in longitude, latitude beyond a pole clamps and is still inside, a non-finite pair is not", async () => {
+    const f = await load();
+    expect(f.contains([90, 0])).toBe(true);
+    expect(f.contains({ lng: -1000, lat: 0 })).toBe(true);
+    expect(f.contains([0, 89.9])).toBe(true);
+    expect(f.contains([0, -90])).toBe(true);
+    expect(f.contains([NaN, 0])).toBe(false);
+    expect(f.contains([0, Infinity])).toBe(false);
+  });
+
   it("carries physical values: rescale is refused", async () => {
     const f = await load();
     expect(() => f.rescale([0, 1])).toThrow(/physical values|range/);
@@ -152,6 +162,18 @@ describe("the sampler, on a non-wrapping 4 × 3 grid (40° wide from 0°E)", () 
     expect(f.sample([-355, 10])).toBeCloseTo(0.5, 10);
     expect(f.sample([355, 10])).toBeNull(); // -5°: half a cell west, outside
   });
+
+  it("contains says exactly where sample would answer: outside west or east of the columns is false, on them true, whatever the turn of the globe", async () => {
+    const f = await load();
+    expect(f.contains([-10, 10])).toBe(false);
+    expect(f.contains([-0.001, 10])).toBe(false);
+    expect(f.contains([0, 10])).toBe(true);
+    expect(f.contains([30, 10])).toBe(true);
+    expect(f.contains([30.001, 10])).toBe(false);
+    expect(f.contains([355, 10])).toBe(false);
+    expect(f.contains([365, 10])).toBe(true);
+    expect(f.contains([15, 80])).toBe(true); // above the first row: clamped, inside
+  });
 });
 
 describe("missing data", () => {
@@ -173,6 +195,9 @@ describe("missing data", () => {
     expect(f.sample([45, 10])).toBeCloseTo(0.5, 10); // the row above, between columns
     expect(f.values().missing[5]).toBe(1);
     expect(Number.isNaN(f.values().value[5]!)).toBe(true);
+    // Missing is not outside: contains tells them apart.
+    expect(f.contains([90, 0])).toBe(true);
+    expect(f.sample([90, 0])).toBeNull();
   });
 
   it("alpha 0 marks a node missing in an RGBA image, and the declared nodata rule adds to it", async () => {
@@ -191,6 +216,55 @@ describe("missing data", () => {
     expect(f.sample([0, 10])).toBe(0);
     expect(f.sample([270, -10])).toBe(11 * 20);
     expect(Array.from(f.values().missing)).toEqual([0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0]);
+  });
+});
+
+describe("channel layouts (gray+alpha and RGB under the nodata rule)", () => {
+  /** 4 × 3 gray+alpha: gray = row*10+col; alpha 255 except node (1, 0) at 100 and node (2, 1) at 0. */
+  const ga = new Uint8Array(4 * 3 * 2);
+  ROWS.flat().forEach((v, i) => ga.set([v, 255], i * 2));
+  ga[1 * 2 + 1] = 100;
+  ga[6 * 2 + 1] = 0;
+  const gaFile = bytesOf(buildPng({ width: 4, height: 3, colorType: 4, scanlines: plainScanlines(ga, 4, 3, 2) }));
+  const bounds = [-45, -15, 315, 15] as [number, number, number, number];
+
+  it("a gray+alpha image under rg-uv is refused naming its 2 channels: its second channel is alpha, never v", async () => {
+    const error = await failure(decodeGrid(gaFile, spec({ encoding: "rg-uv", range: [-1, 1], bounds }), host));
+    expect(error.failure).toMatchObject({ code: "encoding", encoding: "rg-uv", image: { channels: 2 } });
+    expect(error.message).toContain("2 channels");
+    expect(error.message).toContain("RGB or RGBA");
+  });
+
+  it("a gray+alpha image under scalar-r reads channel 0, and `nodata: channel: a` reads its alpha (channel 1)", async () => {
+    const f = (await decodeGrid(gaFile, spec({ encoding: "scalar-r", range: [0, 255], bounds, nodata: { channel: "a", below: 128 } }), host)) as ScalarGridField;
+    expect(f.sample([0, 10])).toBe(0);
+    expect(f.sample([270, -10])).toBe(23);
+    expect(f.isMissing(1, 0)).toBe(true); // alpha 100: under the rule
+    expect(f.isMissing(2, 1)).toBe(true); // alpha 0: the encoding's own marker
+    expect(f.isMissing(3, 0)).toBe(false);
+    expect(Array.from(f.values().missing)).toEqual([0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0]);
+    // Without the rule, only alpha 0 marks.
+    const plain = (await decodeGrid(gaFile, spec({ encoding: "scalar-r", range: [0, 255], bounds }), host)) as ScalarGridField;
+    expect(plain.isMissing(1, 0)).toBe(false);
+    expect(plain.isMissing(2, 1)).toBe(true);
+  });
+
+  it("a rule naming a channel the layout lacks is refused naming the rule and the channel count: `a` on RGB, `g` on grayscale", async () => {
+    const rgb = new Uint8Array(4 * 3 * 3);
+    ROWS.flat().forEach((v, i) => rgb.set([v, 0, 0], i * 3));
+    const rgbFile = bytesOf(buildPng({ width: 4, height: 3, colorType: 2, scanlines: plainScanlines(rgb, 4, 3, 3) }));
+    const error = await failure(decodeGrid(rgbFile, spec({ encoding: "scalar-r", range: [0, 255], bounds, nodata: { channel: "a", below: 128 } }), host));
+    expect(error.failure).toMatchObject({ code: "encoding", format: "grid", image: { channels: 3 }, detail: "nodata: channel: a" });
+    expect(error.message).toContain("3 channels");
+    expect(error.message).toContain("`nodata: channel: a`");
+    expect(error.message).not.toContain("rg-uv");
+    // The same file with a rule on a channel it has reads fine.
+    const ok = (await decodeGrid(rgbFile, spec({ encoding: "scalar-r", range: [0, 255], bounds, nodata: { channel: "b", above: 200 } }), host)) as ScalarGridField;
+    expect(ok.sample([90, 0])).toBe(11);
+    const gray = bytesOf(buildPng({ width: 4, height: 3, colorType: 0, scanlines: plainScanlines(new Uint8Array(12), 4, 3, 1) }));
+    const g = await failure(decodeGrid(gray, spec({ encoding: "scalar-r", range: [0, 255], bounds, nodata: { channel: "g", equals: 0 } }), host));
+    expect(g.failure).toMatchObject({ code: "encoding", image: { channels: 1 }, detail: "nodata: channel: g" });
+    expect(g.message).toContain("1 channel");
   });
 });
 
@@ -258,6 +332,22 @@ describe("byte encodings: rg-uv and scalar-r over an image", () => {
     expect(g.values().value[5]).toBe(22);
     expect(g.grid).toEqual(f.grid);
     expect(Object.isFrozen(g)).toBe(true);
+  });
+
+  it("values() hands out a copy of the missing mask: writing to it changes neither the field nor a rescaled sibling", async () => {
+    const f = (await decodeGrid(file, spec({ encoding: "scalar-r", range: [0, 255], grid: geometry }), host)) as ScalarGridField;
+    const values = f.values();
+    values.missing[5] = 1;
+    values.missing.fill(1, 8);
+    expect(f.isMissing(1, 1)).toBe(false);
+    expect(f.sample([90, 0])).toBe(11);
+    expect(f.sample([0, -10])).toBe(20);
+    expect(f.values().missing[5]).toBe(1); // the materialization itself is kept, as documented
+    const g = f.rescale([0, 510]) as ScalarGridField;
+    expect(g.isMissing(1, 1)).toBe(false);
+    expect(g.sample([90, 0])).toBe(22);
+    expect(Array.from(g.values().missing)).toEqual(new Array(12).fill(0));
+    expect(g.values().missing).not.toBe(values.missing);
   });
 
   it("the declared grid must match the image: a dimension mismatch names both", async () => {
@@ -365,6 +455,27 @@ describe("nullschool-json", () => {
     expect(f.sample([90, 0])).toEqual({ u: 11, v: 22, speed: Math.hypot(11, 22) });
   });
 
+  it("refuses a header whose rows run south to north (la2 north of la1) rather than decoding the field upside down", async () => {
+    const text = JSON.stringify([record({ lo1: 0, la1: -90, la2: 90, dx: 90, dy: 180, nx: 4, ny: 2 }, [0, 1, 2, 3, 10, 11, 12, 13])]);
+    const error = await failure(decodeGrid(bytesOf(new TextEncoder().encode(text)), json(), host));
+    expect(error.failure).toMatchObject({ code: "read", format: "grid" });
+    expect(error.failure.detail).toContain("rows run south to north");
+    expect(error.failure.detail).toContain("a grid's first row must be its northern edge");
+    expect(error.message).toContain("south to north");
+    // The usual way round (la2 south of la1, or no la2 at all) decodes.
+    const north = JSON.stringify([record({ lo1: 0, la1: 90, la2: -90, dx: 90, dy: 180, nx: 4, ny: 2 }, [0, 1, 2, 3, 10, 11, 12, 13])]);
+    const f = (await decodeGrid(bytesOf(new TextEncoder().encode(north)), json(), host)) as ScalarGridField;
+    expect(f.sample([90, 90])).toBe(1);
+    expect(f.sample([90, -90])).toBe(11);
+  });
+
+  it("two records that describe different grids are refused: u and v must share one", async () => {
+    const text = JSON.stringify([record({ lo1: 0, la1: 10, dx: 90, dy: 10, nx: 4, ny: 3 }, ROWS.flat()), record({ lo1: 10, la1: 10, dx: 90, dy: 10, nx: 4, ny: 3 }, ROWS.flat())]);
+    const error = await failure(decodeGrid(bytesOf(new TextEncoder().encode(text)), json(), host));
+    expect(error.failure).toMatchObject({ code: "read", format: "grid" });
+    expect(error.failure.detail).toContain("describe different grids");
+  });
+
   it("refuses what isn't a nullschool file: not JSON, no records, a record without a header, data of the wrong length, three records", async () => {
     const notJson = await failure(decodeGrid(bytesOf(new TextEncoder().encode("<html>")), json(), host));
     expect(notJson.failure).toMatchObject({ code: "not-format", format: "grid", expected: "JSON" });
@@ -383,8 +494,43 @@ describe("nullschool-json", () => {
 });
 
 describe("geotiff, through the COG chunk's band reader", () => {
-  /** A 4 × 3 two-band float32 GeoTIFF over [0, -15, 360, 15] (cell edges), EPSG:4326 unless told otherwise. */
-  function tiff(options: { bands?: number; epsg?: number; nodata?: number; values?: (band: number, i: number) => number } = {}): ArrayBuffer {
+  /**
+   * Rename TIFF tags and GeoKeys in place, by id: the geotiff writer always
+   * writes a pixel scale, a tie point and a GeographicTypeGeoKey, and the
+   * reader's refusals need files without them. A tag renamed to a private id
+   * is still in the directory, but means nothing to any reader.
+   */
+  function retag(buffer: ArrayBuffer, tags: Record<number, number>, geoKeys: Record<number, number> = {}): ArrayBuffer {
+    const view = new DataView(buffer);
+    const le = view.getUint16(0, true) === 0x4949;
+    const ifd = view.getUint32(4, le);
+    const count = view.getUint16(ifd, le);
+    for (let i = 0; i < count; i++) {
+      const at = ifd + 2 + i * 12;
+      const tag = view.getUint16(at, le);
+      if (tags[tag] !== undefined) view.setUint16(at, tags[tag]!, le);
+      if (tag === 34735) {
+        // GeoKeyDirectory: SHORTs at the offset — [version, revision, minor, n] then [key, location, count, value]…
+        const n = view.getUint32(at + 4, le);
+        const offset = n * 2 > 4 ? view.getUint32(at + 8, le) : at + 8;
+        for (let k = 4; k < n; k += 4) {
+          const key = view.getUint16(offset + k * 2, le);
+          if (geoKeys[key] !== undefined) view.setUint16(offset + k * 2, geoKeys[key]!, le);
+        }
+      }
+    }
+    return buffer;
+  }
+
+  /**
+   * A 4 × 3 two-band float32 GeoTIFF over [0, -15, 360, 15] (cell edges),
+   * EPSG:4326 unless told otherwise. `geographic: false` strips the
+   * GeographicTypeGeoKey (a geographic model with no EPSG code, as some
+   * writers leave it); `georeferenced: false` strips the pixel scale and tie point.
+   */
+  function tiff(
+    options: { bands?: number; epsg?: number; nodata?: number; values?: (band: number, i: number) => number; geographic?: false; georeferenced?: false } = {}
+  ): ArrayBuffer {
     const bands = options.bands ?? 2;
     const value = options.values ?? ((band, i) => (band === 0 ? ROWS.flat()[i]! : -ROWS.flat()[i]!));
     const flat = new Float32Array(4 * 3 * bands);
@@ -399,9 +545,28 @@ describe("geotiff, through the COG chunk's band reader", () => {
         : { GeographicTypeGeoKey: options.epsg ?? 4326, GTModelTypeGeoKey: 2 }),
       ...(options.nodata !== undefined ? { GDAL_NODATA: `${options.nodata}\0` } : {}),
     };
-    return writeArrayBuffer(flat, metadata as never);
+    const written = writeArrayBuffer(flat, metadata as never);
+    const tags: Record<number, number> = options.georeferenced === false ? { 33550: 65000, 33922: 65001 } : {};
+    const geoKeys: Record<number, number> = options.geographic === false ? { 2048: 2999 } : {};
+    return retag(written, tags, geoKeys);
   }
   const geotiff = (s: Partial<GridSource> = {}) => spec({ encoding: "geotiff", url: "data/field.tif", ...s });
+
+  it("a geographic model with no GeographicTypeGeoKey (unlabelled longitude/latitude) decodes like EPSG:4326", async () => {
+    const bytes = tiff({ geographic: false });
+    const cog = await getDecoder("cog");
+    expect(cog.readCogHeader(new Uint8Array(bytes))).toMatchObject({ crs: "longitude/latitude" });
+    const f = (await decodeGrid(bytes, geotiff({ bands: [0, 1] }), host)) as VectorGridField;
+    expect(f.grid).toEqual({ nx: 4, ny: 3, lo1: 0, la1: 10, dx: 90, dy: 10 });
+    expect(f.sample([90, 0])).toEqual({ u: 11, v: -11, speed: Math.hypot(11, 11) });
+  });
+
+  it("a GeoTIFF without a pixel scale and tie point is refused: no georeferencing", async () => {
+    const error = await failure(decodeGrid(tiff({ georeferenced: false }), geotiff(), host));
+    expect(error.failure).toMatchObject({ code: "read", format: "grid" });
+    expect(error.failure.detail).toContain("no georeferencing");
+    expect(error.message).toContain("couldn't be read as a grid");
+  });
 
   it("two bands sample to the source arrays, with geometry from the file", async () => {
     const f = (await decodeGrid(tiff(), geotiff({ bands: [0, 1], units: "m/s" }), host)) as VectorGridField;

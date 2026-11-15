@@ -15,6 +15,8 @@ export function YamlMap() {
   void ref.current?.gridReady("field").then((field) => field.sample([0, 0]));
   const held: GridField | undefined = ref.current?.getGrid("field");
   void held;
+  const declared: boolean = ref.current?.hasGrid("field") ?? false;
+  void declared;
   ref.current?.addEventListener("ml-map:layer-click", (event) => {
     const id: string = event.detail.layerId;
     void id;

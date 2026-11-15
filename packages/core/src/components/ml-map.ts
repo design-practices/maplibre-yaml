@@ -2676,6 +2676,20 @@ export class MLMap extends BaseElement {
   }
 
   /**
+   * Whether the applied document has a `type: grid` source of this id,
+   * decoded or not — so `getGrid()` returning `undefined` can be read as
+   * "not yet" rather than "no such source". False before the map has loaded.
+   *
+   * @example
+   * ```javascript
+   * if (el.hasGrid("elevation") && !el.getGrid("elevation")) readout.textContent = "Loading…";
+   * ```
+   */
+  hasGrid(sourceId: string): boolean {
+    return this.renderer?.hasGrid(sourceId) ?? false;
+  }
+
+  /**
    * Resolve with a `type: grid` source's field once it is decoded (R14), at
    * once if it already is. Separate from {@link mapReady}: the map opens
    * without waiting for its grids, and this does not wait for the layers.

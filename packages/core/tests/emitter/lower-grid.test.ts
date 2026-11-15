@@ -10,7 +10,8 @@
 import { describe, it, expect } from "vitest";
 import { validateStyleMin } from "@maplibre/maplibre-gl-style-spec";
 import { projectStyle, EmitError } from "../../src/emitter";
-import { GRID_SOURCES_METADATA_KEY } from "../../src/emitter/lower-grid";
+import { GRID_SOURCES_METADATA_KEY, isGridSource } from "../../src/emitter/lower-grid";
+import { isGridSource as schemaPredicate } from "../../src/schemas/source.schema";
 import { normalizeMapBlock, toModel } from "../../src/model";
 import type { V1MapInput } from "../../src/model";
 import { exportClasses } from "../../src/export/registrations";
@@ -86,6 +87,14 @@ sources:
     expect(warnings[0]!.message).toMatch(/grid source `field` is not a MapLibre source/);
     expect(warnings[0]!.message).toMatch(/kept under metadata for maplibre-yaml renderers/);
     expect(validateStyleMin(style as never)).toEqual([]);
+  });
+});
+
+describe("the predicate", () => {
+  it("the projection's isGridSource is the schema's, re-exported: one home, no drift", () => {
+    expect(isGridSource).toBe(schemaPredicate);
+    expect(isGridSource({ type: "grid", url: "x.png" })).toBe(true);
+    expect(isGridSource({ type: "raster", tiles: [] })).toBe(false);
   });
 });
 

@@ -75,7 +75,10 @@ decoded.
 `sample()` takes MapLibre's `{ lng, lat }` or a `[lng, lat]` pair,
 interpolates between the four surrounding nodes, and returns `null` where
 any of them is missing or the position is outside a grid that does not
-cover the globe.
+cover the globe. `field.contains(position)` tells the two `null` cases
+apart: it returns `true` when the position falls inside the grid, so a
+`null` from `sample()` while `contains()` is `true` means missing data,
+not an out-of-range position.
 
 ## What the map does with a grid
 
@@ -88,6 +91,11 @@ cover the globe.
   It rejects when the document has no grid source of that id, when the
   file fails to load (the map's notice says why), or when the source is
   removed.
+- `el.hasGrid("elevation")` answers synchronously, without waiting on
+  decode: `true` whenever the applied document declares a grid source of
+  that id, whether or not it has finished decoding yet, and `false` when it
+  doesn't. Use it to tell "not yet decoded" apart from "no such source"
+  without an `await`.
 - `ml-map:source-loaded` fires on the element with `{ sourceId }` each time
   a grid is decoded, the first load included.
 - A load failure shows in the map's notice like a layer's data failure, and
@@ -155,8 +163,12 @@ MapLibre uses for `raster-dem` pixel packing, and it is required.
 The byte encodings need `range: [lo, hi]`, the values bytes 0 and 255
 stand for; the other two carry physical values and refuse `range:`. A PNG
 must be 8-bit, not interlaced, grayscale, RGB or RGBA; a palette or 16-bit
-image is refused with a notice that says so. `rg-uv` needs at least two
-channels. A GeoTIFF in another projection is refused with the `gdalwarp`
+image is refused with a notice that says so. `rg-uv` needs an RGB or RGBA
+image specifically — a grayscale or grayscale+alpha PNG has no green
+channel to read the second component from, and is refused with an encoding
+notice rather than read as if it did. A `nodata:` rule naming a channel the
+image doesn't carry (`channel: b` on a grayscale `scalar-r` PNG, say) is an
+error once the file is decoded, not a rule silently ignored. A GeoTIFF in another projection is refused with the `gdalwarp`
 command to reproject it. A GeoTIFF grid is read by the same decoder as a
 [Cloud Optimized GeoTIFF](/guides/cog/), so its first use downloads two
 on-demand files (the grid decoder, then the GeoTIFF reader) rather than
@@ -167,6 +179,15 @@ header: the whole-file byte cap the large-data readers share, and 16
 million cells (`nx × ny`; a 0.25° global grid is about one million). A
 grid is fetched whole, so over the limit the way out is a coarser grid or
 a smaller extent.
+
+Once decoded, a field is kept in a shared cache so that re-declaring the
+same source (stepping through a series, or a live update that doesn't
+change the fetch) doesn't decode the file twice. What the cache retains is
+bounded both by how many fields it holds (16) and by the decoded bytes it
+keeps across all of them (`GRID_CACHE_MAX_BYTES`, about 256 MB); past
+either limit the oldest entries are dropped and a later `sample()` on a
+field you still hold keeps working from what it already decoded, but a
+fresh `gridReady()` for a dropped entry decodes again.
 
 ## Missing data: `nodata`
 
@@ -351,7 +372,41 @@ with a model built outside the parser. The
 
 ## Decode a file outside the browser
 
-The same decoder is exported for tooling and tests: `decodeGrid(bytes, spec)` from `@maplibre-yaml/core` takes the file's bytes and the source declaration and resolves with the field, in Node as in the browser. It loads the decoder on demand, so importing the package does not pull it in.
+The same decoder is exported for tooling and tests: `decodeGrid(bytes, spec)`
+from `@maplibre-yaml/core` takes the file's bytes and the source declaration
+and resolves with the field, in Node as in the browser. It loads the decoder
+on demand, so importing the package does not pull it in.
+
+```js
+import { readFile } from "node:fs/promises";
+import { decodeGrid } from "@maplibre-yaml/core";
+
+const bytes = await readFile("data/elevation.png");
+const field = await decodeGrid(bytes, {
+  type: "grid",
+  url: "data/elevation.png", // unused by decodeGrid itself; kept for parity with the document
+  encoding: "scalar-r",
+  grid: { nx: 360, ny: 181, lo1: -180, la1: 90, dx: 1, dy: 1 },
+  range: [-500, 9000],
+  units: "m",
+});
+
+const { value, missing } = field.values();
+let max = -Infinity;
+for (let i = 0; i < value.length; i++) {
+  if (!missing[i] && value[i] > max) max = value[i];
+}
+console.log(`highest decoded value: ${max} ${field.units}`);
+```
+
+`values()` returns the whole field at once as typed arrays (`value` for a
+scalar field, `u` and `v` for a vector one) plus a `missing` mask, row-major
+from the north-west node — the primitive suited to a script or a check that
+walks every cell, rather than `sample()`'s one-position-at-a-time lookup.
+Reach for `sample(lngLat)` when you have a position (the pointer, a feature,
+a camera centre) and want the interpolated value there; reach for `values()`
+when you want every cell, such as computing a statistic or writing the field
+out to another format.
 
 ## Make the files
 
@@ -389,13 +444,28 @@ What follows is specific to grids. Every notice names the file.
   bits needs `range:` to match the new scale.
 - **"…has 1 channel; `encoding: rg-uv` reads two"**: a vector field needs
   red and green; a one-channel image is `scalar-r`.
+- **"…is a grayscale PNG; `encoding: rg-uv` needs an RGB or RGBA image"**
+  (also for grayscale+alpha): `rg-uv` reads its second component from the
+  green channel, which a grayscale image doesn't have even when it carries
+  alpha. Write the file as RGB or RGBA.
+- **"nodata: names channel … , but the image has no such channel"**: the
+  `nodata.channel` you wrote isn't one the image carries (`b` on a
+  grayscale `scalar-r` PNG, say). Pick a channel the file actually has, or
+  drop the rule and rely on the encoding's own missing-value marker.
 - **"…is 1440 × 721 pixels, but `grid:` declares nx: 360, ny: 181"**: the
   declared node counts must match the image. Fix `nx` and `ny`, or use
   `bounds:`, which takes the counts from the image.
 - **"…is in EPSG:3857; a grid must be in longitude/latitude (EPSG:4326)"**:
   run the `gdalwarp -t_srs EPSG:4326` command the notice gives. A plain
   TIFF with no coordinates gets a `gdal_translate -a_srs … -a_ullr …`
-  command instead.
+  command instead. A geographic GeoTIFF with no explicit EPSG GeoKey at all
+  (no projection tag either way) is accepted as longitude/latitude rather
+  than refused; only a GeoKey naming a projected system such as EPSG:3857
+  triggers this notice.
+- **"…header rows run south to north"** (a `nullschool-json` file): the
+  decoder expects the first row at the top (north), as grib2json writes it;
+  a file whose rows run the other way is refused rather than read upside
+  down. Check the tool that produced the file.
 - **"encoding: scalar-r needs range: [lo, hi]"** (a validation error): the
   byte encodings need `range:`; `nullschool-json` and `geotiff` refuse it.
 - **"A grid source takes bounds: or grid:, not both"**, or **"encoding:

@@ -50,6 +50,12 @@ export interface PngSpec {
    * file, for size guards that must fail before inflating).
    */
   scanlines?: Uint8Array[];
+  /**
+   * The IDAT payload as given, instead of deflated `scanlines`: a zlib stream
+   * built by the test (one that inflates to far more than the image needs),
+   * or bytes that aren't zlib at all.
+   */
+  idat?: Uint8Array;
   /** A PLTE chunk's RGB triples (palette images). */
   palette?: Uint8Array;
   /** IDAT split into this many chunks (default 1). */
@@ -69,9 +75,8 @@ export function buildPng(spec: PngSpec): Uint8Array {
   ihdr[12] = spec.interlace ?? 0;
   const parts: Uint8Array[] = [SIGNATURE, chunk("IHDR", ihdr)];
   if (spec.palette) parts.push(chunk("PLTE", spec.palette));
-  if (spec.scanlines) {
-    const raw = concat(spec.scanlines);
-    const deflated = new Uint8Array(deflateSync(raw));
+  if (spec.scanlines || spec.idat) {
+    const deflated = spec.idat ?? new Uint8Array(deflateSync(concat(spec.scanlines!)));
     const n = spec.idatChunks ?? 1;
     const per = Math.ceil(deflated.length / n);
     for (let i = 0; i < n; i++) parts.push(chunk("IDAT", deflated.subarray(i * per, Math.min(deflated.length, (i + 1) * per))));

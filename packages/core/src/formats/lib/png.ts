@@ -161,7 +161,10 @@ export function decodePng(bytes: Uint8Array): PngImage {
   const expected = height * (stride + 1);
   let inflated: Uint8Array;
   try {
-    inflated = unzlibSync(deflated);
+    // Inflate into a buffer of exactly the scanlines' size: fflate never
+    // grows a given `out`, so a stream that inflates to far more than the
+    // header promises (a decompression bomb) costs no more than the image.
+    inflated = unzlibSync(deflated, { out: new Uint8Array(expected) });
   } catch (error) {
     throw new PngError("corrupt", `the image data won't inflate (${String((error as Error).message ?? error)})`);
   }

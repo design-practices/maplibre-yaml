@@ -72,6 +72,15 @@ export interface GridFieldBase {
    */
   isMissing(col: number, row: number): boolean;
   /**
+   * Whether `position` lies on the grid: on or between its columns (any
+   * longitude, when the grid `wraps`), at any latitude (latitude clamps to
+   * the first and last row, as `sample` does). Exactly where `sample` would
+   * answer with a value or `null` for a missing node — a missing node does
+   * not make it false — so callers can tell "outside" from "missing". False
+   * for a position that isn't a finite pair.
+   */
+  contains(position: GridPosition): boolean;
+  /**
    * The same field with another `range:` — a new field from the retained
    * bytes, no decode. Byte encodings only (`rg-uv`, `scalar-r`); a field
    * carrying physical values throws.
@@ -140,9 +149,10 @@ export interface GridLoadHost extends GridHost {
   /**
    * formats/http `fetchWhole`: one `GET`, the body read up to
    * `maxWholeBytes`. Throws the `HTTP <status>` shape (`status` set),
-   * whatever `fetch` threw, or `BodyTooLarge` (`name`, `size`).
+   * whatever `fetch` threw, or `BodyTooLarge` (`name`, `size`); an aborted
+   * `signal` rejects with the `AbortError`.
    */
-  fetchWhole(url: string, options: { maxWholeBytes?: number | undefined }): Promise<{ bytes: ArrayBuffer }>;
+  fetchWhole(url: string, options: { maxWholeBytes?: number | undefined; signal?: AbortSignal | undefined }): Promise<{ bytes: ArrayBuffer }>;
   /** `url` resolved against the page: the cache key. */
   absoluteUrl(url: string): string;
   /** `url` when a page may fetch it, else null (utils/html `safeUrl`). */

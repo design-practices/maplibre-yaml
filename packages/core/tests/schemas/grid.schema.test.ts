@@ -7,7 +7,7 @@
  * layer, and in a v2 document's `style.sources`.
  */
 import { describe, it, expect } from "vitest";
-import { GridSourceSchema, LayerSourceSchema } from "../../src/schemas/source.schema";
+import { GridSourceSchema, LayerSourceSchema, isGridSource } from "../../src/schemas/source.schema";
 import { SourceV2Schema } from "../../src/schemas/map-v2.schema";
 import { YAMLParser } from "../../src/parser";
 
@@ -261,5 +261,18 @@ describe("did-you-mean on a grid source", () => {
     );
     expect(typed.success).toBe(false);
     expect(typed.errors.map((e) => e.message).join("\n")).toContain('Unknown source type "gird"');
+  });
+});
+
+describe("isGridSource, the one predicate the renderer and the emitter share", () => {
+  it("is true for a grid spec (parsed or raw) and false for anything else", () => {
+    expect(isGridSource({ type: "grid", url: "x.png" })).toBe(true);
+    expect(isGridSource(GridSourceSchema.parse({ type: "grid", url: "x.tif", encoding: "geotiff", bounds: [-180, -90, 180, 90] }))).toBe(true);
+    expect(isGridSource({ type: "geojson", data: {} })).toBe(false);
+    expect(isGridSource({ type: "grid" }), "the type key alone is the test").toBe(true);
+    expect(isGridSource("grid")).toBe(false);
+    expect(isGridSource(null)).toBe(false);
+    expect(isGridSource(undefined)).toBe(false);
+    expect(isGridSource(["grid"])).toBe(false);
   });
 });

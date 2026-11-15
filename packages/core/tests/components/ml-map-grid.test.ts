@@ -3,8 +3,8 @@
  * @module @maplibre-yaml/core/tests/components
  *
  * @description
- * The element half of grid sources: `getGrid` and `gridReady` forward to the
- * renderer, `ml-map:source-loaded` announces a decoded field, a failed load
+ * The element half of grid sources: `getGrid`, `hasGrid` and `gridReady`
+ * forward to the renderer, `ml-map:source-loaded` announces a decoded field, a failed load
  * lands on the per-source notice and leaves with a successful `reload()`.
  * Each test maps to one bullet of the plan's U4 test scenarios
  * (docs/plans/2026-11-14-001-feat-grid-source-plan.md).
@@ -220,11 +220,17 @@ describe("<ml-map> getGrid / gridReady / ml-map:source-loaded (R14, R15)", () =>
     const el = await mount(doc({ field: wind(F000) }));
     const seen = record(el, ["ml-map:source-loaded"]);
     expect(el.getGrid("field")).toBeUndefined();
+    // Nothing is registered before the style loads: hasGrid is false, as for any unknown id.
+    expect(el.hasGrid("field")).toBe(false);
     const ready = el.gridReady("field");
     latestMap().emit("load");
     // mapReady() does not wait for the grid: the response is still held.
     await el.mapReady();
     expect(el.getGrid("field")).toBeUndefined();
+    // Declared and registered, not yet decoded: hasGrid tells this apart from "no such source".
+    expect(el.hasGrid("field")).toBe(true);
+    expect(el.getRenderer()!.hasGrid("field")).toBe(true);
+    expect(el.hasGrid("nope")).toBe(false);
     expect(seen).toEqual([]);
     g.open();
     const field = await ready;
@@ -232,6 +238,8 @@ describe("<ml-map> getGrid / gridReady / ml-map:source-loaded (R14, R15)", () =>
     expect(field.units).toBe("m/s");
     expect(el.getGrid("field")).toBe(field);
     expect(el.getRenderer()!.getGrid("field")).toBe(field);
+    expect(el.hasGrid("field")).toBe(true);
+    expect(el.hasGrid("nope")).toBe(false);
     expect(seen).toEqual([{ type: "ml-map:source-loaded", detail: { sourceId: "field" }, bubbles: true }]);
     // A grid never reaches MapLibre.
     expect(latestMap().addSource).not.toHaveBeenCalled();
@@ -252,6 +260,8 @@ describe("<ml-map> getGrid / gridReady / ml-map:source-loaded (R14, R15)", () =>
     const ready = el.gridReady("field");
     expect(el.getRenderer()).toBeNull();
     expect(el.getGrid("field")).toBeUndefined();
+    // No map yet: nothing is declared as far as the element can tell.
+    expect(el.hasGrid("field")).toBe(false);
     el.config = doc({ field: wind(F000) }) as any;
     document.body.appendChild(el);
     await tick();
@@ -259,6 +269,24 @@ describe("<ml-map> getGrid / gridReady / ml-map:source-loaded (R14, R15)", () =>
     const field = await ready;
     expect(field.kind).toBe("vector");
     expect(el.getGrid("field")).toBe(field);
+    expect(el.hasGrid("field")).toBe(true);
+  });
+
+  it("hasGrid is false for a non-grid source and for a grid the applied document no longer declares", async () => {
+    fetchSpy = serve();
+    const document_ = doc({ field: wind(F000) }) as any;
+    document_.sources.points = { type: "geojson", data: { type: "FeatureCollection", features: [] } };
+    const el = await mount(document_);
+    latestMap().emit("load");
+    await el.mapReady();
+    expect(el.hasGrid("field")).toBe(true);
+    expect(el.hasGrid("points"), "a MapLibre source is not a grid").toBe(false);
+    // A live update that drops the grid: hasGrid follows the applied document.
+    const applied = new Promise<void>((resolve) => el.addEventListener("ml-map:update-applied", () => resolve(), { once: true }));
+    el.config = doc({}) as any;
+    await applied;
+    expect(el.hasGrid("field")).toBe(false);
+    expect(el.getGrid("field")).toBeUndefined();
   });
 
   it("a mapStyle change while the field is awaited: gridReady resolves against the rebuilt renderer, not the one torn down", async () => {

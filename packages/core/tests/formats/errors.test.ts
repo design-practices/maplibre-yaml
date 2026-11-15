@@ -88,8 +88,18 @@ describe("describeFormatFailure — a grid source's sentences (grid source U2)",
       "is 720 × 361 pixels, but `grid:` declares nx: 360, ny: 181."
     );
     expect(describeFormatFailure({ ...grid, code: "encoding", encoding: "rg-uv", image: { channels: 1 } })).toContain(
-      "has 1 channel; `encoding: rg-uv` reads two"
+      "has 1 channel; `encoding: rg-uv` reads u from red and v from green, so it needs an RGB or RGBA image"
     );
+    expect(describeFormatFailure({ ...grid, code: "encoding", encoding: "rg-uv", image: { channels: 2 } })).toContain("has 2 channels; `encoding: rg-uv`");
+    // A nodata rule on a channel the layout lacks: the detail is the rule.
+    const absent = describeFormatFailure({ ...grid, code: "encoding", encoding: "scalar-r", image: { channels: 3 }, detail: "nodata: channel: a" });
+    expect(absent).toContain("has 3 channels, so `nodata: channel: a` names one it doesn't have");
+    expect(absent).not.toContain("rg-uv");
+    // A CRS label that isn't a code: the file may be in longitude/latitude already, so it isn't told to reproject.
+    const unlabelled = describeFormatFailure({ ...grid, code: "crs", crs: "user-defined" });
+    expect(unlabelled).toContain("a coordinate system it doesn't name (user-defined)");
+    expect(unlabelled).toContain("gdal_translate -a_srs EPSG:4326");
+    expect(unlabelled).not.toContain("is in user-defined");
     expect(describeFormatFailure({ ...grid, code: "encoding", image: { bitDepth: 16, colorType: "RGB", interlaced: false } })).toContain(
       "is a 16-bit RGB PNG; a grid image must be an 8-bit PNG"
     );

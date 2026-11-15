@@ -1081,6 +1081,11 @@ export const GridSourceSchema = z.object({
 /** Inferred type for a grid source. */
 export type GridSource = z.infer<typeof GridSourceSchema>;
 
+/** Whether a source spec (named or inline, parsed or raw) declares a grid: `type: "grid"`. */
+export function isGridSource(spec: unknown): spec is GridSource {
+  return typeof spec === "object" && spec !== null && (spec as { type?: unknown }).type === "grid";
+}
+
 /**
  * Union of all layer source types.
  *
