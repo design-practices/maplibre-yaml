@@ -54,9 +54,10 @@ const CORPUS: ParityDocument[] = [
 ];
 
 describe("stripDescribe (the transform)", () => {
-  const files = readdirSync(SCHEMAS).filter((f) => f.endsWith(".ts"));
+  const files = readdirSync(SCHEMAS, { recursive: true, encoding: "utf8" }).filter((f) => f.endsWith(".ts"));
 
   it("removes every .describe( from every schema file", () => {
+    expect(files).toContain(join("sources", "geojson.ts"));
     let removed = 0;
     for (const file of files) {
       const { code, removed: n } = stripDescribe(readFileSync(join(SCHEMAS, file), "utf8"), file);
@@ -88,8 +89,9 @@ describe("stripDescribe (the transform)", () => {
     expect(() => stripDescribe(`import { z } from "zod/v3";\n${line}\n`, "synthetic.schema.ts")).toThrow(/synthetic\.schema\.ts:2 /);
   });
 
-  it("the plugin reads only src/schemas/*.ts", () => {
+  it("the plugin reads only the files under src/schemas/", () => {
     expect(SCHEMA_FILE.test(join(PKG_ROOT, "src/schemas/map.schema.ts"))).toBe(true);
+    expect(SCHEMA_FILE.test(join(PKG_ROOT, "src/schemas/sources/geojson.ts"))).toBe(true);
     expect(SCHEMA_FILE.test(join(PKG_ROOT, "src/parser/yaml-parser.ts"))).toBe(false);
     expect(SCHEMA_FILE.test(join(PKG_ROOT, "tests/schemas/map.test.ts"))).toBe(false);
   });
