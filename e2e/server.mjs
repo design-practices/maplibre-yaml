@@ -72,7 +72,8 @@ import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { extname, join, normalize, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { brotliCompressSync, deflateSync } from "node:zlib";
+import { brotliCompressSync } from "node:zlib";
+import { buildPng } from "../scripts/lib/png-bytes.mjs";
 
 const require = createRequire(import.meta.url);
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -265,33 +266,17 @@ function encodeRgbTile(color) {
   return pngFile({ width: size, height: size, bitDepth: 8, colorType: 6 }, raw);
 }
 
-/** One PNG chunk: length, type, data, CRC. */
-function pngChunk(type, data) {
-  const len = Buffer.alloc(4);
-  len.writeUInt32BE(data.length);
-  const body = Buffer.concat([Buffer.from(type, "ascii"), data]);
-  const crc = Buffer.alloc(4);
-  crc.writeUInt32BE(crc32(body) >>> 0);
-  return Buffer.concat([len, body, crc]);
-}
-
 /**
  * A PNG file from its header fields and filtered scanlines (`raw`: one
  * filter byte then the row's bytes, per row); `raw` null writes a file that
  * is only its signature, IHDR and IEND — a header with nothing behind it.
+ * The bytes come from the shared builder (scripts/lib/png-bytes.mjs, the
+ * one the core tests use too), as a `Buffer` so `send` serves them as a
+ * static file (ranges, hosting variants).
  */
 function pngFile({ width, height, bitDepth, colorType }, raw) {
-  const ihdr = Buffer.alloc(13);
-  ihdr.writeUInt32BE(width, 0);
-  ihdr.writeUInt32BE(height, 4);
-  ihdr[8] = bitDepth;
-  ihdr[9] = colorType;
-  return Buffer.concat([
-    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
-    pngChunk("IHDR", ihdr),
-    ...(raw ? [pngChunk("IDAT", deflateSync(raw))] : []),
-    pngChunk("IEND", Buffer.alloc(0)),
-  ]);
+  const png = buildPng({ width, height, bitDepth, colorType, ...(raw ? { scanlines: [raw] } : {}) });
+  return Buffer.from(png.buffer, png.byteOffset, png.byteLength);
 }
 
 /**
@@ -320,21 +305,6 @@ function gridFixture(name) {
   }
   if (name === "huge-header.png") return pngFile({ width: 5000, height: 4000, bitDepth: 8, colorType: 2 }, null);
   return null;
-}
-
-let CRC_TABLE;
-function crc32(buf) {
-  if (!CRC_TABLE) {
-    CRC_TABLE = new Int32Array(256);
-    for (let n = 0; n < 256; n++) {
-      let c = n;
-      for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
-      CRC_TABLE[n] = c;
-    }
-  }
-  let c = -1;
-  for (let i = 0; i < buf.length; i++) c = CRC_TABLE[(c ^ buf[i]) & 0xff] ^ (c >>> 8);
-  return c ^ -1;
 }
 
 const DEM_TILE = terrariumTile();
