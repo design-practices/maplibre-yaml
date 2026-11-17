@@ -42,9 +42,9 @@ import { PNG } from "pngjs";
 const PORT = Number(process.env.VERIFY_PORT ?? 4174);
 const ORIGIN = `http://localhost:${PORT}`;
 const PAGE = "/examples/verification/null-earth/index.html";
-const VENDOR_MAJOR = Number(
-  JSON.parse(readFileSync(join(process.cwd(), "node_modules/maplibre-gl/package.json"), "utf8")).version.split(".")[0]
-);
+// VERIFY_MAPLIBRE_DIR serves another install locally (see e2e/server.mjs); the CI matrix overrides node_modules.
+const MAPLIBRE_DIR = process.env.VERIFY_MAPLIBRE_DIR ?? join(process.cwd(), "node_modules/maplibre-gl");
+const VENDOR_MAJOR = Number(JSON.parse(readFileSync(join(MAPLIBRE_DIR, "package.json"), "utf8")).version.split(".")[0]);
 
 test.use({ viewport: { width: 1000, height: 700 } });
 test.describe.configure({ mode: "serial" });

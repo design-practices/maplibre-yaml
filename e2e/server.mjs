@@ -157,6 +157,8 @@ export const Popup = gl.Popup;
 export const Marker = gl.Marker;
 export const LngLat = gl.LngLat;
 export const LngLatBounds = gl.LngLatBounds;
+// The Deltares streamline engine (examples/verification/null-earth) imports it.
+export const MercatorCoordinate = gl.MercatorCoordinate;
 export const NavigationControl = gl.NavigationControl;
 export const GeolocateControl = gl.GeolocateControl;
 export const ScaleControl = gl.ScaleControl;
