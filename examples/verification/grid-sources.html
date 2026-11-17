@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Grid sources: a sampleable raster field, and what a student sees when one doesn't load</title>
+  <!--
+    Grid source (ml-nb1.2) — demo AND browser fixture (e2e/grid-sources.spec.ts).
+
+    A `type: grid` source is a regular raster field on a longitude/latitude
+    grid — elevation, density, temperature, any scalar or vector field — that
+    the library fetches and decodes once and page code reads as numbers:
+    el.getGrid(id).sample(lngLat). No layer draws it (yet); the map is flat,
+    the style is local and nothing here needs a custom layer, so the page
+    runs on maplibre-gl 4, 5 and 6 alike.
+
+    The data is the one committed 8-bit grid image (360 x 181, one byte per
+    cell in the red channel, examples/verification/null-earth/data/), read
+    here as a neutral "density" field over 0..100: the bytes are the data,
+    `range:` says what bytes 0 and 255 stand for.
+
+    PASS (default, ?case=ok): move the pointer over the map — the readout
+    shows a density between 0 and 100 that follows the pointer, and the
+    "status" line says the field is in (360 x 181 nodes, wraps). No notice.
+
+    The unhappy paths, each a `case=` query (the notice on the map is the
+    assertion; the spec checks its wording):
+      404       the file isn't there         → "didn't load … 404 …", where the browser looked
+      nocors    served without CORS headers  → the CORS sentence, with no mention of `Range`
+      oversize  Content-Length 60 MB         → "too large … more than a page loads whole (50 MB)"
+      size      `grid:` says nx: 100         → "is 360 × 181 pixels, but `grid:` declares nx: 100 …"
+      bits      a 16-bit PNG                 → "is a 16-bit grayscale PNG; a grid image must be an 8-bit PNG"
+      cells     a header claiming 5000x4000  → "has 20,000,000 grid cells … more than a page decodes (16,000,000)"
+      range     the ok field, then "Double the range" (or __grid.doubleRange()):
+                a new field from the same bytes, no request — values double
+
+    Buttons: "Fix the URL" (404 case) re-points the source at the real file
+    through el.update(); "Double the range" changes `range:` to [0, 200].
+
+    Serve from the repo root:  pnpm --filter @maplibre-yaml/core build && pnpm verify:serve
+    Then open: http://localhost:4174/examples/verification/grid-sources.html?case=ok
+  -->
+  <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; }
+    header { padding: 8px 16px; background: #1d3557; color: white; font-size: 13px; display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+    header code { background: rgba(255,255,255,0.15); padding: 1px 5px; border-radius: 3px; }
+    header button { font: inherit; padding: 2px 8px; }
+    main { padding: 12px 16px; }
+    ml-map { display: block; height: 440px; }
+    #readout { font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; margin-top: 8px; display: grid; grid-template-columns: max-content 1fr; gap: 2px 12px; }
+    #readout b { font-weight: 600; font-variant-numeric: tabular-nums; }
+    #log { font: 12px/1.4 ui-monospace, monospace; white-space: pre-wrap; color: #555; margin-top: 8px; }
+  </style>
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }
+  </script>
+</head>
+<body>
+  <header>
+    Grid source — case <code id="case">ok</code>
+    <button id="fix" type="button" hidden>Fix the URL</button>
+    <button id="double" type="button" hidden>Double the range</button>
+    <span id="hint"></span>
+  </header>
+  <main>
+    <ml-map id="map"></ml-map>
+    <div id="readout">
+      <span>status</span><b id="status">waiting for the field…</b>
+      <span>position</span><b id="pos">—</b>
+      <span>density</span><b id="value">—</b>
+    </div>
+    <pre id="log"></pre>
+  </main>
+  <script type="module">
+    import "/packages/core/register.js";
+
+    const q = new URLSearchParams(location.search);
+    const CASE = q.get("case") ?? "ok";
+    document.getElementById("case").textContent = CASE;
+    const $ = (id) => document.getElementById(id);
+    const log = (line) => { $("log").textContent += `${line}\n`; };
+
+    // The committed 8-bit grid image: 360 columns from 180° W, 181 rows from
+    // 90° N, one degree apart, the red byte the value. Read as a density
+    // over 0..100; `nodata:` marks a cell whose blue byte is above 153.
+    const FILE = "/examples/verification/null-earth/data/2026111400-f000-temp-2m.png";
+    const GRID = { nx: 360, ny: 181, lo1: -180, la1: 90, dx: 1, dy: 1 };
+    const WHOLE_GLOBE = [-180, -90, 180, 90];
+    const base = { type: "grid", encoding: "scalar-r", url: FILE, grid: GRID, range: [0, 100], nodata: { channel: "b", above: 153 } };
+
+    /** The source for each case: the ok declaration with one thing wrong. */
+    const SOURCES = {
+      ok: base,
+      range: base,
+      404: { ...base, url: FILE.replace("f000", "f999") },
+      // Another origin (127.0.0.1 for a page on localhost), served without `Access-Control-Allow-Origin`.
+      nocors: { ...base, url: `http://127.0.0.1:${location.port}/nocors${FILE}` },
+      // The server pads the file to 60 MB (Content-Length says so): over the 50 MB whole-file cap before a byte is read.
+      oversize: { ...base, url: `/oversize/60${FILE}` },
+      size: { ...base, grid: { ...GRID, nx: 100 } },
+      // Generated by e2e/server.mjs: a 4x4 16-bit grayscale PNG.
+      bits: { ...base, url: "/grid-fixtures/16bit.png", grid: undefined, bounds: WHOLE_GLOBE },
+      // Generated by e2e/server.mjs: a PNG that is only its header, 5000 x 4000 — 20 M cells, over the 16 M cap.
+      cells: { ...base, url: "/grid-fixtures/huge-header.png", grid: undefined, bounds: WHOLE_GLOBE },
+    };
+    const source = SOURCES[CASE];
+    if (!source) throw new Error(`unknown case "${CASE}"`);
+    for (const key of Object.keys(source)) if (source[key] === undefined) delete source[key];
+
+    const doc = {
+      type: "map",
+      id: "grid-sources",
+      config: { center: [10, 20], zoom: 1, mapStyle: "/examples/verification/configs/local-style.json" },
+      sources: { density: source },
+      layers: [{ id: "ocean", type: "background", paint: { "background-color": "#dbe7f0" } }],
+    };
+
+    const el = $("map");
+    const errors = []; // every ml-map:error message, for the spec
+    const loaded = []; // every ml-map:source-loaded source id, in order
+    el.addEventListener("ml-map:error", (e) => { errors.push(e.detail.error?.message ?? String(e.detail.error)); log(`ml-map:error ${e.detail.error?.message}`); });
+    el.addEventListener("ml-map:source-loaded", (e) => {
+      loaded.push(e.detail.sourceId);
+      const f = el.getGrid(e.detail.sourceId);
+      $("status").textContent = `${f.kind} field in: ${f.nx} × ${f.ny} nodes, range ${f.range.join("..")}, ${f.wraps ? "wraps" : "doesn't wrap"}`;
+      log(`ml-map:source-loaded ${e.detail.sourceId}`);
+      if (last) show(last);
+    });
+    el.config = doc;
+
+    // Resolves with the field, or rejects with the load's failure (the notice says why).
+    const ready = el.gridReady("density");
+    ready.catch((e) => { $("status").textContent = `the field didn't load: see the notice`; log(`gridReady rejected: ${e.message}`); });
+
+    // The readout: sample the field under the pointer. getGrid() is
+    // undefined until the field is in, and still the previous field while a
+    // swap is in flight.
+    let last = null;
+    function show(lngLat) {
+      last = lngLat;
+      const field = el.getGrid("density");
+      const v = field?.sample(lngLat);
+      $("pos").textContent = `${lngLat.lat.toFixed(2)}, ${lngLat.lng.toFixed(2)}`;
+      $("value").textContent = field ? (v === null ? "no data" : v.toFixed(2)) : "—";
+    }
+    const map = await el.mapReady();
+    map.on("mousemove", (e) => show(e.lngLat));
+
+    /** The 404 case: point the source at the file that exists (el.update): the notice goes, source-loaded fires. */
+    async function fix() {
+      const next = structuredClone(el.getDocument());
+      next.sources.density.url = FILE;
+      const done = nextLoaded();
+      await el.update(next);
+      return done;
+    }
+    /** Change `range:` to twice its span: a new field from the retained bytes, no request; every sample doubles. */
+    async function doubleRange() {
+      const next = structuredClone(el.getDocument());
+      const [lo, hi] = next.sources.density.range;
+      next.sources.density.range = [lo, lo + 2 * (hi - lo)];
+      const done = nextLoaded();
+      await el.update(next);
+      return done;
+    }
+    const nextLoaded = () => new Promise((resolve) => el.addEventListener("ml-map:source-loaded", () => resolve(el.getGrid("density")), { once: true }));
+
+    if (CASE === "404") { $("fix").hidden = false; $("fix").addEventListener("click", fix); }
+    if (CASE === "ok" || CASE === "range") { $("double").hidden = false; $("double").addEventListener("click", doubleRange); }
+    $("hint").textContent = {
+      ok: "PASS: the density follows the pointer; no notice.",
+      range: "PASS: Double the range → the value under the pointer doubles, no request.",
+      404: "PASS: a notice names the missing file; Fix the URL clears it.",
+      nocors: "PASS: the notice says CORS, and nothing about Range.",
+      oversize: "PASS: the notice says the file is too large to load whole.",
+      size: "PASS: the notice names 100 (declared) and 360 (the image).",
+      bits: "PASS: the notice says 16-bit, and that an 8-bit PNG is required.",
+      cells: "PASS: the notice names 20,000,000 cells and the 16,000,000 cap.",
+    }[CASE];
+
+    /** The notice's text, if one is showing. */
+    const notice = () => document.querySelector("#map .ml-map-notice")?.innerText.replace(/\s+/g, " ") ?? null;
+    window.__grid = { el, doc, ready, errors, loaded, fix, doubleRange, notice, show };
+    document.documentElement.dataset.ready = "1";
+  </script>
+</body>
+</html>

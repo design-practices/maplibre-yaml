@@ -11,6 +11,9 @@ importers:
       '@changesets/cli':
         specifier: ^2.27.0
         version: 2.29.8(@types/node@22.20.5)
+      '@deltares/webgl-streamline-visualizer':
+        specifier: 5.2.0
+        version: 5.2.0
       '@eslint/js':
         specifier: ^9
         version: 9.39.5
@@ -26,6 +29,9 @@ importers:
       globals:
         specifier: ^17.13.0
         version: 17.13.0
+      mapbox-exif-layer:
+        specifier: ^1.5.0
+        version: 1.5.0(geotiff@3.0.5)(maplibre-gl@6.12.0)
       maplibre-contour:
         specifier: 0.1.1
         version: 0.1.1
@@ -367,6 +373,9 @@ importers:
       fzstd:
         specifier: ^0.1.1
         version: 0.1.1
+      geotiff:
+        specifier: 3.0.5
+        version: 3.0.5
       hyparquet:
         specifier: ^1.31.5
         version: 1.31.5
@@ -796,6 +805,9 @@ packages:
   '@ctrl/tinycolor@4.2.0':
     resolution: {integrity: sha512-kzyuwOAQnXJNLS9PSyrk0CWk35nWJW/zl/6KvnTBMFK65gm7U1/Z5BqjxeapjZCIhQcM/DsrEmcbRwDyXyXK4A==}
     engines: {node: '>=14'}
+
+  '@deltares/webgl-streamline-visualizer@5.2.0':
+    resolution: {integrity: sha512-NaLl1GUoe+TTgsI5OlMYDYzT+qbc8BZREf+U57E00C/xNjrqsdpKBjR6RKUMO/WfFdqONQnG34g+RQqSL1H4Nw==}
 
   '@emmetio/abbreviation@2.3.3':
     resolution: {integrity: sha512-mgv58UrU3rh4YgbE/TzgLQwJ3pFsHHhCLqY20aJq+9comytTXUDNGG/SMtSeMJdkpxgXSXunBGLD8Boka3JyVA==}
@@ -2121,6 +2133,9 @@ packages:
   '@mapbox/tiny-sdf@2.2.0':
     resolution: {integrity: sha512-LVL4wgI9YAum5V+LNVQO6QgFBPw7/MIIY4XJPNsPDMrjEwcE+JfKk1LuIl8GnF197ejVdC9QdPaxrx5gfgdGXg==}
 
+  '@mapbox/tiny-sdf@2.3.0':
+    resolution: {integrity: sha512-gBvcNDBBB66bgQYvnaJ6Jk+VCaMmVq5+IZR2kWPisT88Z8s0kBQt6hfVi8QgRW8Vpg0UWZzBA4ZSyzHHC+VeRA==}
+
   '@mapbox/unitbezier@1.0.0':
     resolution: {integrity: sha512-fqd515fjBmANKGGsQ286E2Wvj/XvDFpGzwJxq4CI6jMQue6Oy04uCKp+JWKF00xRTmk6cEu1jPJ9p3xqH8YWqQ==}
 
@@ -2139,8 +2154,15 @@ packages:
   '@maplibre/geojson-vt@6.1.2':
     resolution: {integrity: sha512-2ZYhobdAY+y4/P/z1xe0698165LywD0yDdWugdu3NRUrajgVWut+tLkcz7i/RJguMTURwK7gxwmwYMFJbgbQFw==}
 
+  '@maplibre/geojson-vt@6.3.1':
+    resolution: {integrity: sha512-743sKqGQPU35Vgdjw0GFk58mUdKlxI3c36vvUvrU9qBx7EdWGSXagLU5yNlOTP12WADo+foDyP5vtlDJjzlvHw==}
+
   '@maplibre/maplibre-gl-style-spec@26.4.4':
     resolution: {integrity: sha512-hG4RZR4PBd/+6A3ODdZ3AnQRF106ZQk1y3bhwDg8bH/A4Oz2tnRUJVVWs9BZa6gXZ1d3UKe89C+Mm+olGBELvA==}
+    hasBin: true
+
+  '@maplibre/maplibre-gl-style-spec@26.8.0':
+    resolution: {integrity: sha512-EClj+0m624zGw5gdCOsI5f88bYzkXfgoP2Sj5VGs2AYg9hZaPxvCumX5KDDs6aKFwl2ut+3jAeLhvrSz7hEsBQ==}
     hasBin: true
 
   '@maplibre/mlt@1.3.0':
@@ -2151,6 +2173,9 @@ packages:
 
   '@maplibre/vt-pbf@4.3.2':
     resolution: {integrity: sha512-j6p0AdjvAR19Z3XaCysle7A4ZSo08tYOzxD0Y9NQylwPAkwJJeYub5b2eVucdeDh7erhv69DahoLOevDRERRUw==}
+
+  '@maplibre/vt-pbf@4.3.3':
+    resolution: {integrity: sha512-dEe5XUd64RQbxNxy2OzIkJnwNDWjVmSXjCd0A7zLirm7QJ/WWbmtDFIkfsiM4yt1cplqzG6oSivRYeWx1SM1yg==}
 
   '@marijn/find-cluster-break@1.0.4':
     resolution: {integrity: sha512-Wy0V7+SGUjnF9/TkiM1hKVDPj7jKXduPNboMVtHTA8dySMURWqfg/JZ9E2Sq8JgSJmkl7k7Qe9FLeMSrSraWmQ==}
@@ -2743,6 +2768,10 @@ packages:
 
   '@vscode/l10n@0.0.18':
     resolution: {integrity: sha512-KYSIHVmslkaCDyw013pphY+d7x1qV8IZupYfeIfzNA+nsaWHbn5uPuQRvdRFsa9zFzGeudPuoGoZ1Op4jrJXIQ==}
+
+  '@xmldom/xmldom@0.9.12':
+    resolution: {integrity: sha512-5AXjrcMClTryPe9LgZrygpB1lj7s0S9E0+W+AHaVKAVyHanafK86iPSvG5xHVSp/jC+VH1UXu0TAEmY279xH7A==}
+    engines: {node: '>=14.6'}
 
   '@zarrita/storage@0.2.0':
     resolution: {integrity: sha512-855ZXqtnds7spnT8vNvD+MXa3QExP1m2GqShe8yt7uZXHnQLgJHgkpVwFjE1B0KDDRO0ki09hmk6OboTaIfPsQ==}
@@ -3474,6 +3503,10 @@ packages:
   execa@8.0.1:
     resolution: {integrity: sha512-VyhnebXciFV2DESc+p6B+y0LjSm0krU4OgJN44qFAhBY0TJ+1V61tYD2+wHusZ6F9n5K+vl8k0sTy7PEfV4qpg==}
     engines: {node: '>=16.17'}
+
+  exifreader@4.54.0:
+    resolution: {integrity: sha512-7mJXhbDMwLnuRtBaId8dIR5S8Hhvz3R1Qjvo3MIXtwFGRr+vbYdVVjbyfQ5F1FsBKVjog6aKx+hcf8yqNHxJUg==}
+    hasBin: true
 
   expressive-code@0.41.5:
     resolution: {integrity: sha512-iXl9BgDogQgzgE/WRSrcyU8upOcRZrXPMiu6tegEHML57YLQ65S0E3/sjAXmMZy0GXoPs60s9jbwoMo/mdEQOg==}
@@ -4226,11 +4259,29 @@ packages:
     resolution: {integrity: sha512-hXdUTZYIVOt1Ex//jAQi+wTZZpUpwBj/0QsOzqegb3rGMMeJiSEu5xLHnYfBrRV4RH2+OCSOO95Is/7x1WJ4bw==}
     engines: {node: '>=10'}
 
+  mapbox-exif-layer@1.5.0:
+    resolution: {integrity: sha512-O4cxV0dJWfjWwxu4TMBxxG98gu46LEgcFhebyQNPxZCco5ptHkx4IIHuEKBAzheyZ1h1/+/4mLbh5tCO2ySCAQ==}
+    peerDependencies:
+      geotiff: ^2.1.0 || ^3.0.0
+      mapbox-gl: ^3.8.0
+      maplibre-gl: ^4.0.0 || ^5.0.0 || ^6.0.0
+    peerDependenciesMeta:
+      geotiff:
+        optional: true
+      mapbox-gl:
+        optional: true
+      maplibre-gl:
+        optional: true
+
   maplibre-contour@0.1.1:
     resolution: {integrity: sha512-0m267124bx+LJ5zM1mpB23uvO4sCrgOb4dWgwbUbGWGsDsWNA4g93XTXPoRQga6GAD6TDI7tzyowBzdADSPusg==}
 
   maplibre-gl@6.12.0:
     resolution: {integrity: sha512-DwgganVi2BhNxOpD7ob3lJC0dQQz4HfJfuQQV3XxCY3XdOzFrMqp9ylMXhRzryRsOnIezdZcklWXIIs/Q8JPjA==}
+    engines: {node: '>=16.14.0', npm: '>=8.1.0'}
+
+  maplibre-gl@6.18.0:
+    resolution: {integrity: sha512-8ucT+RhJtEZGFvWGPioVQwvOPMAIuUehEgxl2dELw9aJmX4SpUi+OCHHAD33B9EuohNC7kC/gccJacUgTMQfQQ==}
     engines: {node: '>=16.14.0', npm: '>=8.1.0'}
 
   markdown-extensions@2.0.0:
@@ -6803,6 +6854,11 @@ snapshots:
 
   '@ctrl/tinycolor@4.2.0': {}
 
+  '@deltares/webgl-streamline-visualizer@5.2.0':
+    dependencies:
+      geotiff: 3.1.0-beta.0
+      maplibre-gl: 6.18.0
+
   '@emmetio/abbreviation@2.3.3':
     dependencies:
       '@emmetio/scanner': 1.0.4
@@ -7681,6 +7737,8 @@ snapshots:
 
   '@mapbox/tiny-sdf@2.2.0': {}
 
+  '@mapbox/tiny-sdf@2.3.0': {}
+
   '@mapbox/unitbezier@1.0.0': {}
 
   '@mapbox/vector-tile@2.0.4':
@@ -7705,7 +7763,20 @@ snapshots:
     dependencies:
       kdbush: 4.1.0
 
+  '@maplibre/geojson-vt@6.3.1':
+    dependencies:
+      kdbush: 4.1.0
+
   '@maplibre/maplibre-gl-style-spec@26.4.4':
+    dependencies:
+      '@mapbox/jsonlint-lines-primitives': 2.0.3
+      '@mapbox/unitbezier': 1.0.0
+      json-stringify-pretty-compact: 4.0.0
+      minimist: 1.2.8
+      quickselect: 3.0.0
+      tinyqueue: 3.0.0
+
+  '@maplibre/maplibre-gl-style-spec@26.8.0':
     dependencies:
       '@mapbox/jsonlint-lines-primitives': 2.0.3
       '@mapbox/unitbezier': 1.0.0
@@ -7729,6 +7800,12 @@ snapshots:
       supercluster: 8.0.1
 
   '@maplibre/vt-pbf@4.3.2':
+    dependencies:
+      '@mapbox/point-geometry': 1.1.0
+      '@types/geojson': 7946.0.16
+      pbf: 5.1.2
+
+  '@maplibre/vt-pbf@4.3.3':
     dependencies:
       '@mapbox/point-geometry': 1.1.0
       '@types/geojson': 7946.0.16
@@ -8426,6 +8503,9 @@ snapshots:
       vscode-uri: 3.1.0
 
   '@vscode/l10n@0.0.18': {}
+
+  '@xmldom/xmldom@0.9.12':
+    optional: true
 
   '@zarrita/storage@0.2.0':
     dependencies:
@@ -9507,6 +9587,10 @@ snapshots:
       signal-exit: 4.1.0
       strip-final-newline: 3.0.0
 
+  exifreader@4.54.0:
+    optionalDependencies:
+      '@xmldom/xmldom': 0.9.12
+
   expressive-code@0.41.5:
     dependencies:
       '@expressive-code/core': 0.41.5
@@ -9685,7 +9769,6 @@ snapshots:
       web-worker: 1.5.0
       xml-utils: 1.10.2
       zstddec: 0.2.0
-    optional: true
 
   get-caller-file@2.0.5: {}
 
@@ -10376,6 +10459,13 @@ snapshots:
     dependencies:
       semver: 7.7.3
 
+  mapbox-exif-layer@1.5.0(geotiff@3.0.5)(maplibre-gl@6.12.0):
+    dependencies:
+      exifreader: 4.54.0
+    optionalDependencies:
+      geotiff: 3.0.5
+      maplibre-gl: 6.12.0
+
   maplibre-contour@0.1.1: {}
 
   maplibre-gl@6.12.0:
@@ -10388,6 +10478,27 @@ snapshots:
       '@maplibre/maplibre-gl-style-spec': 26.4.4
       '@maplibre/mlt': 1.3.0
       '@maplibre/vt-pbf': 4.3.2
+      '@types/geojson': 7946.0.16
+      bidi-js: 1.1.0
+      earcut: 3.2.4
+      gl-matrix: 3.4.4
+      kdbush: 4.1.0
+      murmurhash-js: 1.0.0
+      pbf: 5.1.2
+      potpack: 2.1.0
+      quickselect: 3.0.0
+      tinyqueue: 3.0.0
+
+  maplibre-gl@6.18.0:
+    dependencies:
+      '@mapbox/point-geometry': 1.1.0
+      '@mapbox/tiny-sdf': 2.3.0
+      '@mapbox/unitbezier': 1.0.0
+      '@mapbox/vector-tile': 3.0.0
+      '@maplibre/geojson-vt': 6.3.1
+      '@maplibre/maplibre-gl-style-spec': 26.8.0
+      '@maplibre/mlt': 1.3.0
+      '@maplibre/vt-pbf': 4.3.3
       '@types/geojson': 7946.0.16
       bidi-js: 1.1.0
       earcut: 3.2.4

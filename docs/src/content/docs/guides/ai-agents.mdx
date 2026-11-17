@@ -192,7 +192,7 @@ the document's `state:` values at runtime, and `camera="host"` on the
 element keeps an update from moving a reader's own view. Full rules:
 [`<ml-map>` reference](/reference/elements/#updating-the-document).
 
-## Three things agents get wrong
+## Four things agents get wrong
 
 ### 1. A map document is `type: map` with a `config:` block \{#1-ml-map-src-wants-a-type-map-block-not-a-pages-document}
 
@@ -254,6 +254,47 @@ layers:
       circle-radius: 6
       circle-color: "#e55e5e"
 ```
+
+### 4. A raster field is read, not drawn with a layer \{#4-a-grid-source-is-read-not-drawn}
+
+Asked to visualize a raster field (elevation, temperature, a current), an
+agent will declare a `type: grid` source and then reach for a layer to draw
+it, as it would for any other source. No layer type draws a grid: the
+parser refuses the layer and names the alternative —
+
+```text
+"<id>" is a grid source; no layer type draws a grid yet. Read its values
+from page code with getGrid("<id>").sample(lngLat).
+```
+
+Declare the source with no layer over it, and read its values from page
+code instead:
+
+```yaml
+type: map
+id: elevation-readout
+config:
+  center: [10, 45]
+  zoom: 3
+  mapStyle: "https://tiles.openfreemap.org/styles/positron"
+sources:
+  elevation:
+    type: grid
+    url: data/elevation.png
+    encoding: scalar-r
+    grid: { nx: 360, ny: 181, lo1: -180, la1: 90, dx: 1, dy: 1 }
+    range: [-500, 9000]
+    units: m
+```
+
+```js
+const field = await el.gridReady("elevation");
+const value = field.sample(map.getCenter()); // a number, or null
+```
+
+See [Grid sources](/guides/grid-sources/) for the full read path, and
+[Alternatives](/guides/grid-sources/#alternatives) for drawing a field on
+the map today with a COG or `raster-dem`.
 
 ## In CI
 

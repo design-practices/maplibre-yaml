@@ -5,11 +5,18 @@
 // on both majors: src, a JSON-string config, a typed MLMap ref, slot
 // children and an inline YAML script.
 import { useRef } from "react";
+import type { GridField } from "@maplibre-yaml/core";
 import type { MLMap } from "@maplibre-yaml/core/register";
 
 export function YamlMap() {
   const ref = useRef<MLMap>(null);
   void ref.current?.mapReady().then((map) => map.getZoom());
+  // Grid sources (U4): the field's type reaches the consumer from the package entry.
+  void ref.current?.gridReady("field").then((field) => field.sample([0, 0]));
+  const held: GridField | undefined = ref.current?.getGrid("field");
+  void held;
+  const declared: boolean = ref.current?.hasGrid("field") ?? false;
+  void declared;
   ref.current?.addEventListener("ml-map:layer-click", (event) => {
     const id: string = event.detail.layerId;
     void id;

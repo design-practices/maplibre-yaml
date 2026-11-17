@@ -1,0 +1,15 @@
+type: map
+id: field
+config:
+  center: [0, 20]
+  zoom: 2
+  mapStyle: https://demotiles.maplibre.org/style.json
+sources:
+  field:
+    type: grid
+    url: data/field.png
+    encoding: rg-uv
+    bounds: [-180, -90, 180, 90]
+    range: [-30, 30]
+    units: m/s
+    attribution: Field data

@@ -59,6 +59,7 @@ import { findDocumentScript, noDocumentMessage } from "./document-script.js";
 import { after, fetchDocument, readDocument, type DocumentText } from "./document-ingest.js";
 import { tomlReaderCard } from "./error-card.js";
 import type { Map as MapLibreMap } from "maplibre-gl";
+import type { GridField } from "../renderer/grid-host.js";
 import {
   YAMLParser,
   type ParseError,
@@ -340,6 +341,29 @@ export class MLScrollytelling extends BaseElement {
     if (el) return customElements.whenDefined("ml-map").then(() => el.mapReady());
     if (this.lastError) return Promise.reject(this.lastError);
     return new Promise((resolve, reject) => this.waiters.push({ resolve, reject }));
+  }
+
+  /** A `type: grid` source's field on the story's map (grid source, R14), or `undefined` before it is decoded. */
+  getGrid(sourceId: string): GridField | undefined {
+    const el = this.mapElement;
+    return el && typeof el.getGrid === "function" ? el.getGrid(sourceId) : undefined;
+  }
+
+  /** Whether the story's map has a `type: grid` source of this id (decoded or not); false before the map has loaded. */
+  hasGrid(sourceId: string): boolean {
+    const el = this.mapElement;
+    return el && typeof el.hasGrid === "function" ? el.hasGrid(sourceId) : false;
+  }
+
+  /**
+   * Resolve with a `type: grid` source's field on the story's map once it
+   * is decoded (R14); before the story has rendered, once it has a map.
+   * Rejects as `<ml-map>`'s does, and when the story fails.
+   */
+  gridReady(sourceId: string): Promise<GridField> {
+    const el = this._story ? this.mapElement : null;
+    if (el) return customElements.whenDefined("ml-map").then(() => el.gridReady(sourceId));
+    return this.mapReady().then(() => this.mapElement!.gridReady(sourceId));
   }
 
   /**

@@ -25,6 +25,11 @@
  *                                  the worker, which v6 locates relative to
  *                                  its own `import.meta.url`)
  *  - `/vendor/maplibre-gl.css`     resolved from node_modules
+ *  - `/vendor/mapbox-exif-layer.mjs`, `/vendor/exifreader.{js,mjs}`  the
+ *                                  null.earth replica's particle layers
+ *                                  (examples/verification/null-earth)
+ *  - `/vendor/dsv/*`               the Deltares streamline engine's dist, the
+ *                                  same replica's second particle engine
  *  - `/dem/{z}/{x}/{y}.png`        a synthesised elevation tile, so the
  *                                  hillshade fixture loads without S3
  *  - `/relief/{z}/{x}/{y}.png`     seamless synthetic mountains (terrarium),
@@ -42,6 +47,13 @@
  *                                  GeoJSON updates for the streaming fixture
  *                                  (examples/verification/stream-sse.html);
  *                                  see `streamPoints`
+ *  - `/grid-fixtures/16bit.png`    a generated 4x4 16-bit grayscale PNG, and
+ *    `/grid-fixtures/huge-header.png`  a PNG that is only its header (IHDR says
+ *                                  5000x4000, 20 M cells, no image data): the
+ *                                  `type: grid` source's bit-depth and
+ *                                  cell-cap notices (grid source U6,
+ *                                  e2e/grid-sources.spec.ts), without
+ *                                  committing a bad binary; see `gridFixture`
  *  - `/my-repo/*`                  examples/verification/base-path/site, as
  *                                  GitHub Pages serves a project site
  *                                  (ml-aot.30); `/my-repo/cloud-native/*`
@@ -60,7 +72,8 @@ import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { extname, join, normalize, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { brotliCompressSync, deflateSync } from "node:zlib";
+import { brotliCompressSync } from "node:zlib";
+import { buildPng } from "../scripts/lib/png-bytes.mjs";
 
 const require = createRequire(import.meta.url);
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -72,6 +85,12 @@ const PORT = Number(process.env.VERIFY_PORT ?? 4174);
 //   VERIFY_MAPLIBRE_DIR=/tmp/ml4/node_modules/maplibre-gl VERIFY_PORT=4591 pnpm verify:browser e2e/x.spec.ts
 const MAPLIBRE_DIR =
   process.env.VERIFY_MAPLIBRE_DIR ?? dirname(require.resolve("maplibre-gl/package.json"));
+// mapbox-exif-layer's dist directory (null.earth replica, ml-nb1.1).
+const EXIF_LAYER_DIR = dirname(require.resolve("mapbox-exif-layer"));
+// @deltares/webgl-streamline-visualizer's dist directory (same spike, the
+// fade-buffer engine); served whole because the entry lazy-loads chunks.
+// (ESM-only exports map, so resolved as a module, not through require.)
+const DSV_DIR = dirname(fileURLToPath(import.meta.resolve("@deltares/webgl-streamline-visualizer")));
 
 const TYPES = {
   ".html": "text/html; charset=utf-8",
@@ -138,6 +157,8 @@ export const Popup = gl.Popup;
 export const Marker = gl.Marker;
 export const LngLat = gl.LngLat;
 export const LngLatBounds = gl.LngLatBounds;
+// The Deltares streamline engine (examples/verification/null-earth) imports it.
+export const MercatorCoordinate = gl.MercatorCoordinate;
 export const NavigationControl = gl.NavigationControl;
 export const GeolocateControl = gl.GeolocateControl;
 export const ScaleControl = gl.ScaleControl;
@@ -244,41 +265,48 @@ function encodeRgbTile(color) {
     }
   }
 
-  const chunk = (type, data) => {
-    const len = Buffer.alloc(4);
-    len.writeUInt32BE(data.length);
-    const body = Buffer.concat([Buffer.from(type, "ascii"), data]);
-    const crc = Buffer.alloc(4);
-    crc.writeUInt32BE(crc32(body) >>> 0);
-    return Buffer.concat([len, body, crc]);
-  };
-
-  const ihdr = Buffer.alloc(13);
-  ihdr.writeUInt32BE(size, 0);
-  ihdr.writeUInt32BE(size, 4);
-  ihdr[8] = 8; // bit depth
-  ihdr[9] = 6; // colour type: RGBA
-  return Buffer.concat([
-    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
-    chunk("IHDR", ihdr),
-    chunk("IDAT", deflateSync(raw)),
-    chunk("IEND", Buffer.alloc(0)),
-  ]);
+  return pngFile({ width: size, height: size, bitDepth: 8, colorType: 6 }, raw);
 }
 
-let CRC_TABLE;
-function crc32(buf) {
-  if (!CRC_TABLE) {
-    CRC_TABLE = new Int32Array(256);
-    for (let n = 0; n < 256; n++) {
-      let c = n;
-      for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
-      CRC_TABLE[n] = c;
+/**
+ * A PNG file from its header fields and filtered scanlines (`raw`: one
+ * filter byte then the row's bytes, per row); `raw` null writes a file that
+ * is only its signature, IHDR and IEND — a header with nothing behind it.
+ * The bytes come from the shared builder (scripts/lib/png-bytes.mjs, the
+ * one the core tests use too), as a `Buffer` so `send` serves them as a
+ * static file (ranges, hosting variants).
+ */
+function pngFile({ width, height, bitDepth, colorType }, raw) {
+  const png = buildPng({ width, height, bitDepth, colorType, ...(raw ? { scanlines: [raw] } : {}) });
+  return Buffer.from(png.buffer, png.byteOffset, png.byteLength);
+}
+
+/**
+ * The grid source's bad-image fixtures (grid source U6), generated so no
+ * bad binary is committed:
+ *  - `16bit.png`        a valid 4x4 16-bit grayscale PNG (a ramp): the reader
+ *                       refuses it by bit depth, naming "16-bit grayscale";
+ *  - `huge-header.png`  signature, an IHDR claiming 5000x4000 RGB, IEND — no
+ *                       image data at all, so only the header's cell count
+ *                       (20 M, over the 16 M cap) can be what the notice
+ *                       reports: the guard reads the header before inflating.
+ */
+function gridFixture(name) {
+  if (name === "16bit.png") {
+    const size = 4;
+    const raw = Buffer.alloc((size * 2 + 1) * size);
+    let o = 0;
+    for (let y = 0; y < size; y++) {
+      raw[o++] = 0; // filter: none
+      for (let x = 0; x < size; x++) {
+        raw.writeUInt16BE(((y * size + x) * 65535) / (size * size - 1), o);
+        o += 2;
+      }
     }
+    return pngFile({ width: size, height: size, bitDepth: 16, colorType: 0 }, raw);
   }
-  let c = -1;
-  for (let i = 0; i < buf.length; i++) c = CRC_TABLE[(c ^ buf[i]) & 0xff] ^ (c >>> 8);
-  return c ^ -1;
+  if (name === "huge-header.png") return pngFile({ width: 5000, height: 4000, bitDepth: 8, colorType: 2 }, null);
+  return null;
 }
 
 const DEM_TILE = terrariumTile();
@@ -603,6 +631,32 @@ const server = createServer(async (req, res) => {
     }
     if (path === "/vendor/maplibre-gl.css") {
       return send(200, await readFile(join(MAPLIBRE_DIR, "dist/maplibre-gl.css")), TYPES[".css"]);
+    }
+    // null.earth replica (ml-nb1.1): the wind-particle / smooth-raster custom
+    // layers and their one runtime dependency, from node_modules, so the
+    // page's import map stays hermetic. exifreader ships UMD only; the .mjs
+    // shim re-exports its global as the default import the library makes.
+    if (path === "/vendor/mapbox-exif-layer.mjs") {
+      return send(200, await readFile(join(EXIF_LAYER_DIR, "index.mjs")), TYPES[".mjs"]);
+    }
+    if (path === "/vendor/exifreader.js") {
+      return send(200, await readFile(require.resolve("exifreader", { paths: [EXIF_LAYER_DIR] })), TYPES[".js"]);
+    }
+    if (path === "/vendor/exifreader.mjs") {
+      return send(200, 'import "./exifreader.js";\nexport default globalThis.ExifReader;\n', TYPES[".mjs"]);
+    }
+    // Any file of the Deltares dist, confined to that directory (the entry
+    // imports sibling chunks by relative path).
+    if (path.startsWith("/vendor/dsv/")) {
+      const rel = normalize(path.slice("/vendor/dsv/".length));
+      const file = join(DSV_DIR, rel);
+      if (rel.startsWith("..") || !file.startsWith(DSV_DIR) || !existsSync(file)) return send(404, "not found");
+      return send(200, await readFile(file), TYPES[extname(file)] ?? "application/octet-stream");
+    }
+    const gridFix = /^\/grid-fixtures\/([\w-]+\.png)$/.exec(path);
+    if (gridFix) {
+      const png = gridFixture(gridFix[1]);
+      return png ? send(200, png, TYPES[".png"]) : send(404, "not found", "text/plain");
     }
     if (path.startsWith("/dem/") && path.endsWith(".png")) {
       return send(200, DEM_TILE, TYPES[".png"]);

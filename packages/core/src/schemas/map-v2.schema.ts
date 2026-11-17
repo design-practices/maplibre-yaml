@@ -62,6 +62,7 @@ import {
   RasterDEMSourceSchema,
   ImageSourceSchema,
   VideoSourceSchema,
+  GridSourceSchema,
   RefreshConfigSchema,
   StreamConfigSchema,
   CacheConfigSchema,
@@ -299,6 +300,10 @@ export const SourceV2Schema: z.ZodTypeAny = z.union([
   ),
   withSourceRuntime(baseObject(ImageSourceSchema)),
   withSourceRuntime(baseObject(VideoSourceSchema)),
+  // A grid's `cache`/`loading` are runtime keys: under `runtime:` in v2, like
+  // geojson's. Its cross-field rules live in parser/grid-checks.ts, which
+  // reads `style.sources` and `runtime.format` in a v2 document.
+  withSourceRuntime(baseObject(GridSourceSchema).omit({ cache: true, loading: true })),
 ]);
 
 /**

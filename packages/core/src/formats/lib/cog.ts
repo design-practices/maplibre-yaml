@@ -9,9 +9,15 @@
  * plugin call (./cog-reader) — so none of it sits in the main bundle. What
  * the adapter uses of core is handed in ({@link useHost}); these modules
  * import core as types only (see the seam, formats/decoders.ts).
+ *
+ * Also the whole-file band reader a grid source with `encoding: geotiff`
+ * decodes with (./geotiff-bands, grid source U2): it uses the geotiff.js
+ * this chunk already carries, so the grid chunk asks for it here through
+ * its host rather than bundling a second copy.
  */
 
 export { cogProtocol } from "@geomatico/maplibre-cog-protocol";
 export { isCloudOptimized, readCogHeader, readCogHeaderParts } from "../cog-header";
 export { dropFirstBlock, shareFirstBlock } from "./cog-first-block";
 export { classifyCogError, handle, preflight, useHost } from "./cog-reader";
+export { readBands } from "./geotiff-bands";

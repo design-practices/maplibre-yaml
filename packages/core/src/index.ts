@@ -11,6 +11,8 @@
 
 // Schemas
 export * from "./schemas";
+// The grid source's declaration type (grid source, ml-nb1.2), inferred from GridSourceSchema.
+export type { GridSourceConfig } from "./types";
 
 // Parser
 export * from "./parser";
@@ -109,9 +111,12 @@ export {
   DEFAULT_PIN_HEIGHT,
   lowerSourceFormat,
   attachSourceData,
+  lowerGridSource,
+  GRID_SOURCES_METADATA_KEY,
 } from "./emitter";
 export type {
   EmitDataRef,
+  GridLowering,
   EmitAsset,
   EmitImageRef,
   HatchTileOptions,
@@ -169,13 +174,18 @@ export {
   type CloudFormat,
 } from "./formats/detect";
 export { FormatError, isFormatError } from "./formats/errors";
-export type { FormatFailure, FormatFailureCode } from "./formats/errors";
+export type { FailureFormat, FormatFailure, FormatFailureCode } from "./formats/errors";
 // Thin async wrappers: the readers are on-demand modules (bundle headroom, U5).
 export { decodeFlatGeobuf, decodeGeoParquet } from "./renderer/cloud-sources";
 // The facts `mlym prepare` reports, from a footer or header alone, through
 // any AsyncBuffer (large data round 2 U6, KTD12): Node-safe, on demand too.
 export { readFlatGeobufFacts, readGeoParquetFacts } from "./renderer/cloud-sources";
 export type { AsyncBuffer, FlatGeobufFacts, GeoParquetFacts, GeoParquetLevelFacts } from "./renderer/cloud-sources";
+// Grid sources (grid source, U4): the field page code samples, and
+// `decodeGrid` for tooling — a thin async wrapper over the `grid` on-demand
+// module, so the entry never imports the chunk (formats/grid.ts).
+export type { GridField, ScalarGridField, VectorGridField, GridPosition, VectorSample, GridGeometry } from "./renderer/grid-host";
+export { decodeGrid } from "./formats/grid";
 // The producer commands the browser's large-file hints name, so `mlym prepare`
 // prints the same command per route (large data round 2 U7).
 export {

@@ -7,7 +7,7 @@
  * browser reads a zod description at runtime: the JSON Schema emitter, the
  * docs reference, Astro collections and map-party read them from source or
  * from the npm build. So the CDN build `register.browser.js` removes every
- * call from `src/schemas/*.ts` as it loads the file (esbuild `onLoad`), and
+ * call from the files under `src/schemas/` as it loads each (esbuild `onLoad`), and
  * the npm build and `index.browser.js` keep them.
  *
  * A call is removed only when its argument is a string literal, or a `+`
@@ -59,8 +59,8 @@ export function stripDescribe(source: string, file: string): StripResult {
   return { code: source.replace(DESCRIBE_CALL, ""), removed: calls.length };
 }
 
-/** The schema sources the plugin rewrites. */
-export const SCHEMA_FILE = /[\\/]src[\\/]schemas[\\/][^\\/]+\.ts$/;
+/** The schema sources the plugin rewrites: `src/schemas/` and its subfolders (`sources/`). */
+export const SCHEMA_FILE = /[\\/]src[\\/]schemas[\\/].+\.ts$/;
 
 /** The esbuild plugin (hand-typed, as tsup.config.ts's others are). */
 export const stripDescribePlugin = {

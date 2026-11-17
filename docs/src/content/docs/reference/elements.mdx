@@ -107,6 +107,9 @@ legend, and for the label language of a Protomaps basemap
 | `removeLayer(layerId)` | `void` | Remove a layer |
 | `setLayerVisibility(layerId, visible)` | `void` | Show or hide a layer |
 | `updateLayerData(layerId, geojson)` | `void` | Replace a GeoJSON layer's data |
+| `getGrid(sourceId)` | `GridField \| undefined` | The decoded field of a `type: grid` source, or `undefined` before it is decoded (and for any other source). `field.sample(lngLat)` returns a number, `{ u, v, speed }` or `null` ([Grid sources](/guides/grid-sources/)) |
+| `gridReady(sourceId)` | `Promise<GridField>` | Resolves with the field once the grid is decoded (at once if it already is). Rejects when the document has no grid source of that id, when its file fails to load (a later `reload()` retries), or when the source is removed |
+| `hasGrid(sourceId)` | `boolean` | Whether the applied document declares a grid source of this id, regardless of decode state — `true` even before `gridReady()` resolves, `false` for no such source. A synchronous way to tell "not yet decoded" from "no such source" ([Grid sources](/guides/grid-sources/)) |
 | `uiString(key, params?)` | `string` | The document's text for a UI string key (`maplibre-yaml.Legend.Title`, `NavigationControl.ZoomIn`, …): its `locale:` translation, or English. For controls you draw next to the map ([Accessibility & languages](/guides/accessibility-languages/)) |
 
 Live data refreshes on the document's own `refreshInterval`; there is no
@@ -192,6 +195,7 @@ listener.
 | `ml-map:layer-data-loading` | `{ layerId }` | A layer's data fetch begins |
 | `ml-map:layer-data-loaded` | `{ layerId, featureCount }` | A layer's data landed |
 | `ml-map:layer-data-error` | `{ layerId, error }` | A layer's data fetch failed |
+| `ml-map:source-loaded` | `{ sourceId }` | A `type: grid` source was decoded and `getGrid(sourceId)` answers: on the first load and again after every swap (a changed `url`, `range` or geometry) ([Grid sources](/guides/grid-sources/)) |
 | `ml-map:layer-click` | `{ layerId, feature, lngLat }` | A feature on an interactive layer was clicked |
 | `ml-map:layer-hover` | `{ layerId, feature, lngLat }` | A feature on an interactive layer was hovered |
 | `ml-map:markers-added` | `{ count }` | The `markers:` pins were added |
@@ -319,6 +323,9 @@ also be `type="application/yaml"`, `type="application/json"` or
 | `mapElement` | The story's own [`<ml-map>`](#ml-map), once the story has rendered: its methods and events work as on any `<ml-map>` |
 | `mapReady()` | A promise of the MapLibre map once it has loaded; rejects if the story or its map fails |
 | `getMap()` | The MapLibre map, or `null` before it loads |
+| `getGrid(sourceId)` | The story map's decoded `type: grid` field, or `undefined` before it is decoded (forwards to the story's `<ml-map>`) |
+| `gridReady(sourceId)` | A promise of that field once decoded; rejects as `<ml-map>`'s `gridReady()` does |
+| `hasGrid(sourceId)` | Whether the story's map declares a grid source of this id, regardless of decode state (forwards to the story's `<ml-map>`) |
 | `goToChapter(id)` | Scroll to a chapter and make it active (what the chapter rail does) |
 
 ### `<ml-scrollytelling>` events

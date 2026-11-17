@@ -1,0 +1,503 @@
+---
+title: Grid sources
+description: Declare a regular raster field (elevation, temperature, density, a current, any scalar or vector field on a latitude/longitude grid) as a grid source, and read its values from page code by position.
+---
+
+import { Aside } from "@astrojs/starlight/components";
+
+A grid source is a regular raster field: values on a latitude/longitude
+grid, one per cell, that your page reads as numbers. Elevation, sea surface
+temperature, population density, air quality, rainfall, a wind or ocean
+current: anything gridded fits. Unlike every other source type, a grid is
+not handed to MapLibre to draw. maplibre-yaml downloads the file once,
+decodes it, and gives page code a field object with `sample(lngLat)`: a
+value under the pointer, a readout for a chosen place, a number to feed a
+chart or a control of your own. The declaration carries what the file
+cannot say for itself (its extent, what its bytes mean, its unit), so
+readers of the document see the data's shape without opening the file.
+
+<Aside type="caution" title="A grid is read, not drawn">
+No layer type draws a grid in this release. A layer whose `source:` names a
+grid is a validation error, and the notice says so. To colour a field on
+the map today, see [Alternatives](#alternatives) at the end of this page.
+Layers that draw a grid directly are planned on top of the same field.
+</Aside>
+
+## Quick start
+
+Declare the file under `sources:`. This one is an 8-bit PNG of global
+elevation at 1°, one value per pixel in the red channel, where byte 0
+stands for −500 m and byte 255 for 9,000 m:
+
+```yaml
+type: map
+id: elevation-readout
+config:
+  center: [10, 45]
+  zoom: 3
+  mapStyle: "https://tiles.openfreemap.org/styles/positron"
+sources:
+  elevation:
+    type: grid
+    url: data/elevation.png
+    encoding: scalar-r
+    grid: { nx: 360, ny: 181, lo1: -180, la1: 90, dx: 1, dy: 1 }
+    range: [-500, 9000]
+    units: m
+```
+
+A document with a grid and no layers is valid: the grid is for your code.
+In the page, wait for the field and sample it as the pointer moves:
+
+```html
+<ml-map id="map" src="map.yaml"></ml-map>
+<output id="readout">Move the pointer over the map</output>
+
+<script type="module">
+  const el = document.getElementById("map");
+  const readout = document.getElementById("readout");
+  const field = await el.gridReady("elevation");
+  const map = await el.mapReady();
+  map.on("mousemove", (e) => {
+    const value = field.sample(e.lngLat);
+    readout.textContent =
+      value === null ? "no data" : `${Math.round(value)} ${field.units}`;
+  });
+</script>
+```
+
+You should see the basemap as usual, and the readout change as the pointer
+moves: a height in metres over land, `no data` where the file marks the sea
+as missing. The map opens without waiting for the grid; `mapReady()`
+resolves on its own, and `gridReady("elevation")` resolves once the file is
+decoded.
+
+`sample()` takes MapLibre's `{ lng, lat }` or a `[lng, lat]` pair,
+interpolates between the four surrounding nodes, and returns `null` where
+any of them is missing or the position is outside a grid that does not
+cover the globe. `field.contains(position)` tells the two `null` cases
+apart: it returns `true` when the position falls inside the grid, so a
+`null` from `sample()` while `contains()` is `true` means missing data,
+not an out-of-range position.
+
+## What the map does with a grid
+
+- Nothing is drawn. The basemap and the other layers render as if the grid
+  were not there.
+- The file is fetched whole and decoded once, on demand: a page without a
+  grid never downloads the decoder.
+- `el.getGrid("elevation")` returns the field once it is decoded and
+  `undefined` before; `el.gridReady("elevation")` resolves with the field.
+  It rejects when the document has no grid source of that id, when the
+  file fails to load (the map's notice says why), or when the source is
+  removed.
+- `el.hasGrid("elevation")` answers synchronously, without waiting on
+  decode: `true` whenever the applied document declares a grid source of
+  that id, whether or not it has finished decoding yet, and `false` when it
+  doesn't. Use it to tell "not yet decoded" apart from "no such source"
+  without an `await`.
+- `ml-map:source-loaded` fires on the element with `{ sourceId }` each time
+  a grid is decoded, the first load included.
+- A load failure shows in the map's notice like a layer's data failure, and
+  the map keeps working. `el.reload()` retries it.
+
+In a [format v2](/guides/format-v2/) document the source sits in
+`style.sources`, like every other source.
+
+## Geometry: `bounds` or `grid`
+
+An image file has no coordinates of its own, so `rg-uv` and `scalar-r`
+sources need one of two keys, never both. They describe the same thing two
+ways: a grid of nodes, or the edges of the cells around them.
+
+```yaml
+sources:
+  # The edges of the outermost cells: MapLibre's [west, south, east, north].
+  # The number of columns and rows comes from the image.
+  rainfall:
+    type: grid
+    url: data/rainfall.png
+    encoding: scalar-r
+    bounds: [-180, -90, 180, 90]
+    range: [0, 400]
+    units: mm
+
+  # The nodes: lo1/la1 is the centre of the top-left node, dx and dy the
+  # spacing in degrees (dx eastward, dy southward, both positive).
+  density:
+    type: grid
+    url: data/density.png
+    encoding: scalar-r
+    grid: { nx: 360, ny: 181, lo1: -180, la1: 90, dx: 1, dy: 1 }
+    range: [0, 5000]
+    units: people/km²
+```
+
+Use `bounds:` when you know the extent, as for any image you would pin to
+the map. Use `grid:` when you know the node positions, which is how most
+gridded data is described: a 1° global grid has 360 columns and 181 rows
+with nodes at whole degrees, and the pixel at the top-left corner is the
+node at 180° W, 90° N. The two are related by half a cell: a node-centred
+global grid's cell edges reach 0.5° past the poles, so `bounds:` may
+overshoot ±90 by up to 1°; anything further is refused as a mistake. The
+order is `[west, south, east, north]`, longitude first, as on every
+MapLibre `bounds`; swapping the pairs gets a did-you-mean.
+
+With `grid:`, the image must be exactly `nx` by `ny` pixels, or the map's
+notice names both sizes. A grid whose columns span the globe (within half
+a cell, or with one duplicated column) wraps: sampling at 179.9° E and
+179.9° W reads neighbouring nodes.
+
+## Encodings
+
+`encoding:` says how the file packs its values. It is the same key name
+MapLibre uses for `raster-dem` pixel packing, and it is required.
+
+| `encoding:` | File | Pick it when |
+|---|---|---|
+| `scalar-r` | 8-bit PNG; the red byte is the value, scaled by `range` | One value per cell (elevation, temperature, density) and you want the smallest file: one byte per cell, 256 steps across `range`. |
+| `rg-uv` | 8-bit PNG; red is the first component and green the second, both scaled by `range` | A vector field (a current, a wind) with two components; `sample()` returns `{ u, v, speed }`. |
+| `nullschool-json` | JSON: one or two `{ header, data }` records, as [grib2json](https://github.com/cambecc/grib2json) writes them | You already have this format, for example from a weather or ocean model pipeline. Physical values and geometry come from the header, so no `range`, `bounds` or `grid`. Larger than a PNG. |
+| `geotiff` | A GeoTIFF in longitude/latitude (EPSG:4326); `bands:` picks `[value]` or `[u, v]` | You want full precision (floats, not bytes) or already have a GeoTIFF. Physical values, geometry and the nodata value come from the file. |
+
+The byte encodings need `range: [lo, hi]`, the values bytes 0 and 255
+stand for; the other two carry physical values and refuse `range:`. A PNG
+must be 8-bit, not interlaced, grayscale, RGB or RGBA; a palette or 16-bit
+image is refused with a notice that says so. `rg-uv` needs an RGB or RGBA
+image specifically — a grayscale or grayscale+alpha PNG has no green
+channel to read the second component from, and is refused with an encoding
+notice rather than read as if it did. A `nodata:` rule naming a channel the
+image doesn't carry (`channel: b` on a grayscale `scalar-r` PNG, say) is an
+error once the file is decoded, not a rule silently ignored. A GeoTIFF in another projection is refused with the `gdalwarp`
+command to reproject it. A GeoTIFF grid is read by the same decoder as a
+[Cloud Optimized GeoTIFF](/guides/cog/), so its first use downloads two
+on-demand files (the grid decoder, then the GeoTIFF reader) rather than
+one.
+
+Two size limits apply before anything is decoded, both from the file's
+header: the whole-file byte cap the large-data readers share, and 16
+million cells (`nx × ny`; a 0.25° global grid is about one million). A
+grid is fetched whole, so over the limit the way out is a coarser grid or
+a smaller extent.
+
+Once decoded, a field is kept in a shared cache so that re-declaring the
+same source (stepping through a series, or a live update that doesn't
+change the fetch) doesn't decode the file twice. What the cache retains is
+bounded both by how many fields it holds (16) and by the decoded bytes it
+keeps across all of them (`GRID_CACHE_MAX_BYTES`, about 256 MB); past
+either limit the oldest entries are dropped and a later `sample()` on a
+field you still hold keeps working from what it already decoded, but a
+fresh `gridReady()` for a dropped entry decodes again.
+
+## Missing data: `nodata`
+
+Some cells carry no value: the sea in a population grid, land in a sea
+surface temperature. Each encoding has a marker of its own that is always
+honoured: a PNG pixel with alpha 0, a `null` in a `nullschool-json` data
+array, a GeoTIFF's `GDAL_NODATA` tag. `nodata:` adds a rule of yours; a
+node that either marks is missing, and a sample touching one is `null`.
+
+```yaml
+sources:
+  # An image encoding: one channel, one comparison (below, above or equals).
+  sea-surface-temperature:
+    type: grid
+    url: data/sst.png
+    encoding: scalar-r
+    bounds: [-180, -90, 180, 90]
+    range: [271, 308]
+    units: K
+    nodata: { channel: b, above: 153 }
+
+  # A GeoTIFF: the number the file uses for missing cells, when the file
+  # doesn't declare it.
+  elevation:
+    type: grid
+    url: data/elevation.tif
+    encoding: geotiff
+    bands: [0]
+    nodata: -9999
+```
+
+`nullschool-json` takes no `nodata:`: its `null` entries are the rule.
+
+## Vector fields
+
+A field with two components (east and north) is a vector field: a current,
+a wind, a displacement. Write both components into one PNG with `rg-uv`,
+red for the first and green for the second, scaled by one `range`:
+
+```yaml
+sources:
+  current:
+    type: grid
+    url: data/surface-current.png
+    encoding: rg-uv
+    grid: { nx: 360, ny: 181, lo1: -180, la1: 90, dx: 1, dy: 1 }
+    range: [-5, 5]
+    units: m/s
+    nodata: { channel: a, equals: 0 }
+```
+
+`sample()` on a vector field returns `{ u, v, speed }`, with `speed` the
+magnitude, or `null` where data is missing. The field's `kind` is
+`"vector"` (a scalar field's is `"scalar"`), so code that takes either can
+tell them apart. A `geotiff` with `bands: [u, v]` and a `nullschool-json`
+file with two records are vector fields too.
+
+## Units
+
+`units:` is a label for your readout: the field carries it as
+`field.units`, and nothing converts it. Write the unit the file's values
+are in, so the label is true. Recommended spellings, so documents agree:
+`m`, `km`, `K`, `°C`, `m/s`, `kn`, `hPa`, `mm`, `%`, `people/km²`,
+`µg/m³`. Conversion (showing °C from a file in K) is yours to do until a
+later release adds it; the recommended spellings are the names it will
+recognise.
+
+## Read values from page code
+
+The field object is immutable: once you hold one, its values never change
+under you. A new document, or a new `url`, produces a new field (see
+[Live updates](#live-updates)), so a page that keeps a reference refreshes
+it on `ml-map:source-loaded`.
+
+### In an HTML page
+
+```html
+<ml-map id="map" src="map.yaml"></ml-map>
+<output id="readout"></output>
+
+<script type="module">
+  const el = document.getElementById("map");
+  const readout = document.getElementById("readout");
+
+  let field = await el.gridReady("elevation");
+  el.addEventListener("ml-map:source-loaded", (e) => {
+    if (e.detail.sourceId === "elevation") field = el.getGrid("elevation");
+  });
+
+  const map = await el.mapReady();
+  map.on("mousemove", (e) => {
+    const value = field.sample(e.lngLat);
+    readout.textContent =
+      value === null ? "no data" : `${value.toFixed(0)} ${field.units ?? ""}`;
+  });
+</script>
+```
+
+With the [JavaScript API](/integrations/vanilla-js/), the same methods are
+on the renderer, `renderer.getGrid(id)` and `renderer.gridReady(id)`, and
+the moment is `renderer.on("source:loaded", …)`.
+
+### In React
+
+On React 19, `onml-map:*` props attach listeners and `ref` gives you the
+element ([React & other frameworks](/integrations/react/#react-19-object-config-and-event-props)):
+
+```tsx
+import { useEffect, useRef, useState } from "react";
+import "@maplibre-yaml/core/register";
+import type { MLMap } from "@maplibre-yaml/core/register";
+import type { GridField } from "@maplibre-yaml/core";
+
+export function ElevationReadout() {
+  const ref = useRef<MLMap>(null);
+  const [field, setField] = useState<GridField | undefined>();
+  const [reading, setReading] = useState("");
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || !field) return;
+    const onMove = (e: { lngLat: { lng: number; lat: number } }) => {
+      const value = field.sample(e.lngLat);
+      setReading(value === null ? "no data" : `${Math.round(value as number)} ${field.units}`);
+    };
+    let detach = () => {};
+    el.mapReady().then((map) => {
+      map.on("mousemove", onMove);
+      detach = () => map.off("mousemove", onMove);
+    });
+    return () => detach();
+  }, [field]);
+
+  return (
+    <>
+      <ml-map
+        ref={ref}
+        src="/map.yaml"
+        onml-map:source-loaded={(e) => {
+          if (e.detail.sourceId === "elevation") setField(ref.current?.getGrid("elevation"));
+        }}
+        style={{ display: "block", height: "400px" }}
+      />
+      <output>{reading}</output>
+    </>
+  );
+}
+```
+
+React 18 ignores the event props: add the listener with
+`ref.current.addEventListener("ml-map:source-loaded", …)` in an effect
+instead, and resolve the first field with `ref.current.gridReady(id)`.
+
+## Live updates
+
+A grid takes part in [document updates](/reference/elements/#updating-the-document)
+like every other source:
+
+- A changed `url:` fetches the new file and swaps the field in one step
+  once it is decoded. `getGrid()` keeps answering with the old field until
+  then, and `ml-map:source-loaded` fires again when the new one is in
+  place. A page stepping through a series (hourly frames, yearly rasters)
+  changes only the URL.
+- A changed `range:` or `units:` produces a new field from the bytes
+  already downloaded, with no fetch. (A field you hold also has
+  `rescale([lo, hi])`, for the same thing in code, on the byte encodings.)
+- A changed `encoding:`, `bounds:` or `grid:` decodes again.
+- Removing the source drops the field; a pending `gridReady()` rejects.
+
+## Export to style.json
+
+MapLibre has no grid source, so a grid cannot be in an exported style's
+`sources`. [`mlym emit`](/guides/export/) leaves it out and keeps the
+declaration under the style's `metadata["maplibre-yaml:grid-sources"]`,
+keyed by source id, where a maplibre-yaml renderer handed the exported
+style can find it. This is a `contract` warning (the map looks the same
+without it), so `--strict` passes. A layer over a grid has no style.json
+form at all, so it is dropped with a `lossy` warning and `--strict`
+refuses; the parser already rejects such a layer, so you meet this only
+with a model built outside the parser. The
+[export classes](/guides/export-classes/) table lists it as `source.grid`.
+
+## Decode a file outside the browser
+
+The same decoder is exported for tooling and tests: `decodeGrid(bytes, spec)`
+from `@maplibre-yaml/core` takes the file's bytes and the source declaration
+and resolves with the field, in Node as in the browser. It loads the decoder
+on demand, so importing the package does not pull it in.
+
+```js
+import { readFile } from "node:fs/promises";
+import { decodeGrid } from "@maplibre-yaml/core";
+
+const bytes = await readFile("data/elevation.png");
+const field = await decodeGrid(bytes, {
+  type: "grid",
+  url: "data/elevation.png", // unused by decodeGrid itself; kept for parity with the document
+  encoding: "scalar-r",
+  grid: { nx: 360, ny: 181, lo1: -180, la1: 90, dx: 1, dy: 1 },
+  range: [-500, 9000],
+  units: "m",
+});
+
+const { value, missing } = field.values();
+let max = -Infinity;
+for (let i = 0; i < value.length; i++) {
+  if (!missing[i] && value[i] > max) max = value[i];
+}
+console.log(`highest decoded value: ${max} ${field.units}`);
+```
+
+`values()` returns the whole field at once as typed arrays (`value` for a
+scalar field, `u` and `v` for a vector one) plus a `missing` mask, row-major
+from the north-west node — the primitive suited to a script or a check that
+walks every cell, rather than `sample()`'s one-position-at-a-time lookup.
+Reach for `sample(lngLat)` when you have a position (the pointer, a feature,
+a camera centre) and want the interpolated value there; reach for `values()`
+when you want every cell, such as computing a statistic or writing the field
+out to another format.
+
+## Make the files
+
+Any tool that writes an 8-bit PNG or a GeoTIFF in longitude/latitude
+works. With GDAL, `gdal_translate -ot Byte -scale -500 9000 0 255 -of PNG
+in.tif out.png` scales a single band into a `scalar-r` image (write the
+same numbers in `range:`), and `gdalwarp -t_srs EPSG:4326 in.tif out.tif`
+reprojects a GeoTIFF for `encoding: geotiff`. In Python, NumPy plus
+Pillow or rasterio does the same in a few lines: clip the values to the
+range, scale to 0–255, write the array as an 8-bit image, set alpha 0 where
+data is missing. One worked example is the spike's converter,
+[`gfs-to-grid.py`](https://github.com/design-practices/maplibre-yaml/blob/main/examples/verification/null-earth/tools/gfs-to-grid.py),
+which bakes a model's GRIB2 records into `rg-uv` and `scalar-r` frames;
+the same steps apply to any gridded dataset.
+
+## Troubleshooting
+
+[Troubleshooting](/troubleshooting/) covers maps that don't show at all.
+What follows is specific to grids. Every notice names the file.
+
+- **"…didn't load (404 Not Found)"**: the path is wrong, or the file is not
+  where the page looks. Relative paths resolve against the page, not the
+  YAML file; on a site under a subpath the notice suggests the `base`
+  attribute ([Publishing & subpaths](/guides/publishing/)).
+- **"The browser couldn't read … (CORS)"**: a file on another site needs
+  that site to send `Access-Control-Allow-Origin`. A grid is fetched whole,
+  so no `Range` header is involved.
+- **"…is 180 MB, more than a page loads whole"** or **"…has 20,000,000
+  grid cells (nx × ny), more than a page decodes"**: the file is over the
+  byte or cell cap. Use a coarser grid or a smaller extent; for a GeoTIFF,
+  an 8-bit PNG is far smaller.
+- **"…is a 16-bit grayscale PNG; a grid image must be an 8-bit PNG
+  (grayscale, RGB or RGBA, not interlaced)"**: write the image at 8 bits,
+  not interlaced, and expand a palette to RGB. A 16-bit file scaled to 8
+  bits needs `range:` to match the new scale.
+- **"…has 1 channel; `encoding: rg-uv` reads two"**: a vector field needs
+  red and green; a one-channel image is `scalar-r`.
+- **"…is a grayscale PNG; `encoding: rg-uv` needs an RGB or RGBA image"**
+  (also for grayscale+alpha): `rg-uv` reads its second component from the
+  green channel, which a grayscale image doesn't have even when it carries
+  alpha. Write the file as RGB or RGBA.
+- **"nodata: names channel … , but the image has no such channel"**: the
+  `nodata.channel` you wrote isn't one the image carries (`b` on a
+  grayscale `scalar-r` PNG, say). Pick a channel the file actually has, or
+  drop the rule and rely on the encoding's own missing-value marker.
+- **"…is 1440 × 721 pixels, but `grid:` declares nx: 360, ny: 181"**: the
+  declared node counts must match the image. Fix `nx` and `ny`, or use
+  `bounds:`, which takes the counts from the image.
+- **"…is in EPSG:3857; a grid must be in longitude/latitude (EPSG:4326)"**:
+  run the `gdalwarp -t_srs EPSG:4326` command the notice gives. A plain
+  TIFF with no coordinates gets a `gdal_translate -a_srs … -a_ullr …`
+  command instead. A geographic GeoTIFF with no explicit EPSG GeoKey at all
+  (no projection tag either way) is accepted as longitude/latitude rather
+  than refused; only a GeoKey naming a projected system such as EPSG:3857
+  triggers this notice.
+- **"…header rows run south to north"** (a `nullschool-json` file): the
+  decoder expects the first row at the top (north), as grib2json writes it;
+  a file whose rows run the other way is refused rather than read upside
+  down. Check the tool that produced the file.
+- **"encoding: scalar-r needs range: [lo, hi]"** (a validation error): the
+  byte encodings need `range:`; `nullschool-json` and `geotiff` refuse it.
+- **"A grid source takes bounds: or grid:, not both"**, or **"encoding:
+  scalar-r needs the field's geometry"**: an image encoding takes exactly
+  one of the two; `nullschool-json` and `geotiff` take neither.
+- **"…is a grid source; no layer type draws a grid yet"** (a validation
+  error at a layer's `source:`): remove the layer and read the field from
+  page code, or see [Alternatives](#alternatives).
+- **"grid sources describe their pixel packing with encoding:, not
+  format:"**: `format:` is for the large-data file formats; a grid's key is
+  `encoding:`.
+- **Values look wrong but the map loads**: check `range:` against the
+  numbers the file was written with, and that `grid.la1` is the top row
+  (the first row of pixels) with `dy` positive.
+
+## Alternatives
+
+### To draw imagery or elevation: COG
+
+A [Cloud Optimized GeoTIFF](/guides/cog/) on a `raster` or `raster-dem`
+source is drawn by MapLibre, tile by tile, with `colorRamp:` for a single
+band of values and hillshade or terrain for elevation. Pick it when you
+want the field seen rather than read; a page can declare both a COG and a
+grid of the same data.
+
+### To colour elevation today: `raster-dem` and `color-relief`
+
+A `raster-dem` source with a `color-relief` layer colours heights on the
+map ([Layers › Imagery and elevation](/guides/layers/#imagery-and-elevation)).
+It draws only elevation encodings, so it is the route for height, not for
+other fields.
+
+Reference: every key of a grid source is in the
+[sources reference](/reference/yaml/sources/#grid); the element's methods and
+events are in [`<ml-map>` reference](/reference/elements/).

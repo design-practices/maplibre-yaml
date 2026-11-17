@@ -459,6 +459,9 @@ const FORMAT_LABELS: Record<string, string> = {
   geoparquet: "GeoParquet",
   cog: "Cloud Optimized GeoTIFF (COG)",
   "protomaps-basemap": "Protomaps basemap",
+  // A grid source (any encoding): the `expected` fact names the file kind
+  // where it matters (`not-format`), the label stands in elsewhere.
+  grid: "grid",
 };
 
 /** The file name at the end of a URL, for command examples. */
@@ -753,6 +756,14 @@ export function describeFormatFailure(failure: FormatFailure): string {
         "`npx serve` work); a file mirrored from GitHub works from fastly.jsdelivr.net, not cdn.jsdelivr.net."
       );
     case "cors":
+      if (failure.format === "grid") {
+        // Fetched whole: no Range header to allow.
+        return (
+          `The browser couldn't read ${file}: the server didn't allow this page to load it ` +
+          "(CORS), or it couldn't be reached. A grid file on another site needs that site to " +
+          "send `Access-Control-Allow-Origin`."
+        );
+      }
       return (
         `The browser couldn't read ${file}: the server didn't allow this page to load it ` +
         `(CORS), or it couldn't be reached. A ${label} file on another site needs that ` +
@@ -760,7 +771,7 @@ export function describeFormatFailure(failure: FormatFailure): string {
       );
     case "not-format":
       return (
-        `${file} isn't a ${label} file. A wrong path often returns a web page instead — ` +
+        `${file} isn't a ${failure.expected ?? label} file. A wrong path often returns a web page instead — ` +
         "check the file name and folder."
       );
     case "http": {
@@ -769,6 +780,9 @@ export function describeFormatFailure(failure: FormatFailure): string {
       return failure.status === 416 ? `${line} ${RANGE_REFUSED_HINT}` : line;
     }
     case "too-large": {
+      // A grid is fetched and decoded whole: no by-view read, no conversion
+      // to tiles — the ways out are a coarser grid or a smaller extent.
+      if (failure.format === "grid") return describeGridTooLarge(failure);
       // The cause first (a count when that is what decided, ml-37r.16: the
       // bytes on the wire say little about the decoded size), then why it
       // can't be read by view, then every way to make it draw — each with
@@ -812,6 +826,7 @@ export function describeFormatFailure(failure: FormatFailure): string {
       );
     case "crs":
       if (failure.format === "cog") return describeCogProjection(failure);
+      if (failure.format === "grid") return describeGridProjection(failure);
       return (
         `${file} is in ${failure.crs ?? "a projected coordinate system"}; MapLibre needs ` +
         "longitude/latitude (EPSG:4326). Reproject it: " +
@@ -824,6 +839,7 @@ export function describeFormatFailure(failure: FormatFailure): string {
         "with GeoPandas `to_parquet`, `ogr2ogr -f Parquet`, or DuckDB's spatial extension."
       );
     case "encoding":
+      if (failure.format === "grid") return describeGridImage(failure);
       return (
         `${file} stores its geometry as GeoArrow${failure.encoding ? ` (\`${failure.encoding}\`)` : ""}, ` +
         "which maplibre-yaml doesn't read yet: it reads GeoParquet with WKB geometry. Rewrite " +
@@ -860,10 +876,19 @@ export function describeFormatFailure(failure: FormatFailure): string {
         `uncompressed ${label} files. Decompress it (\`zstd -d ${fileNameOf(failure.url)}\`) or ` +
         "write it without compression (`ogr2ogr -f FlatGeobuf` writes an uncompressed file)."
       );
+    case "dimensions": {
+      const declared = failure.gridSize?.declared;
+      const actual = failure.gridSize?.actual;
+      return (
+        `${file} is ${actual ? `${actual[0]} × ${actual[1]}` : "another size in"} pixels, but \`grid:\` declares ` +
+        `${declared ? `nx: ${declared[0]}, ny: ${declared[1]}` : "other counts"}. The declared grid must match the ` +
+        "image: check `nx` and `ny`, or use `bounds: [west, south, east, north]`, which takes the counts from the image."
+      );
+    }
     case "read":
     default:
       return (
-        `${file} couldn't be read as ${label}` +
+        `${file} couldn't be read as ${failure.format === "grid" ? "a grid" : label}` +
         (failure.detail ? `: ${failure.detail.replace(/[.\s]+$/, "")}.` : ".")
       );
   }
@@ -913,6 +938,75 @@ function describeCogProjection(failure: FormatFailure): string {
   return (
     `${file} is in ${failure.crs}; a COG must be in Web Mercator (EPSG:3857) to be drawn. ` +
     `Reproject it: ${fix}`
+  );
+}
+
+/**
+ * A grid over the cell cap or the whole-file byte cap. A grid is fetched
+ * and decoded whole, so none of the cloud readers' advice (reading by view,
+ * `load:`, converting to tiles) applies: the ways out are the grid itself.
+ */
+function describeGridTooLarge(failure: FormatFailure): string {
+  const file = `\`${failure.url}\``;
+  if (failure.cells !== undefined) {
+    const cap = failure.limits?.cells;
+    return (
+      `${file} has ${formatCount(failure.cells)} grid cells (nx × ny)` +
+      (cap !== undefined ? `, more than a page decodes (${formatCount(cap)})` : ", too many to decode in a browser") +
+      ". Use a coarser grid or a smaller extent."
+    );
+  }
+  const cap = failure.limits?.bytes;
+  return (
+    `${file} is ${failure.size !== undefined ? megabytes(failure.size) : "very large"}` +
+    (cap !== undefined ? `, more than a page loads whole (${megabytes(cap)})` : ", too large to load whole in a browser") +
+    ". Use a coarser grid, a smaller extent, or an 8-bit PNG (one byte per channel per cell)."
+  );
+}
+
+/** A GeoTIFF grid that isn't in longitude/latitude, or has no coordinates at all. */
+function describeGridProjection(failure: FormatFailure): string {
+  const file = `\`${failure.url}\``;
+  const name = fileNameOf(failure.url);
+  if (failure.crs === undefined) {
+    return (
+      `${file} has no map coordinates (a plain TIFF image, not a GeoTIFF), so its cells can't be placed. ` +
+      `Georeference it in longitude/latitude: \`gdal_translate -a_srs EPSG:4326 -a_ullr west north east south ${name} out.tif\`.`
+    );
+  }
+  // A label that isn't an EPSG code ("user-defined"): the file may already be
+  // in longitude/latitude and only lack the code, so don't tell it to reproject.
+  if (!failure.crs.startsWith("EPSG:")) {
+    return (
+      `${file} is in a coordinate system it doesn't name (${failure.crs}); a grid must be in longitude/latitude (EPSG:4326). ` +
+      `If it already is, label it: \`gdal_translate -a_srs EPSG:4326 ${name} out.tif\`; else reproject it with gdalwarp.`
+    );
+  }
+  return `${file} is in ${failure.crs}; a grid must be in longitude/latitude (EPSG:4326). Reproject it: \`gdalwarp -t_srs EPSG:4326 ${name} out.tif\`.`;
+}
+
+/** A grid PNG this reader doesn't decode: not 8-bit, interlaced, a palette — or too few channels for the encoding. */
+function describeGridImage(failure: FormatFailure): string {
+  const file = `\`${failure.url}\``;
+  const image = failure.image ?? {};
+  if (image.channels !== undefined) {
+    const count = `${image.channels} channel${image.channels === 1 ? "" : "s"}`;
+    // A `nodata:` rule on a channel the layout lacks (the detail is the rule).
+    if (failure.detail?.startsWith("nodata:")) {
+      return (
+        `${file} has ${count}, so \`${failure.detail}\` names one it doesn't have (grayscale has r; grayscale with alpha ` +
+        "r and a; RGB r, g and b). Name a channel the image has, or write the image as RGBA."
+      );
+    }
+    return (
+      `${file} has ${count}; \`encoding: ${failure.encoding ?? "rg-uv"}\` reads u from red and v from green, so it needs ` +
+      "an RGB or RGBA image. Use `encoding: scalar-r` for a one-channel image, or write the components into the red and green channels."
+    );
+  }
+  const shape = `${image.interlaced ? "an interlaced " : "a "}${image.bitDepth !== undefined ? `${image.bitDepth}-bit ` : ""}${image.colorType ?? ""} PNG`;
+  return (
+    `${file} is ${shape}; a grid image must be an 8-bit PNG (grayscale, RGB or RGBA, not interlaced), so ` +
+    "that each byte is one value. Write it that way (a palette image as RGB; a 16-bit image scaled to 8 bits, with `range:` to match)."
   );
 }
 

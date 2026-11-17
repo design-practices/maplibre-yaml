@@ -277,6 +277,56 @@ describe("diff: sources applied in place", () => {
   });
 });
 
+describe("diff: grid sources (grid source U3, R16)", () => {
+  const grid = (overrides: Record<string, unknown> = {}): LayerSource =>
+    ({ type: "grid", url: "/data/f000.png", encoding: "rg-uv", range: [-40, 40], grid: { nx: 360, ny: 181, lo1: -180, la1: 90, dx: 1, dy: 1 }, units: "m/s", ...overrides }) as LayerSource;
+  const gridDoc = (source: LayerSource) => doc({ layers: [], sources: { field: source } });
+
+  it("a url change is sourceSetUrl: the manager swaps the field in place", () => {
+    const result = diff(gridDoc(grid()), gridDoc(grid({ url: "/data/f003.png" })), NO_HINTS);
+    expect(result.ops).toEqual([expect.objectContaining({ op: "sourceSetUrl", sourceId: "field", inline: false })]);
+    expect(result.summary.sourcesReplaced).toEqual([]);
+  });
+
+  it.each([
+    ["range", { range: [-80, 80] }],
+    ["units", { units: "kt" }],
+    ["cache", { cache: { enabled: false } }],
+  ])("a %s change is applied in place (sourceSetUrl, no replacement)", (_key, change) => {
+    const result = diff(gridDoc(grid()), gridDoc(grid(change)), NO_HINTS);
+    expect(opNames(result.ops)).toEqual(["sourceSetUrl"]);
+  });
+
+  it.each([
+    ["encoding", { encoding: "scalar-r" }],
+    ["grid", { grid: { nx: 720, ny: 361, lo1: -180, la1: 90, dx: 0.5, dy: 0.5 } }],
+    ["nodata", { nodata: { channel: "b", below: 64 } }],
+    ["bands", { bands: [1, 2] }],
+  ])("a %s change is constructor-only: sourceReplace naming the key", (key, change) => {
+    const result = diff(gridDoc(grid()), gridDoc(grid(change)), NO_HINTS);
+    expect(result.ops).toEqual([expect.objectContaining({ op: "sourceReplace", sourceId: "field", reason: key })]);
+  });
+
+  it("swapping bounds for grid is constructor-only", () => {
+    const next = grid({ grid: undefined, bounds: [-180.5, -90.5, 179.5, 90.5] });
+    delete (next as Record<string, unknown>)["grid"];
+    const result = diff(gridDoc(grid()), gridDoc(next), NO_HINTS);
+    expect(result.ops).toEqual([expect.objectContaining({ op: "sourceReplace", sourceId: "field" })]);
+  });
+
+  it("a grid is its own kind: changing the type to or from grid replaces the source", () => {
+    const geojson = { type: "geojson", url: "/data/f000.png" } as LayerSource;
+    expect(diff(gridDoc(grid()), gridDoc(geojson), NO_HINTS).ops[0]).toMatchObject({ op: "sourceReplace", reason: "kind" });
+    expect(diff(gridDoc(geojson), gridDoc(grid()), NO_HINTS).ops[0]).toMatchObject({ op: "sourceReplace", reason: "kind" });
+  });
+
+  it("a failed grid is retried through sourceSetUrl on reload (KTD11)", () => {
+    const applied = gridDoc(grid());
+    const result = diff(applied, applied, { failedSources: new Set(["field"]), urlsRebased: false, reload: true });
+    expect(opNames(result.ops)).toEqual(["sourceSetUrl"]);
+  });
+});
+
 describe("diff: fallback and map options", () => {
   it("changing mapStyle produces a single fallback('mapStyle') and no other operations", () => {
     // A paint change rides along: still one operation.

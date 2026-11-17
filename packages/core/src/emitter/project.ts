@@ -34,6 +34,12 @@ import { LAYER_RUNTIME_KEYS, SOURCE_RUNTIME_KEYS } from "../model/normalize";
 import { sanitizeSourcesAttribution } from "../utils/attribution";
 import { lowerEffectLayer } from "./lower-effects";
 import { lowerSourceFormat, PMTILES_ON_EMIT, type EmitDataRef } from "./lower-formats";
+import {
+  GRID_SOURCES_METADATA_KEY,
+  isGridSource,
+  layerOverGridWarning,
+  lowerGridSource,
+} from "./lower-grid";
 import { isProtomapsBasemap } from "../schemas/basemap.schema";
 
 /**
@@ -52,14 +58,17 @@ import { isProtomapsBasemap } from "../schemas/basemap.schema";
 export function sanitizeEmittedAttribution(
   sources: Record<string, unknown>,
   warnings: EmitWarning[],
-  origin: "document" | "basemap" = "document"
+  origin: "document" | "basemap" | "grid" = "document",
+  pathPrefix = "sources"
 ): Record<string, unknown> {
+  const label =
+    origin === "basemap" ? "Basemap source" : origin === "grid" ? "Grid source" : "Source";
   const cleaned = sanitizeSourcesAttribution(sources, (id) => {
     warnings.push({
-      path: `sources.${id}.attribution`,
+      path: `${pathPrefix}.${id}.attribution`,
       kind: "contract",
       message:
-        `${origin === "basemap" ? "Basemap source" : "Source"} "${id}" attribution ` +
+        `${label} "${id}" attribution ` +
         "contained markup other than text and http(s)/mailto links; it was " +
         "escaped or removed, because maplibre-gl renders attribution as HTML.",
     });
@@ -507,9 +516,36 @@ export function projectStyle(
   const sources: Record<string, unknown> = {};
   // FlatGeobuf / GeoParquet sources the caller reads and inlines (ml-cnv; core describes).
   const dataRefs: EmitDataRef[] = [];
+  // Grid sources (ml-nb1.2): not MapLibre sources, so never copied into
+  // `sources`; their declarations ride the style's root `metadata` instead.
+  const gridSources: Record<string, unknown> = {};
 
   for (const [name, source] of Object.entries(model.style.sources)) {
     let spec: unknown = isPlainObject(source.spec) ? { ...source.spec } : source.spec;
+    if (isGridSource(spec)) {
+      requireExportClass("source.grid");
+      const lowered = lowerGridSource(name, spec, `sources.${name}`);
+      gridSources[name] = lowered.declaration;
+      warnings.push(lowered.warning);
+      // Its runtime keys (`cache`, `loading`) are the renderer's, as on every
+      // source — but "the emitted source renders empty" is the wrong report
+      // when there is no emitted source at all. Contract, never lossy:
+      // nothing visible depends on them.
+      for (const key of Object.keys(source.runtime)) {
+        if (isSchemaDefault("source", key, source.runtime[key])) continue;
+        const known = (SOURCE_RUNTIME_KEYS as readonly string[]).includes(key);
+        const definition = known ? requireExportClass(`source.${key}`) : undefined;
+        warnings.push({
+          path: `sources.${name}.${key}`,
+          kind: "contract",
+          ...(definition ? { construct: `source.${key}`, exportClass: definition.class } : {}),
+          message:
+            `\`${key}\` on grid source \`${name}\` is runtime behaviour; the emitted style ` +
+            "carries no grid source for it to apply to.",
+        });
+      }
+      continue;
+    }
     if (isPlainObject(spec)) {
       const lowered = lowerSourceFormat(name, spec, source.runtime, `sources.${name}`);
       spec = lowered.spec;
@@ -581,6 +617,17 @@ export function projectStyle(
         }
         spec[block] = rewritten;
       }
+    }
+
+    // A layer over a grid has no style.json form (ml-nb1.2). The parser
+    // rejects one today, so this is a model from older tooling or a direct
+    // caller: dropped, lossy, so --strict refuses — the effects precedent.
+    const layerSource = spec["source"];
+    const overNamedGrid = typeof layerSource === "string" && layerSource in gridSources;
+    if (overNamedGrid || isGridSource(layerSource)) {
+      requireExportClass("source.grid");
+      warnings.push(layerOverGridWarning(id, overNamedGrid ? (layerSource as string) : undefined));
+      return { id, spec, dropped: true };
     }
 
     // Captured before the hoist below replaces the inline object with a
@@ -798,6 +845,23 @@ export function projectStyle(
     style["metadata"] = {
       "maplibre-yaml:description": model.style.description,
       ...metadata,
+    };
+  }
+  // Grid declarations (ml-nb1.2) ride `metadata` too, keyed by source id,
+  // so a maplibre-yaml renderer handed this style can recover the fields.
+  // Attribution is sanitized the way emitted sources' is: a renderer shows
+  // it as HTML. The compiled stash wins over an authored key of its name —
+  // it is derived from this document's sources, not prose.
+  if (Object.keys(gridSources).length > 0) {
+    const metadata = isPlainObject(style["metadata"]) ? style["metadata"] : {};
+    style["metadata"] = {
+      ...metadata,
+      [GRID_SOURCES_METADATA_KEY]: sanitizeEmittedAttribution(
+        gridSources,
+        warnings,
+        "grid",
+        `metadata.${GRID_SOURCES_METADATA_KEY}`
+      ),
     };
   }
 

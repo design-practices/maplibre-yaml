@@ -1,0 +1,78 @@
+{
+  "source": "NOAA/NWS/NCEP Global Forecast System (GFS), via AWS Open Data noaa-gfs-bdp-pds",
+  "license": "US government work, public domain",
+  "run": "20261114 00Z",
+  "resolution_deg": 1.0,
+  "grid": {
+    "nx": 360,
+    "ny": 181,
+    "lo1": -180.0,
+    "la1": 90.0,
+    "dx": 1.0,
+    "dy": 1.0
+  },
+  "bounds": [
+    -180.5,
+    90.5,
+    179.5,
+    -90.5
+  ],
+  "encodings": {
+    "wind": {
+      "kind": "rg-uv",
+      "r": "u",
+      "g": "v",
+      "b": "255 (< 128 = no data)",
+      "velocityRange": [
+        -40.0,
+        40.0
+      ],
+      "unit": "m/s"
+    },
+    "temp": {
+      "kind": "scalar-r",
+      "g": "0",
+      "b": "0 (> 153 = no data)",
+      "scalarValueRange": [
+        193.0,
+        328.0
+      ],
+      "unit": "K"
+    }
+  },
+  "frames": [
+    {
+      "hour": 0,
+      "valid": "2026-11-14T00:00Z",
+      "wind": "2026111400-f000-wind-10m.png",
+      "temp": "2026111400-f000-temp-2m.png",
+      "stats": {
+        "speed_max_mps": 29.4,
+        "t2m_min_k": 222.9,
+        "t2m_max_k": 311.9
+      }
+    },
+    {
+      "hour": 3,
+      "valid": "2026-11-14T03:00Z",
+      "wind": "2026111400-f003-wind-10m.png",
+      "temp": "2026111400-f003-temp-2m.png",
+      "stats": {
+        "speed_max_mps": 29.3,
+        "t2m_min_k": 226.8,
+        "t2m_max_k": 314.5
+      }
+    },
+    {
+      "hour": 6,
+      "valid": "2026-11-14T06:00Z",
+      "wind": "2026111400-f006-wind-10m.png",
+      "temp": "2026111400-f006-temp-2m.png",
+      "stats": {
+        "speed_max_mps": 30.6,
+        "t2m_min_k": 229.3,
+        "t2m_max_k": 314.3
+      }
+    }
+  ]
+}

@@ -142,10 +142,12 @@ export function declaredFormat(source: unknown): unknown {
  * otherwise the URL's scheme or extension decides. The source `type` is
  * NOT consulted: a `.pmtiles` URL on a `geojson` source is still PMTiles —
  * {@link formatTypeMismatch} reports that as the author's mistake rather
- * than this function hiding it.
+ * than this function hiding it. The one exception is `type: grid`, which
+ * maplibre-yaml reads itself (its `encoding:` says how): a `.tif` grid is not
+ * a COG, so it never reaches a tile protocol.
  */
 export function formatOfSource(source: unknown): CloudFormat | undefined {
-  if (!isObject(source)) return undefined;
+  if (!isObject(source) || source["type"] === "grid") return undefined;
   const declared = declaredFormat(source);
   if (isCloudFormat(declared)) return declared;
   return formatFromUrl(source["url"]);

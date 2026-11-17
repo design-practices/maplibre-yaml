@@ -51,6 +51,64 @@ describe("classifyPmtilesError", () => {
   });
 });
 
+describe("describeFormatFailure — a grid source's sentences (grid source U2)", () => {
+  const grid = { format: "grid" as const, url: "data/field.png" };
+
+  it("CORS has no Range clause: a grid is fetched whole", () => {
+    const text = describeFormatFailure({ ...grid, code: "cors" });
+    expect(text).toContain("A grid file on another site needs that site to send `Access-Control-Allow-Origin`.");
+    expect(text).not.toContain("Range");
+  });
+
+  it("too large by bytes or by cells says to use a coarser grid or a smaller extent, never the cloud readers' advice", () => {
+    const bytes = describeFormatFailure({ ...grid, code: "too-large", size: 60 * 1024 * 1024, limits: { bytes: 50 * 1024 * 1024 } });
+    expect(bytes).toContain("`data/field.png` is 60 MB, more than a page loads whole (50 MB).");
+    expect(bytes).toContain("Use a coarser grid, a smaller extent, or an 8-bit PNG");
+    const cells = describeFormatFailure({ ...grid, code: "too-large", cells: 20_000_000, limits: { cells: 16_000_000 } });
+    expect(cells).toContain("has 20,000,000 grid cells (nx × ny), more than a page decodes (16,000,000).");
+    expect(cells).toContain("Use a coarser grid or a smaller extent.");
+    for (const text of [bytes, cells]) {
+      for (const forbidden of ["load:", "mlym prepare", "PMTiles", "by view", "viewport", "Range", "maxFeatures"]) {
+        expect(text, forbidden).not.toContain(forbidden);
+      }
+    }
+  });
+
+  it("the other codes reuse the catalogue with the grid label and the expected file kind", () => {
+    expect(describeFormatFailure({ ...grid, code: "not-format", expected: "PNG" })).toContain("`data/field.png` isn't a PNG file.");
+    expect(describeFormatFailure({ ...grid, code: "not-format" })).toContain("isn't a grid file.");
+    expect(describeFormatFailure({ ...grid, code: "http", status: 404 })).toBe("`data/field.png` didn't load (404 Not Found).");
+    expect(describeFormatFailure({ ...grid, code: "chunk", url: "chunks/grid.js" })).toContain("The grid reader (`chunks/grid.js`) couldn't be downloaded.");
+    expect(describeFormatFailure({ ...grid, code: "read", detail: "the file ends inside a chunk" })).toBe(
+      "`data/field.png` couldn't be read as a grid: the file ends inside a chunk."
+    );
+    expect(describeFormatFailure({ ...grid, code: "crs" })).toContain("has no map coordinates");
+    expect(describeFormatFailure({ ...grid, code: "crs", crs: "EPSG:32633" })).toContain("is in EPSG:32633; a grid must be in longitude/latitude (EPSG:4326)");
+    expect(describeFormatFailure({ ...grid, code: "dimensions", gridSize: { declared: [360, 181], actual: [720, 361] } })).toContain(
+      "is 720 × 361 pixels, but `grid:` declares nx: 360, ny: 181."
+    );
+    expect(describeFormatFailure({ ...grid, code: "encoding", encoding: "rg-uv", image: { channels: 1 } })).toContain(
+      "has 1 channel; `encoding: rg-uv` reads u from red and v from green, so it needs an RGB or RGBA image"
+    );
+    expect(describeFormatFailure({ ...grid, code: "encoding", encoding: "rg-uv", image: { channels: 2 } })).toContain("has 2 channels; `encoding: rg-uv`");
+    // A nodata rule on a channel the layout lacks: the detail is the rule.
+    const absent = describeFormatFailure({ ...grid, code: "encoding", encoding: "scalar-r", image: { channels: 3 }, detail: "nodata: channel: a" });
+    expect(absent).toContain("has 3 channels, so `nodata: channel: a` names one it doesn't have");
+    expect(absent).not.toContain("rg-uv");
+    // A CRS label that isn't a code: the file may be in longitude/latitude already, so it isn't told to reproject.
+    const unlabelled = describeFormatFailure({ ...grid, code: "crs", crs: "user-defined" });
+    expect(unlabelled).toContain("a coordinate system it doesn't name (user-defined)");
+    expect(unlabelled).toContain("gdal_translate -a_srs EPSG:4326");
+    expect(unlabelled).not.toContain("is in user-defined");
+    expect(describeFormatFailure({ ...grid, code: "encoding", image: { bitDepth: 16, colorType: "RGB", interlaced: false } })).toContain(
+      "is a 16-bit RGB PNG; a grid image must be an 8-bit PNG"
+    );
+    expect(describeFormatFailure({ ...grid, code: "encoding", image: { bitDepth: 8, colorType: "RGBA", interlaced: true } })).toContain(
+      "is an interlaced 8-bit RGBA PNG"
+    );
+  });
+});
+
 describe("describeFormatFailure — the on-page sentences", () => {
   it("a 416 on a tile archive says the file was found (ml-aot.114)", () => {
     const text = describeFormatFailure({ code: "http", status: 416, format: "pmtiles", url: URL });

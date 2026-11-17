@@ -224,6 +224,10 @@ To zoom into a cluster when it's clicked, see the gallery's
   FlatGeobuf, GeoParquet and Cloud Optimized GeoTIFF read only the part in
   view. See [Large data](/guides/cloud-native-data/).
 - **Data that changes**: see [Live data](/guides/live-data/).
+- **A field of values to read, not draw** (elevation, temperature,
+  density, a current): `type: grid` decodes a raster once and gives page
+  code `sample(lngLat)`; no layer draws it. See
+  [Grid sources](/guides/grid-sources/).
 
 Which source type fits which data, elevation and image overlays included, is
 in [Sources & layers](/schema/sources-and-layers/#which-source-type). Every
