@@ -334,6 +334,35 @@ describe("CircleLayerSchema", () => {
     expect(CircleLayerSchema.parse(layer)).toMatchObject(layer);
   });
 
+  it("accepts interactive.click/hover tolerance in pixels and rejects a negative one", () => {
+    const base = {
+      id: "trails",
+      type: "line" as const,
+      source: {
+        type: "geojson" as const,
+        data: { type: "FeatureCollection", features: [] },
+      },
+    };
+    const ok = LineLayerSchema.parse({
+      ...base,
+      interactive: {
+        click: { tolerance: 6, popup: [{ p: [{ property: "name" }] }] },
+        hover: { tolerance: 6, cursor: "pointer", highlight: true },
+      },
+    });
+    expect(ok.interactive?.click?.tolerance).toBe(6);
+    expect(ok.interactive?.hover?.tolerance).toBe(6);
+    expect(LineLayerSchema.parse({ ...base, interactive: { click: { tolerance: 0 } } }).interactive?.click?.tolerance).toBe(0);
+
+    const bad = LineLayerSchema.safeParse({ ...base, interactive: { click: { tolerance: -1 } } });
+    expect(bad.success).toBe(false);
+    if (!bad.success) {
+      const issue = bad.error.issues[0]!;
+      expect(issue.path).toEqual(["interactive", "click", "tolerance"]);
+      expect(issue.message).toMatch(/greater than or equal to 0/);
+    }
+  });
+
   it("accepts legend configuration", () => {
     const layer = {
       id: "points",

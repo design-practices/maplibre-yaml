@@ -20,6 +20,8 @@ import {
 import {
   bindLayerInteractions,
   clearInteractionState,
+  unbindLayerInteractions,
+  type BoundLayerHandlers,
   type LayerBindDeps,
 } from "../interactions/attach";
 import type { ProjectedLayerInteractions } from "../interactions/manifest";
@@ -71,7 +73,7 @@ export class EventHandler {
   /** The one-popup slot (KTD8 coexistence), shared with attachInteractions. */
   private popupSlot: PopupSlot;
   private attachedLayers: Set<string>;
-  private boundHandlers: Map<string, any>;
+  private boundHandlers: Map<string, BoundLayerHandlers>;
   private registry: InteractionRegistry;
   private interactionDeps: InteractionDeps;
   private clickInteractions: BoundInteraction[];
@@ -218,25 +220,15 @@ export class EventHandler {
    *
    * @remarks
    * Mirrors `attachInteractions`'s `detach`: `map.off` each listener the shared
-   * core bound (recorded in `boundHandlers`), then clear the layer's
-   * feature-state so a feature left lit here does not stay lit.
+   * core bound (recorded in `boundHandlers`, delegated or map-level for a
+   * `tolerance`), then clear the layer's feature-state so a feature left lit
+   * here does not stay lit.
    */
   detachEvents(layerId: string): void {
     const handlers = this.boundHandlers.get(layerId);
     if (!handlers) return;
 
-    if (handlers.click) {
-      this.map.off("click", layerId, handlers.click as any);
-    }
-    if (handlers.mouseenter) {
-      this.map.off("mouseenter", layerId, handlers.mouseenter as any);
-    }
-    if (handlers.mouseleave) {
-      this.map.off("mouseleave", layerId, handlers.mouseleave as any);
-    }
-    if (handlers.mousemove) {
-      this.map.off("mousemove", layerId, handlers.mousemove as any);
-    }
+    unbindLayerInteractions(this.map, layerId, handlers);
 
     // Before forgetting the layer: a feature left lit here would stay lit.
     clearInteractionState(

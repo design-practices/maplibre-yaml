@@ -245,6 +245,19 @@ describe("diff: forced source replacement", () => {
   });
 });
 
+describe("diff: interactive tolerance (ml-tgg)", () => {
+  it("changing or removing click/hover tolerance is one interactive property set, not a replacement", () => {
+    const click = { popup: [{ p: [{ property: "name" }] }] };
+    const applied = doc({ layers: [lotsLayer({ interactive: { click: { ...click, tolerance: 6 }, hover: { cursor: "pointer", tolerance: 6 } } })] });
+    const next = doc({ layers: [lotsLayer({ interactive: { click, hover: { cursor: "pointer" } } })] });
+    const result = diff(applied, next, NO_HINTS);
+    expect(result.ops).toEqual([
+      expect.objectContaining({ op: "layerSetProperty", layerId: "lots", target: "runtime", property: "interactive" }),
+    ]);
+    expect(result.summary.replaced).toEqual([]);
+  });
+});
+
 describe("diff: sources applied in place", () => {
   it("changing a GeoJSON source url produces sourceSetUrl on the source and no layer operations (AE2)", () => {
     const applied = doc({

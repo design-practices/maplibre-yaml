@@ -105,7 +105,7 @@ describe("projectStyle — the runtime half degrades", () => {
           id: "a",
           type: "circle",
           source: "s",
-          interactive: { hover: { highlight: true } },
+          interactive: { hover: { highlight: true, tolerance: 6 }, click: { tolerance: 6, popup: [{ p: [{ str: "x" }] }] } },
           legend: { color: "#111", label: "Points" },
         },
       ],
@@ -114,6 +114,8 @@ describe("projectStyle — the runtime half degrades", () => {
     const layers = style["layers"] as Record<string, unknown>[];
     expect(layers[0]).not.toHaveProperty("interactive");
     expect(layers[0]).not.toHaveProperty("legend");
+    // Runtime-only: the pixel tolerance never reaches the style.
+    expect(JSON.stringify(style)).not.toContain("tolerance");
     expect(warnings.map((w) => w.message).join(" ")).toMatch(/interactive/);
   });
 

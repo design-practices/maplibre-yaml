@@ -661,6 +661,31 @@ describe("EventHandler", () => {
       );
     });
 
+    it("offs a tolerant layer's map-level listeners without a layerId (ml-tgg)", () => {
+      mockMap.queryRenderedFeatures = vi.fn(() => []);
+      const layer = {
+        id: "trails",
+        type: "line" as const,
+        source: {
+          type: "geojson" as const,
+          data: { type: "FeatureCollection" as const, features: [] },
+        },
+        interactive: {
+          hover: { cursor: "pointer", tolerance: 6 },
+          click: { popup: [{ p: [{ str: "Test" }] }], tolerance: 6 },
+        },
+      };
+
+      handler.attachEvents(layer);
+      const bound = mockMap.on.mock.calls;
+      expect(bound.map((c: any[]) => c[0]).sort()).toEqual(["click", "mousemove", "mouseout"]);
+      for (const c of bound) expect(c[1]).toBeTypeOf("function"); // map-level: no layerId
+
+      handler.detachEvents("trails");
+      expect(mockMap.off.mock.calls).toEqual(expect.arrayContaining(bound));
+      expect(mockMap.off).toHaveBeenCalledTimes(bound.length);
+    });
+
     it("handles detaching non-existent layer gracefully", () => {
       expect(() => handler.detachEvents("non-existent")).not.toThrow();
     });
