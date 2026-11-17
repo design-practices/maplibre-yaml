@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>interactive.click / hover tolerance: pixels of slack around a feature</title>
+  <!--
+    ml-tgg: `tolerance` (pixels) on a layer's interactive.click and
+    interactive.hover. Two thin features on the left carry `tolerance: 8`
+    (a 2 px line and a 3 px dot); their twins on the right are identical
+    without it. e2e/interactive-tolerance.spec.ts clicks and hovers 5 px
+    beside each and reads the popup, the cursor and the hover feature-state.
+
+    PASS by hand: click a little beside the LEFT line or dot — a popup opens
+    and the pointer becomes a hand as you approach. Click the same distance
+    beside the RIGHT line or dot — nothing happens until you are exactly on
+    it. Press "Drop tolerance": the left pair now behaves like the right.
+
+    Hermetic: a local source-less basemap, inline GeoJSON, maplibre-gl from
+    the e2e server's /vendor mount.
+    Serve from the repo root:  pnpm verify:serve
+    Then open: http://localhost:4174/examples/verification/interactive-tolerance.html
+  -->
+  <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; }
+    header { padding: 8px 16px; background: #1d3557; color: white; font-size: 13px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+    header button { font: inherit; padding: 2px 8px; }
+    ml-map { display: block; height: 460px; }
+  </style>
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }
+  </script>
+</head>
+<body>
+  <header>
+    <span>LEFT line and dot: <code>tolerance: 8</code> — click or hover a little beside them. RIGHT twins: no tolerance — only an exact hit counts.</span>
+    <button id="drop" type="button">Drop tolerance</button>
+  </header>
+  <ml-map id="map">
+    <script type="text/yaml">
+type: map
+id: interactive-tolerance
+config:
+  center: [0, 0]
+  zoom: 12
+  mapStyle: "/examples/verification/configs/local-style.json"
+layers:
+  - id: line-tolerant
+    type: line
+    source:
+      type: geojson
+      data:
+        type: FeatureCollection
+        features:
+          - type: Feature
+            properties: { name: tolerant line }
+            geometry: { type: LineString, coordinates: [[-0.02, -0.012], [-0.02, 0.012]] }
+    paint: { line-color: "#1d3557", line-width: 2 }
+    interactive:
+      click:
+        tolerance: 8
+        popup:
+          - p: [{ property: name }]
+      hover:
+        tolerance: 8
+        cursor: pointer
+        highlight: true
+  - id: line-plain
+    type: line
+    source:
+      type: geojson
+      data:
+        type: FeatureCollection
+        features:
+          - type: Feature
+            properties: { name: plain line }
+            geometry: { type: LineString, coordinates: [[0.02, -0.012], [0.02, 0.012]] }
+    paint: { line-color: "#1d3557", line-width: 2 }
+    interactive:
+      click:
+        popup:
+          - p: [{ property: name }]
+      hover:
+        cursor: pointer
+        highlight: true
+  - id: dot-tolerant
+    type: circle
+    source:
+      type: geojson
+      data:
+        type: FeatureCollection
+        features:
+          - type: Feature
+            properties: { name: tolerant dot }
+            geometry: { type: Point, coordinates: [-0.01, 0.02] }
+    paint: { circle-color: "#e63946", circle-radius: 3 }
+    interactive:
+      click:
+        tolerance: 8
+        popup:
+          - p: [{ property: name }]
+      hover:
+        tolerance: 8
+        cursor: pointer
+  - id: dot-plain
+    type: circle
+    source:
+      type: geojson
+      data:
+        type: FeatureCollection
+        features:
+          - type: Feature
+            properties: { name: plain dot }
+            geometry: { type: Point, coordinates: [0.01, 0.02] }
+    paint: { circle-color: "#e63946", circle-radius: 3 }
+    interactive:
+      click:
+        popup:
+          - p: [{ property: name }]
+      hover:
+        cursor: pointer
+    </script>
+  </ml-map>
+  <script type="module" src="../../packages/core/register.js"></script>
+  <script type="module">
+    // The live-update leg: the same document with every `tolerance` removed.
+    // The spec calls this too (window.__dropTolerance), then expects the left
+    // pair to need an exact hit like the right.
+    const el = document.getElementById("map");
+    window.__dropTolerance = () => {
+      const doc = JSON.parse(JSON.stringify(el.getDocument()));
+      for (const layer of doc.layers) {
+        for (const trigger of Object.values(layer.interactive ?? {})) delete trigger.tolerance;
+      }
+      return el.update(doc);
+    };
+    document.getElementById("drop").addEventListener("click", () => window.__dropTolerance());
+  </script>
+</body>
+</html>

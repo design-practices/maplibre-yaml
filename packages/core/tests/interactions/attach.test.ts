@@ -64,14 +64,34 @@ const LNGLAT = { lng: 1, lat: 2 } as any;
 
 /** A bare Map mock: records on/off, exposes the runtime methods interactions call. */
 function mockMap() {
+  const canvas = { style: { cursor: "" } };
   return {
     on: vi.fn(),
     off: vi.fn(),
     flyTo: vi.fn(),
     fitBounds: vi.fn(),
     setFeatureState: vi.fn(),
-    getCanvas: vi.fn(() => ({ style: { cursor: "" } })),
+    queryRenderedFeatures: vi.fn(() => []),
+    getLayer: vi.fn(() => ({ id: "layer-1" })),
+    getCanvas: vi.fn(() => canvas),
   } as any;
+}
+
+/** The map-level (no layerId) listener registered for `event`, if any. */
+function mapLevel(map: any, event: string) {
+  return map.on.mock.calls.find((c: any[]) => c[0] === event && typeof c[1] === "function")?.[1];
+}
+
+/** The delegated (layerId) listener registered for `event`, if any. */
+function delegated(map: any, event: string) {
+  return map.on.mock.calls.find((c: any[]) => c[0] === event && typeof c[1] === "string")?.[2];
+}
+
+const POINT = { x: 100, y: 50 };
+
+/** Fire a map-level listener with a synthetic pointer event at POINT. */
+function fireMap(map: any, event: string) {
+  mapLevel(map, event)?.({ point: POINT, lngLat: LNGLAT });
 }
 
 /** Fire the listener registered for `event` with a synthetic feature. */
@@ -577,3 +597,155 @@ function inlineLayer(id: string, interactive: unknown) {
     interactive,
   };
 }
+
+describe("tolerance — pixels of slack around a feature (ml-tgg)", () => {
+  const popup = [{ p: [{ property: "name" }] }];
+  const f = (id: number) => ({ id, properties: { name: `f${id}` } });
+
+  it("absent or 0 keeps the delegated layer listeners, no map-level one", () => {
+    for (const click of [{ popup }, { popup, tolerance: 0 }]) {
+      const map = mockMap();
+      attachInteractions(map, projection({ click, hover: { cursor: "pointer", tolerance: 0 } }), { policy: trusted });
+      expect(delegated(map, "click")).toBeTypeOf("function");
+      expect(delegated(map, "mouseenter")).toBeTypeOf("function");
+      expect(mapLevel(map, "click")).toBeUndefined();
+      expect(mapLevel(map, "mousemove")).toBeUndefined();
+      expect(map.queryRenderedFeatures).not.toHaveBeenCalled();
+    }
+  });
+
+  it("a tolerant listener does not query a layer that is no longer on the map (parity with MapLibre's delegates)", () => {
+    const map = mockMap();
+    map.getLayer.mockReturnValue(undefined);
+    attachInteractions(map, projection({ click: { popup, tolerance: 8 }, hover: { cursor: "pointer", tolerance: 8 } }), { policy: trusted });
+    mapLevel(map, "click")!({ point: { x: 10, y: 10 }, lngLat: LNGLAT });
+    mapLevel(map, "mousemove")!({ point: { x: 10, y: 10 }, lngLat: LNGLAT });
+    expect(map.queryRenderedFeatures).not.toHaveBeenCalled();
+    expect(map.getCanvas().style.cursor).toBe("");
+  });
+
+  it("click.tolerance registers a map-level click and hit-tests a ±n box on that layer", () => {
+    const map = mockMap();
+    map.queryRenderedFeatures.mockReturnValue([f(1), f(2)]);
+    attachInteractions(map, projection({ click: { popup, tolerance: 6 } }), { policy: trusted });
+
+    expect(delegated(map, "click")).toBeUndefined();
+    fireMap(map, "click");
+
+    expect(map.queryRenderedFeatures).toHaveBeenCalledWith(
+      [[94, 44], [106, 56]],
+      { layers: ["layer-1"] }
+    );
+    // The topmost feature (first result) is dispatched, as the delegated path takes e.features[0].
+    expect(popupInstance.setHTML).toHaveBeenCalledTimes(1);
+    expect(popupInstance.setHTML.mock.calls[0]?.[0]).toContain("f1");
+    expect(popupInstance.setLngLat).toHaveBeenCalledWith(LNGLAT);
+  });
+
+  it("a tolerant click that finds no feature dispatches nothing", () => {
+    const map = mockMap();
+    attachInteractions(map, projection({ click: { popup, tolerance: 6 } }), { policy: trusted });
+    fireMap(map, "click");
+    expect(popupInstance.setHTML).not.toHaveBeenCalled();
+  });
+
+  it("fires onClick after dispatch with the hit feature", () => {
+    const map = mockMap();
+    map.queryRenderedFeatures.mockReturnValue([f(3)]);
+    const order: string[] = [];
+    const onClick = vi.fn(() => order.push("onClick"));
+    const registry = createInteractionRegistry();
+    const deps: InteractionDeps = { showPopup: () => order.push("dispatch"), policy: trusted };
+    const bind = (xs: readonly any[]) => xs.map((interaction) => ({ interaction, runtime: interaction.create(deps) }));
+    bindLayerInteractions(map, "layer-1", { source: "s", interactive: { click: { popup, tolerance: 4 } } } as any, {
+      registry,
+      clickInteractions: bind(registry.clickInteractions()),
+      hoverInteractions: bind(registry.hoverInteractions()),
+      boundHandlers: new Map(),
+      callbacks: { onClick },
+    });
+    fireMap(map, "click");
+    expect(onClick).toHaveBeenCalledWith("layer-1", f(3), LNGLAT);
+    expect(order).toEqual(["dispatch", "onClick"]);
+  });
+
+  it("hover.tolerance emulates enter / move / leave from a map-level mousemove", () => {
+    const map = mockMap();
+    const canvas = map.getCanvas();
+    attachInteractions(
+      map,
+      projection({ hover: { cursor: "pointer", highlight: true, tolerance: 8 } }, "src"),
+      { policy: trusted }
+    );
+    expect(delegated(map, "mouseenter")).toBeUndefined();
+    expect(delegated(map, "mousemove")).toBeUndefined();
+    expect(mapLevel(map, "mousemove")).toBeTypeOf("function");
+    expect(mapLevel(map, "mouseout")).toBeTypeOf("function");
+
+    // No hit yet: nothing happens.
+    fireMap(map, "mousemove");
+    expect(canvas.style.cursor).toBe("");
+    expect(map.setFeatureState).not.toHaveBeenCalled();
+
+    // First hit: enter (cursor) + per-feature hover dispatch.
+    map.queryRenderedFeatures.mockReturnValue([f(1)]);
+    fireMap(map, "mousemove");
+    expect(map.queryRenderedFeatures).toHaveBeenLastCalledWith([[92, 42], [108, 58]], { layers: ["layer-1"] });
+    expect(canvas.style.cursor).toBe("pointer");
+    expect(map.setFeatureState).toHaveBeenCalledWith({ source: "src", id: 1 }, { hover: true });
+
+    // Different feature: move logic lights the new one and clears the old.
+    map.setFeatureState.mockClear();
+    map.queryRenderedFeatures.mockReturnValue([f(2)]);
+    fireMap(map, "mousemove");
+    expect(map.setFeatureState).toHaveBeenCalledWith({ source: "src", id: 1 }, { hover: false });
+    expect(map.setFeatureState).toHaveBeenCalledWith({ source: "src", id: 2 }, { hover: true });
+
+    // No hit while one was current: leave (cursor reset, state cleared).
+    map.setFeatureState.mockClear();
+    map.queryRenderedFeatures.mockReturnValue([]);
+    fireMap(map, "mousemove");
+    expect(canvas.style.cursor).toBe("");
+    expect(map.setFeatureState).toHaveBeenCalledWith({ source: "src", id: 2 }, { hover: false });
+
+    // Leaving the canvas while over a feature also leaves.
+    map.queryRenderedFeatures.mockReturnValue([f(5)]);
+    fireMap(map, "mousemove");
+    expect(canvas.style.cursor).toBe("pointer");
+    fireMap(map, "mouseout");
+    expect(canvas.style.cursor).toBe("");
+    expect(map.setFeatureState).toHaveBeenCalledWith({ source: "src", id: 5 }, { hover: false });
+  });
+
+  it("detach/destroy off the map-level listeners with the two-argument form", () => {
+    const map = mockMap();
+    const handle = attachInteractions(
+      map,
+      projection({ click: { popup, tolerance: 6 }, hover: { cursor: "pointer", tolerance: 6 } }),
+      { policy: trusted }
+    );
+    const on = map.on.mock.calls.map((c: any[]) => c.join(":")).sort();
+    expect(on.length).toBe(3); // click, mousemove, mouseout — all map-level
+    handle.destroy();
+    const off = map.off.mock.calls.map((c: any[]) => c.join(":")).sort();
+    expect(off).toEqual(on);
+    for (const c of map.off.mock.calls) expect(c[1]).toBeTypeOf("function");
+  });
+
+  it("a tolerant layer and a delegated layer detach independently", () => {
+    const map = mockMap();
+    const handle = attachInteractions(
+      map,
+      {
+        layers: {
+          a: { source: "a", interactive: { click: { popup, tolerance: 6 } } as any },
+          b: { source: "b", interactive: { click: { popup } } as any },
+        },
+      },
+      { policy: trusted }
+    );
+    handle.detach("a");
+    expect(map.off).toHaveBeenCalledTimes(1);
+    expect(map.off).toHaveBeenCalledWith("click", mapLevel(map, "click"));
+  });
+});

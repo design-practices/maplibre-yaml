@@ -1431,6 +1431,11 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                                       }
                                     },
                                     "description": "Popup shown while hovering a feature (no close button; dismissed on leave). A pinned click popup suppresses hover popups until it is dismissed. Touch has no hover: tap uses \`click.popup\`."
+                                  },
+                                  "tolerance": {
+                                    "type": "number",
+                                    "minimum": 0,
+                                    "description": "Pixels of slack around a feature: how far from it the pointer may be and still count as on it (0 or absent: on the feature only)"
                                   }
                                 },
                                 "additionalProperties": false,
@@ -1508,6 +1513,11 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                                   "emit": {
                                     "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/interactive/properties/hover/properties/emit",
                                     "description": "Dispatch a named host event with a declarative payload on click"
+                                  },
+                                  "tolerance": {
+                                    "type": "number",
+                                    "minimum": 0,
+                                    "description": "Pixels of slack around a feature: how far from it the pointer may be and still count as on it (0 or absent: on the feature only)"
                                   }
                                 },
                                 "additionalProperties": false,
@@ -6034,6 +6044,11 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                                   }
                                 },
                                 "description": "Popup shown while hovering a feature (no close button; dismissed on leave). A pinned click popup suppresses hover popups until it is dismissed. Touch has no hover: tap uses \`click.popup\`."
+                              },
+                              "tolerance": {
+                                "type": "number",
+                                "minimum": 0,
+                                "description": "Pixels of slack around a feature: how far from it the pointer may be and still count as on it (0 or absent: on the feature only)"
                               }
                             },
                             "additionalProperties": false,
@@ -6111,6 +6126,11 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                               "emit": {
                                 "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/interactive/properties/hover/properties/emit",
                                 "description": "Dispatch a named host event with a declarative payload on click"
+                              },
+                              "tolerance": {
+                                "type": "number",
+                                "minimum": 0,
+                                "description": "Pixels of slack around a feature: how far from it the pointer may be and still count as on it (0 or absent: on the feature only)"
                               }
                             },
                             "additionalProperties": false,
@@ -9513,6 +9533,11 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                               }
                             },
                             "description": "Popup shown while hovering a feature (no close button; dismissed on leave). A pinned click popup suppresses hover popups until it is dismissed. Touch has no hover: tap uses \`click.popup\`."
+                          },
+                          "tolerance": {
+                            "type": "number",
+                            "minimum": 0,
+                            "description": "Pixels of slack around a feature: how far from it the pointer may be and still count as on it (0 or absent: on the feature only)"
                           }
                         },
                         "additionalProperties": false,
@@ -9590,6 +9615,11 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                           "emit": {
                             "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/interactive/properties/hover/properties/emit",
                             "description": "Dispatch a named host event with a declarative payload on click"
+                          },
+                          "tolerance": {
+                            "type": "number",
+                            "minimum": 0,
+                            "description": "Pixels of slack around a feature: how far from it the pointer may be and still count as on it (0 or absent: on the feature only)"
                           }
                         },
                         "additionalProperties": false,
@@ -14341,6 +14371,11 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                                   }
                                 },
                                 "description": "Popup shown while hovering a feature (no close button; dismissed on leave). A pinned click popup suppresses hover popups until it is dismissed. Touch has no hover: tap uses \`click.popup\`."
+                              },
+                              "tolerance": {
+                                "type": "number",
+                                "minimum": 0,
+                                "description": "Pixels of slack around a feature: how far from it the pointer may be and still count as on it (0 or absent: on the feature only)"
                               }
                             },
                             "additionalProperties": false,
@@ -14418,6 +14453,11 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                               "emit": {
                                 "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/interactive/properties/hover/properties/emit",
                                 "description": "Dispatch a named host event with a declarative payload on click"
+                              },
+                              "tolerance": {
+                                "type": "number",
+                                "minimum": 0,
+                                "description": "Pixels of slack around a feature: how far from it the pointer may be and still count as on it (0 or absent: on the feature only)"
                               }
                             },
                             "additionalProperties": false,

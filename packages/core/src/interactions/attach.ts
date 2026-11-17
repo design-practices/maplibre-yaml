@@ -132,7 +132,7 @@ export interface LayerBindDeps {
   /** Hover interactions bound once per attach session, in registry order. */
   hoverInteractions: BoundInteraction[];
   /** Listener functions per layer, so `detach`/`destroy` can `map.off` each. */
-  boundHandlers: Map<string, any>;
+  boundHandlers: Map<string, BoundLayerHandlers>;
   /** Optional raw-event callback hook (KD2); absent on the compiled path. */
   callbacks?: LayerInteractionCallbacks;
 }
@@ -198,6 +198,38 @@ function validateTrigger(
 }
 
 /**
+ * The listeners bound for one layer, as `boundHandlers` records them.
+ *
+ * @remarks
+ * Delegated listeners (`map.on(event, layerId, fn)`) sit under their event
+ * name; a `tolerance` binds map-level listeners (`map.on(event, fn)`) instead,
+ * recorded under `map` so {@link unbindLayerInteractions} removes each with
+ * the `off` form it was bound with.
+ */
+export interface BoundLayerHandlers {
+  click?: any;
+  mouseenter?: any;
+  mouseleave?: any;
+  mousemove?: any;
+  map?: Record<string, any>;
+}
+
+/** `map.off` every listener {@link bindLayerInteractions} bound for a layer. */
+export function unbindLayerInteractions(
+  map: MapLibreMap,
+  layerId: string,
+  handlers: BoundLayerHandlers
+): void {
+  for (const [event, fn] of Object.entries(handlers) as [string, any][]) {
+    if (event === "map") {
+      for (const [ev, f] of Object.entries(fn) as [string, any][]) map.off(ev as any, f);
+    } else {
+      map.off(event as any, layerId, fn);
+    }
+  }
+}
+
+/**
  * Bind click / hover / mousemove listeners for one projected layer — the shared
  * per-layer bind core (KD1).
  *
@@ -215,6 +247,12 @@ function validateTrigger(
  * callback can read `e.features?.[0]` — matching `EventHandler`'s timing and
  * arguments. When `deps.callbacks` is absent (the compiled path) nothing extra
  * fires and the binding is byte-identical to the pre-extraction closure.
+ *
+ * A trigger's `tolerance` (pixels, > 0) swaps MapLibre's delegated layer
+ * event — which fires only on a rendered pixel of a feature — for a map-level
+ * listener that hit-tests a ±tolerance box restricted to the layer
+ * (`queryRenderedFeatures`), so thin lines and small points are easier to
+ * hit. Dispatch is the same code either way; only the listener differs.
  *
  * @param map - The map to bind listeners on.
  * @param layerId - The layer these listeners target.
@@ -238,55 +276,111 @@ export function bindLayerInteractions(
   validateTrigger(registry, click, RESERVED_CLICK_KEYS, layerId);
   validateTrigger(registry, hover, RESERVED_HOVER_KEYS, layerId);
 
-  const handlers: any = {};
+  // Delegated listeners keyed by event; map-level ones (a `tolerance`) under
+  // `map`, so `unbindLayerInteractions` knows which `off` form each needs.
+  const handlers: BoundLayerHandlers = {};
+  const ctx = (feature: any, lngLat: LngLat): InteractionContext => ({
+    map,
+    layerId,
+    sourceId,
+    feature,
+    lngLat,
+  });
+  // The tolerant hit test: the topmost feature of this layer within ±n px of
+  // the pointer — the same "first result" the delegated path reads from
+  // `e.features[0]`, so a multi-feature hit resolves identically. Skipped
+  // while the layer is not on the map (a host removed it, or a style swap is
+  // mid-flight): MapLibre's own delegated listeners filter by getLayer the
+  // same way, and querying a missing layer id fires a map error per event.
+  const hit = (e: MapMouseEvent, n: number) =>
+    map.getLayer(layerId)
+      ? map.queryRenderedFeatures(
+          [
+            [e.point.x - n, e.point.y - n],
+            [e.point.x + n, e.point.y + n],
+          ],
+          { layers: [layerId] }
+        )[0]
+      : undefined;
 
   if (hover) {
-    handlers.mouseenter = (e: MapMouseEvent & { features?: any[] }) => {
+    const enter = (feature: any, lngLat: LngLat) => {
       if (hover.cursor) map.getCanvas().style.cursor = hover.cursor;
-      const feature = e.features?.[0];
-      if (feature) callbacks?.onHover?.(layerId, feature, e.lngLat);
+      if (feature) callbacks?.onHover?.(layerId, feature, lngLat);
     };
-    handlers.mouseleave = () => {
+    const leave = () => {
       map.getCanvas().style.cursor = "";
       clearInteractionState(map, clickInteractions, hoverInteractions, layerId);
     };
-    map.on("mouseenter", layerId, handlers.mouseenter);
-    map.on("mouseleave", layerId, handlers.mouseleave);
-
     // mousemove only when a hover interaction needs per-feature resolution —
     // mouseenter fires once for the layer, not once per feature.
-    if (hasHoverInteraction(hoverInteractions, hover)) {
-      handlers.mousemove = (e: MapMouseEvent & { features?: any[] }) => {
-        const feature = e.features?.[0];
-        if (!feature) return;
-        dispatch(hoverInteractions, hover, {
-          map,
-          layerId,
-          sourceId,
-          feature,
-          lngLat: e.lngLat,
-        });
+    const perFeature = hasHoverInteraction(hoverInteractions, hover);
+    const move = (feature: any, lngLat: LngLat) =>
+      dispatch(hoverInteractions, hover, ctx(feature, lngLat));
+    const n = hover.tolerance;
+
+    if (n > 0) {
+      // Emulate enter/leave from a map-level mousemove: the first hit enters,
+      // every hit moves (the runtimes dedupe per feature, as on the delegated
+      // path), the first miss — or the pointer leaving the canvas — leaves.
+      let over = false;
+      const out = () => {
+        if (over) {
+          over = false;
+          leave();
+        }
       };
-      map.on("mousemove", layerId, handlers.mousemove);
+      const mousemove = (e: MapMouseEvent) => {
+        const feature = hit(e, n);
+        if (!feature) return out();
+        if (!over) {
+          over = true;
+          enter(feature, e.lngLat);
+        }
+        if (perFeature) move(feature, e.lngLat);
+      };
+      handlers.map = { mousemove, mouseout: out };
+      map.on("mousemove", mousemove);
+      map.on("mouseout", out);
+    } else {
+      handlers.mouseenter = (e: MapMouseEvent & { features?: any[] }) =>
+        enter(e.features?.[0], e.lngLat);
+      handlers.mouseleave = leave;
+      map.on("mouseenter", layerId, handlers.mouseenter);
+      map.on("mouseleave", layerId, handlers.mouseleave);
+      if (perFeature) {
+        handlers.mousemove = (e: MapMouseEvent & { features?: any[] }) => {
+          const feature = e.features?.[0];
+          if (feature) move(feature, e.lngLat);
+        };
+        map.on("mousemove", layerId, handlers.mousemove);
+      }
     }
   }
 
   if (click) {
-    handlers.click = (e: MapMouseEvent & { features?: any[] }) => {
-      // Multi-feature clicks resolve to the topmost feature, matching hover.
-      const feature = e.features?.[0];
-      if (!feature) return;
-      dispatch(clickInteractions, click, {
-        map,
-        layerId,
-        sourceId,
-        feature,
-        lngLat: e.lngLat,
-      });
+    const pick = (feature: any, lngLat: LngLat) => {
+      dispatch(clickInteractions, click, ctx(feature, lngLat));
       // Raw-event hook fires AFTER dispatch so interaction handlers run first.
-      callbacks?.onClick?.(layerId, feature, e.lngLat);
+      callbacks?.onClick?.(layerId, feature, lngLat);
     };
-    map.on("click", layerId, handlers.click);
+    const n = click.tolerance;
+
+    if (n > 0) {
+      const mapClick = (e: MapMouseEvent) => {
+        const feature = hit(e, n);
+        if (feature) pick(feature, e.lngLat);
+      };
+      (handlers.map ??= {}).click = mapClick;
+      map.on("click", mapClick);
+    } else {
+      handlers.click = (e: MapMouseEvent & { features?: any[] }) => {
+        // Multi-feature clicks resolve to the topmost feature, matching hover.
+        const feature = e.features?.[0];
+        if (feature) pick(feature, e.lngLat);
+      };
+      map.on("click", layerId, handlers.click);
+    }
   }
 
   boundHandlers.set(layerId, handlers);
@@ -337,7 +431,7 @@ export function attachInteractions(
   const hoverInteractions = bind(registry.hoverInteractions());
 
   // Handlers bound per layer, so detach/destroy can `map.off` each with no leak.
-  const boundHandlers = new Map<string, any>();
+  const boundHandlers = new Map<string, BoundLayerHandlers>();
 
   // The per-session state the shared core threads across layers. The compiled
   // path supplies no `callbacks`, so binding is byte-identical to the pre-
@@ -353,10 +447,7 @@ export function attachInteractions(
     const handlers = boundHandlers.get(layerId);
     if (!handlers) return;
 
-    if (handlers.click) map.off("click", layerId, handlers.click);
-    if (handlers.mouseenter) map.off("mouseenter", layerId, handlers.mouseenter);
-    if (handlers.mouseleave) map.off("mouseleave", layerId, handlers.mouseleave);
-    if (handlers.mousemove) map.off("mousemove", layerId, handlers.mousemove);
+    unbindLayerInteractions(map, layerId, handlers);
 
     // Before forgetting the layer: a feature left lit here would stay lit.
     clearInteractionState(map, clickInteractions, hoverInteractions, layerId);

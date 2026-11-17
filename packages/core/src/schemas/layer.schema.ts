@@ -443,6 +443,7 @@ export const InteractiveConfigSchema: z.ZodType<
         highlight?: boolean;
         emit?: EmitConfig;
         popup?: PopupContent;
+        tolerance?: number;
       };
       click?: {
         popup?: PopupContent;
@@ -454,6 +455,7 @@ export const InteractiveConfigSchema: z.ZodType<
           duration?: number;
         };
         emit?: EmitConfig;
+        tolerance?: number;
       };
       mouseenter?: { action?: string };
       mouseleave?: { action?: string };
@@ -480,6 +482,15 @@ export const InteractiveConfigSchema: z.ZodType<
             "on leave). A pinned click popup suppresses hover popups until " +
             "it is dismissed. Touch has no hover: tap uses `click.popup`."
         ),
+        tolerance: z
+          .number()
+          .finite()
+          .min(0)
+          .optional()
+          .describe(
+            "Pixels of slack around a feature: how far from it the pointer " +
+              "may be and still count as on it (0 or absent: on the feature only)"
+          ),
       })
       .optional()
       .describe("Hover behavior"),
@@ -528,6 +539,15 @@ export const InteractiveConfigSchema: z.ZodType<
         emit: EmitConfigSchema.optional().describe(
           "Dispatch a named host event with a declarative payload on click"
         ),
+        tolerance: z
+          .number()
+          .finite()
+          .min(0)
+          .optional()
+          .describe(
+            "Pixels of slack around a feature: how far from it the pointer " +
+              "may be and still count as on it (0 or absent: on the feature only)"
+          ),
       })
       .optional()
       .describe("Click behavior"),

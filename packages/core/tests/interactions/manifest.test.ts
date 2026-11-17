@@ -196,3 +196,16 @@ describe("projectInteractions — declarative data only", () => {
     expect(Object.keys(projection.layers).sort()).toEqual(["one", "two"]);
   });
 });
+
+describe("projectInteractions — tolerance survives projection (ml-tgg)", () => {
+  it("carries click/hover tolerance, including when emit is dropped under untrusted", () => {
+    const interactive = {
+      click: { tolerance: 6, popup: [{ p: [{ str: "x" }] }], emit: { event: "pick" } },
+      hover: { tolerance: 4, cursor: "pointer", emit: { event: "peek" } },
+    };
+    const projected = projectInteractions(model([inlineLayer("trails", interactive)]), untrusted)
+      .layers["trails"]!.interactive;
+    expect(projected.click).toEqual({ tolerance: 6, popup: [{ p: [{ str: "x" }] }] });
+    expect(projected.hover).toEqual({ tolerance: 4, cursor: "pointer" });
+  });
+});

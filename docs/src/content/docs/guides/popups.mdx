@@ -185,6 +185,37 @@ Leave `highlight` off and write the colour as a `case` on the feature's
 Without `highlight`, ids aren't generated for you: give the source
 `promoteId` or `generateId: true`.
 
+## Make thin lines and small points easier to hit
+
+A click or hover counts only when the pointer is on a drawn pixel of the
+feature, so a 2 px trail or a 3 px dot is hard to catch. Give `click:` or
+`hover:` a `tolerance` in pixels, and the pointer may be that far from the
+feature and still count as on it:
+
+```yaml
+layers:
+  - id: trails
+    type: line
+    source: trails
+    paint: { line-width: 2 }
+    interactive:
+      click:
+        tolerance: 6
+        popup:
+          - h3: [{ property: name }]
+      hover:
+        tolerance: 6
+        cursor: pointer
+        highlight: true
+```
+
+Everything else is unchanged: the popup, highlight, cursor, camera moves and
+the element's events behave as they do for a click on the feature itself, and
+the topmost feature of that layer within reach is the one picked, as on the feature itself. Leave
+`tolerance` out (or write `0`) to keep the on-the-feature behaviour. You no
+longer need a second, transparent, wider copy of the layer as a hit area
+(core 0.11 or later).
+
 ## Move the camera to a feature
 
 Two click actions move the map to what the reader picked. They work with or
