@@ -484,6 +484,7 @@ export const InteractiveConfigSchema: z.ZodType<
         ),
         tolerance: z
           .number()
+          .finite()
           .min(0)
           .optional()
           .describe(
@@ -540,6 +541,7 @@ export const InteractiveConfigSchema: z.ZodType<
         ),
         tolerance: z
           .number()
+          .finite()
           .min(0)
           .optional()
           .describe(

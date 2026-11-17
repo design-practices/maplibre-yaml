@@ -361,6 +361,8 @@ describe("CircleLayerSchema", () => {
       expect(issue.path).toEqual(["interactive", "click", "tolerance"]);
       expect(issue.message).toMatch(/greater than or equal to 0/);
     }
+    // YAML `.inf` parses to Infinity; a box of infinite extent is not a tolerance.
+    expect(LineLayerSchema.safeParse({ ...base, interactive: { hover: { tolerance: Infinity } } }).success).toBe(false);
   });
 
   it("accepts legend configuration", () => {

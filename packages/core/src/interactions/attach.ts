@@ -288,15 +288,20 @@ export function bindLayerInteractions(
   });
   // The tolerant hit test: the topmost feature of this layer within ±n px of
   // the pointer — the same "first result" the delegated path reads from
-  // `e.features[0]`, so a multi-feature hit resolves identically.
+  // `e.features[0]`, so a multi-feature hit resolves identically. Skipped
+  // while the layer is not on the map (a host removed it, or a style swap is
+  // mid-flight): MapLibre's own delegated listeners filter by getLayer the
+  // same way, and querying a missing layer id fires a map error per event.
   const hit = (e: MapMouseEvent, n: number) =>
-    map.queryRenderedFeatures(
-      [
-        [e.point.x - n, e.point.y - n],
-        [e.point.x + n, e.point.y + n],
-      ],
-      { layers: [layerId] }
-    )[0];
+    map.getLayer(layerId)
+      ? map.queryRenderedFeatures(
+          [
+            [e.point.x - n, e.point.y - n],
+            [e.point.x + n, e.point.y + n],
+          ],
+          { layers: [layerId] }
+        )[0]
+      : undefined;
 
   if (hover) {
     const enter = (feature: any, lngLat: LngLat) => {

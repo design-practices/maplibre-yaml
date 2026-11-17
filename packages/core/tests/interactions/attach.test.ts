@@ -72,6 +72,7 @@ function mockMap() {
     fitBounds: vi.fn(),
     setFeatureState: vi.fn(),
     queryRenderedFeatures: vi.fn(() => []),
+    getLayer: vi.fn(() => ({ id: "layer-1" })),
     getCanvas: vi.fn(() => canvas),
   } as any;
 }
@@ -611,6 +612,16 @@ describe("tolerance — pixels of slack around a feature (ml-tgg)", () => {
       expect(mapLevel(map, "mousemove")).toBeUndefined();
       expect(map.queryRenderedFeatures).not.toHaveBeenCalled();
     }
+  });
+
+  it("a tolerant listener does not query a layer that is no longer on the map (parity with MapLibre's delegates)", () => {
+    const map = mockMap();
+    map.getLayer.mockReturnValue(undefined);
+    attachInteractions(map, projection({ click: { popup, tolerance: 8 }, hover: { cursor: "pointer", tolerance: 8 } }), { policy: trusted });
+    mapLevel(map, "click")!({ point: { x: 10, y: 10 }, lngLat: LNGLAT });
+    mapLevel(map, "mousemove")!({ point: { x: 10, y: 10 }, lngLat: LNGLAT });
+    expect(map.queryRenderedFeatures).not.toHaveBeenCalled();
+    expect(map.getCanvas().style.cursor).toBe("");
   });
 
   it("click.tolerance registers a map-level click and hit-tests a ±n box on that layer", () => {
