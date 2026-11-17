@@ -1,5 +1,15 @@
 # @maplibre-yaml/docs
 
+## 0.1.10
+
+### Patch Changes
+
+- Updated dependencies [9a33daf]
+- Updated dependencies [c1971ad]
+  - @maplibre-yaml/core@0.11.0
+  - @maplibre-yaml/astro@0.8.0
+  - @maplibre-yaml/effects@0.1.3
+
 ## 0.1.9
 
 ### Patch Changes

@@ -1,5 +1,14 @@
 # @maplibre-yaml/example-astro-site
 
+## 0.0.12
+
+### Patch Changes
+
+- Updated dependencies [9a33daf]
+- Updated dependencies [c1971ad]
+  - @maplibre-yaml/core@0.11.0
+  - @maplibre-yaml/astro@0.8.0
+
 ## 0.0.11
 
 ### Patch Changes
