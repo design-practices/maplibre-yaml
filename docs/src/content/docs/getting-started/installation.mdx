@@ -179,6 +179,29 @@ maplibre-gl 6 is published only as an ES module: the browser file is
 worker from next to itself, which works from a CDN or any static server; only
 a bundle needs the worker step in [Using a bundler](#using-a-bundler-vite).
 
+### Features and the MapLibre release they need
+
+A few keys arrived in a specific maplibre-gl release. Every document
+validates the same way whatever version you load; on an older runtime the
+key is ignored (or the map degrades as the table says) and you get one
+console notice naming the release it needs. `mlym emit --target` below the
+release reports the same key as lossy.
+
+| Key | Needs maplibre-gl | On an older runtime |
+|---|---|---|
+| `terrain:` | 2.2 | the map renders flat |
+| `sky:` | 4.5 | no sky or fog |
+| `projection: { type: globe }` | 5.0 | renders in mercator |
+| `state:` and `["global-state", …]` | 5.6 | an export inlines each default; the live map cannot change the value |
+| `type: color-relief` layers | 5.6 | the layer is skipped |
+| `sparse: true` on a vector source | 6.17 | the key is ignored; missing tiles stay empty |
+| `fill-layer-blend`, `line-layer-blend`, `raster-layer-blend` | 6.18 | the key is ignored; the layer draws with normal blending |
+
+The releases are exported as constants (`GLOBE_RUNTIME_FLOOR`,
+`LAYER_BLEND_RUNTIME_FLOOR`, …) in the
+[API reference](/reference/api/maplibre-yaml/core/) if your own code
+needs them.
+
 ## Hosting the files yourself
 
 To serve maplibre-yaml from your own site instead of a CDN, copy the

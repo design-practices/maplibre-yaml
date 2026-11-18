@@ -216,3 +216,53 @@ describe("capability policy", () => {
     expect(allowsOrigin({ trust: "untrusted" }, "https://anywhere.test/x")).toBe(true);
   });
 });
+
+describe("runtime gate on style-spec 26.8 keys (ml-vwz)", () => {
+  const blendDoc = {
+    id: "m",
+    config: { center: [0, 0], zoom: 5 },
+    sources: {
+      s: emptyGeojson,
+      tiles: { type: "vector", tiles: ["https://example.com/{z}/{x}/{y}.mvt"], sparse: true },
+    },
+    layers: [
+      { id: "shade", type: "fill", source: "s", paint: { "fill-color": "#36c", "fill-layer-blend": "multiply" } },
+      { id: "roads", type: "line", source: "tiles", "source-layer": "r", paint: { "line-layer-blend": "screen" } },
+    ],
+  };
+
+  it("reports each *-layer-blend key and sparse source as lossy below their floors", () => {
+    const gated = applyRuntimeGate(project(blendDoc), { trust: "trusted", target: "6.12.0" });
+    const lossy = gated.warnings.filter((w) => w.kind === "lossy");
+    expect(lossy.map((w) => w.path).sort()).toEqual([
+      "layers.roads.paint.line-layer-blend",
+      "layers.shade.paint.fill-layer-blend",
+      "sources.tiles.sparse",
+    ]);
+    expect(lossy.every((w) => /needs maplibre-gl 6\.1[78]\.0 or later/.test(w.message))).toBe(true);
+    // Nothing is rewritten: the keys stay for the runtime that knows them.
+    const layers = gated.style["layers"] as Record<string, any>[];
+    expect(layers[0]!["paint"]["fill-layer-blend"]).toBe("multiply");
+    expect((gated.style["sources"] as any)["tiles"]["sparse"]).toBe(true);
+  });
+
+  it("reports only the layer-blend keys on a 6.17 target (sparse is known there)", () => {
+    const gated = applyRuntimeGate(project(blendDoc), { trust: "trusted", target: "6.17.0" });
+    expect(gated.warnings.filter((w) => w.kind === "lossy").map((w) => w.path).sort()).toEqual([
+      "layers.roads.paint.line-layer-blend",
+      "layers.shade.paint.fill-layer-blend",
+    ]);
+  });
+
+  it("is quiet at the floor and with no declared target", () => {
+    for (const policy of [{ trust: "trusted" as const, target: "6.18.0" }, { trust: "trusted" as const }]) {
+      const gated = applyRuntimeGate(project(blendDoc), policy);
+      expect(gated.warnings.filter((w) => w.kind === "lossy")).toEqual([]);
+    }
+  });
+
+  it("the emitted style validates against the installed spec", () => {
+    const gated = applyRuntimeGate(project(blendDoc), { trust: "trusted", target: "6.18.0" });
+    expect(validateStyleMin(gated.style as any).map((e: any) => e.message)).toEqual([]);
+  });
+});

@@ -1,0 +1,41 @@
+# Assertion: `fill-layer-blend: multiply` (style-spec 26.8, maplibre-gl 6.18)
+# composites the whole top layer over what is under it. Two squares overlap:
+# the yellow one draws normally, the cyan one on top multiplies. Where they
+# overlap, multiply gives green (0, 163, 0); normal compositing would give
+# the cyan itself (0, 204, 255). On a runtime older than 6.18 the renderer
+# drops the key with one console notice and the square draws cyan — the
+# layer is still there, MapLibre did not refuse it (ml-vwz).
+type: map
+id: layer-blend
+config:
+  center: [5, 5]
+  zoom: 3
+  mapStyle: "/examples/verification/configs/local-style.json"
+layers:
+  - id: under
+    type: fill
+    source:
+      type: geojson
+      data:
+        type: Feature
+        properties: {}
+        geometry:
+          type: Polygon
+          coordinates: [[[-10, -10], [10, -10], [10, 10], [-10, 10], [-10, -10]]]
+    paint:
+      fill-color: "#ffcc00"
+      fill-antialias: false
+  - id: over
+    type: fill
+    source:
+      type: geojson
+      data:
+        type: Feature
+        properties: {}
+        geometry:
+          type: Polygon
+          coordinates: [[[0, 0], [20, 0], [20, 20], [0, 20], [0, 0]]]
+    paint:
+      fill-color: "#00ccff"
+      fill-antialias: false
+      fill-layer-blend: multiply

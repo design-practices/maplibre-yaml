@@ -771,3 +771,45 @@ describe("Layer zoom and filter", () => {
     expect(CircleLayerSchema.parse(layer)).toMatchObject(layer);
   });
 });
+
+describe("*-layer-blend paint (maplibre-gl 6.18, ml-vwz)", () => {
+  it("holds the same values as the installed style spec", async () => {
+    const { latest } = await import("@maplibre/maplibre-gl-style-spec");
+    const { LAYER_BLEND_VALUES } = await import("../../src/schemas/layer.schema");
+    const spec = (latest as any).paint_fill["fill-layer-blend"].values;
+    expect([...LAYER_BLEND_VALUES].sort()).toEqual(Object.keys(spec).sort());
+    expect((latest as any).paint_line["line-layer-blend"].values).toEqual(spec);
+    expect((latest as any).paint_raster["raster-layer-blend"].values).toEqual(spec);
+  });
+
+  it("accepts every blend mode on fill, line and raster", () => {
+    const source = { type: "geojson", data: { type: "FeatureCollection", features: [] } };
+    for (const mode of ["normal", "multiply", "color", "luminosity", "plus-lighter", "screen", "overlay"]) {
+      expect(
+        FillLayerSchema.safeParse({ id: "f", type: "fill", source, paint: { "fill-layer-blend": mode } }).success
+      ).toBe(true);
+      expect(
+        LineLayerSchema.safeParse({ id: "l", type: "line", source, paint: { "line-layer-blend": mode } }).success
+      ).toBe(true);
+      expect(
+        RasterLayerSchema.safeParse({
+          id: "r",
+          type: "raster",
+          source: { type: "raster", tiles: ["https://e.com/{z}/{x}/{y}.png"] },
+          paint: { "raster-layer-blend": mode },
+        }).success
+      ).toBe(true);
+    }
+  });
+
+  it("refuses a value outside the enum, at the key", () => {
+    const result = FillLayerSchema.safeParse({
+      id: "f",
+      type: "fill",
+      source: { type: "geojson", data: { type: "FeatureCollection", features: [] } },
+      paint: { "fill-layer-blend": "darken" },
+    });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues[0]?.path).toEqual(["paint", "fill-layer-blend"]);
+  });
+});

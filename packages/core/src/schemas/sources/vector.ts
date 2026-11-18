@@ -85,6 +85,12 @@ export const VectorSourceSchema = z
       .boolean()
       .optional()
       .describe("Skip the tile cache (MapLibre `volatile`); for frequently changing tiles"),
+    sparse: z
+      .boolean()
+      .optional()
+      .describe(
+        "Slice a missing tile from the nearest ancestor that exists instead of leaving a hole (MapLibre `sparse`, experimental; needs maplibre-gl 6.17 or later, older runtimes drop the key with a notice)"
+      ),
     encoding: z
       .enum(["mvt", "mlt"])
       .optional()

@@ -56,6 +56,23 @@ export const GLOBE_RUNTIME_FLOOR = "5.0.0";
  */
 export const COLOR_RELIEF_RUNTIME_FLOOR = "5.6.0";
 
+/**
+ * The earliest maplibre-gl that knows the `fill-layer-blend`,
+ * `line-layer-blend` and `raster-layer-blend` paint properties (style-spec
+ * 26.8). Below it the renderer drops the key with one notice per layer —
+ * MapLibre would otherwise refuse the whole layer as an unknown property —
+ * and emit for a lower `--target` reports it as lossy.
+ */
+export const LAYER_BLEND_RUNTIME_FLOOR = "6.18.0";
+
+/**
+ * The earliest maplibre-gl that knows the experimental `sparse` vector
+ * source option (a missing tile is sliced from an ancestor). Below it the
+ * renderer drops the key with one notice per source, and emit for a lower
+ * `--target` reports it as lossy.
+ */
+export const SPARSE_SOURCE_RUNTIME_FLOOR = "6.17.0";
+
 export interface CapabilityPolicy {
   /**
    * Target maplibre-gl version, as a semver string.

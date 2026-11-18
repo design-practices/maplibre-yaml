@@ -4,16 +4,13 @@
  */
 
 import { suggest } from "../utils/suggest";
-import { absolutizeSourceUrls, absolutizeTileTemplate, absolutizeVectorTiles } from "../utils/tile-url";
+import { absolutizeSourceUrls, absolutizeVectorTiles } from "../utils/tile-url";
 import type { Map as MapLibreMap, GeoJSONSource } from "maplibre-gl";
 import type { z } from "zod/v3";
 import type { FeatureCollection } from "geojson";
 import {
   LayerSchema,
   GeoJSONSourceSchema,
-  VectorSourceSchema,
-  RasterSourceSchema,
-  RasterDEMSourceSchema,
   ImageSourceSchema,
   VideoSourceSchema,
 } from "../schemas";
@@ -56,12 +53,12 @@ import type { StartedOpen, StartedTail } from "./cloud-host";
 import { GridSourceManager } from "./grid-sources";
 import type { GridField } from "./grid-host";
 import { isGridSource } from "../schemas/source.schema";
+// Runtime floors for keys MapLibre refuses as unknown below a release
+// (maplibre-gl free: the version is read off the map instance).
+import { LAYER_BLEND_RUNTIME_FLOOR, SPARSE_SOURCE_RUNTIME_FLOOR, meetsVersion } from "../capabilities";
 
 type Layer = z.infer<typeof LayerSchema>;
 type GeoJSONSourceConfig = z.infer<typeof GeoJSONSourceSchema>;
-type VectorSourceConfig = z.infer<typeof VectorSourceSchema>;
-type RasterSourceConfig = z.infer<typeof RasterSourceSchema>;
-type RasterDEMSourceConfig = z.infer<typeof RasterDEMSourceSchema>;
 type ImageSourceConfig = z.infer<typeof ImageSourceSchema>;
 type VideoSourceConfig = z.infer<typeof VideoSourceSchema>;
 
@@ -540,7 +537,84 @@ export class LayerManager {
     } = spec as Record<string, unknown>;
     // Same-origin vector tile paths must be absolute by the time MapLibre's
     // worker fetches them (see utils/tile-url).
-    return absolutizeVectorTiles(this.resolveTileSource(mapLibreSpec, sourceId));
+    return absolutizeVectorTiles(
+      this.resolveTileSource(this.dropSparseBelowFloor(mapLibreSpec, sourceId), sourceId)
+    );
+  }
+
+  /**
+   * The running maplibre-gl version, when the map reports one (`Map#version`;
+   * a test double usually does not). Undefined is not a claim: the key is
+   * attempted and MapLibre has the final word, as for `color-relief`.
+   */
+  private runtimeVersion(): string | undefined {
+    const version = (this.map as unknown as { version?: unknown }).version;
+    return typeof version === "string" ? version : undefined;
+  }
+
+  /** Whether the running maplibre-gl is KNOWN to be older than `floor`. */
+  private runtimeBelow(floor: string): boolean {
+    const version = this.runtimeVersion();
+    return version !== undefined && !meetsVersion(version, floor);
+  }
+
+  /**
+   * Below maplibre-gl 6.18, `fill-layer-blend` / `line-layer-blend` /
+   * `raster-layer-blend` are unknown paint properties, and MapLibre's style
+   * validation then refuses the whole layer — not just the key. Declared
+   * absence instead (the `color-relief` posture): the key is dropped, the
+   * layer still draws with normal blending, and the author hears once per
+   * layer and key what it needs. The layer's own `paint` is left untouched.
+   */
+  private dropLayerBlendBelowFloor(layerSpec: { id: string; paint?: Record<string, unknown> }): void {
+    const paint = layerSpec.paint;
+    if (!paint) return;
+    const keys = Object.keys(paint).filter((key) => this.layerBlendBelowFloor(layerSpec.id, key));
+    if (keys.length === 0) return;
+    const rest = { ...paint };
+    for (const key of keys) delete rest[key];
+    layerSpec.paint = rest;
+  }
+
+  /**
+   * True when `key` is a `*-layer-blend` paint property the running
+   * maplibre-gl does not know; the author hears once per layer and key. Shared
+   * by addLayer and the live paint update, so neither path hands MapLibre a
+   * key it would reject.
+   */
+  private layerBlendBelowFloor(layerId: string, key: string): boolean {
+    if (!key.endsWith("-layer-blend") || !this.runtimeBelow(LAYER_BLEND_RUNTIME_FLOOR)) return false;
+    this.hintOnce(
+      layerId,
+      key,
+      `Layer \`${layerId}\`: \`${key}\` ` +
+        this.floorNotice(LAYER_BLEND_RUNTIME_FLOOR, "the layer draws with normal blending")
+    );
+    return true;
+  }
+
+  /** "needs maplibre-gl X or later (running Y), so the key is ignored and <tail>." */
+  private floorNotice(floor: string, tail: string): string {
+    return `needs maplibre-gl ${floor} or later (running ${this.runtimeVersion()}), so the key is ignored and ${tail}.`;
+  }
+
+  /**
+   * Below maplibre-gl 6.17, `sparse` is an unknown vector-source option and
+   * MapLibre refuses the source (so every layer over it fails too). Dropped
+   * with one notice per source instead; the tiles load as they would have
+   * without it.
+   */
+  private dropSparseBelowFloor(spec: Record<string, unknown>, sourceId?: string): Record<string, unknown> {
+    if (spec["type"] !== "vector" || spec["sparse"] === undefined) return spec;
+    if (!this.runtimeBelow(SPARSE_SOURCE_RUNTIME_FLOOR)) return spec;
+    const { sparse: _sparse, ...rest } = spec;
+    if (sourceId && this.firstHint(`${sourceId}\0sparse`)) {
+      this.callbacks.onSourceHint?.(
+        sourceId,
+        `Source \`${sourceId}\`: \`sparse\` ` + this.floorNotice(SPARSE_SOURCE_RUNTIME_FLOOR, "missing tiles stay empty")
+      );
+    }
+    return rest;
   }
 
   /**
@@ -1163,6 +1237,9 @@ export class LayerManager {
     }
     switch (target) {
       case "paint":
+        // Below the floor MapLibre's setPaintProperty throws on the unknown
+        // key before validating it; the same drop-and-hint as addLayer.
+        if (this.layerBlendBelowFloor(layerId, property)) return;
         // The property name is the document's, not one of MapLibre's keyed unions.
         this.map.setPaintProperty(layerId, property as any, value);
         return;
@@ -1293,6 +1370,7 @@ export class LayerManager {
     if (isHighlightEnabled(layer)) {
       applyHighlightPaint(layerSpec, layer);
     }
+    this.dropLayerBlendBelowFloor(layerSpec);
     if ("layout" in layer && layer.layout) layerSpec.layout = layer.layout;
     if ("source-layer" in layer && layer["source-layer"])
       layerSpec["source-layer"] = layer["source-layer"];
@@ -1379,57 +1457,19 @@ export class LayerManager {
       // No stream-only branch: validation refuses a GeoJSON source with only
       // `stream:` (it starts from `url:` or `data:`), so one never reaches
       // here from a validated document (ml-aot.134).
-    } else if (source.type === "vector") {
-      const vectorSource = this.resolveTileSource(
-        source as unknown as Record<string, unknown>,
-        sourceId
-      ) as unknown as VectorSourceConfig;
-      const vectorSpec: any = { type: "vector" };
-      if (vectorSource.url) vectorSpec.url = vectorSource.url;
-      if (vectorSource.tiles)
-        vectorSpec.tiles = vectorSource.tiles.map((t) => absolutizeTileTemplate(t));
-      if (vectorSource.minzoom !== undefined)
-        vectorSpec.minzoom = vectorSource.minzoom;
-      if (vectorSource.maxzoom !== undefined)
-        vectorSpec.maxzoom = vectorSource.maxzoom;
-      if (vectorSource.bounds) vectorSpec.bounds = vectorSource.bounds;
-      if (vectorSource.attribution)
-        vectorSpec.attribution = vectorSource.attribution;
-      this.addMapSource(sourceId, vectorSpec);
-    } else if (source.type === "raster") {
-      const rasterSource = this.resolveTileSource(
-        source as unknown as Record<string, unknown>,
-        sourceId
-      ) as unknown as RasterSourceConfig;
-      const rasterSpec: any = { type: "raster" };
-      if (rasterSource.url) rasterSpec.url = rasterSource.url;
-      if (rasterSource.tiles) rasterSpec.tiles = rasterSource.tiles;
-      if (rasterSource.tileSize !== undefined)
-        rasterSpec.tileSize = rasterSource.tileSize;
-      if (rasterSource.minzoom !== undefined)
-        rasterSpec.minzoom = rasterSource.minzoom;
-      if (rasterSource.maxzoom !== undefined)
-        rasterSpec.maxzoom = rasterSource.maxzoom;
-      if (rasterSource.bounds) rasterSpec.bounds = rasterSource.bounds;
-      if (rasterSource.attribution)
-        rasterSpec.attribution = rasterSource.attribution;
-      this.addMapSource(sourceId, rasterSpec);
-    } else if (source.type === "raster-dem") {
-      // Forwarded whole rather than field-by-field: the schema is passthrough,
-      // and `encoding: custom` is meaningless without the redFactor/
-      // greenFactor/blueFactor/baseShift that come with it. A whitelist would
-      // drop those silently and leave custom encodings decoding as mapbox.
-      // Safe to spread — raster-dem carries no YAML-only keys to scrub (unlike
-      // geojson's refresh/cache/prefetchedData). This also matches how
-      // block-level named sources reach MapLibre.
-      const demSource = this.resolveTileSource(
-        source as unknown as Record<string, unknown>,
-        sourceId
-      ) as unknown as RasterDEMSourceConfig;
-      this.addMapSource(sourceId, {
-        ...demSource,
-        type: "raster-dem",
-      } as any);
+    } else if (source.type === "vector" || source.type === "raster" || source.type === "raster-dem") {
+      // Forwarded whole, exactly as a named `sources:` entry is: the schemas
+      // are passthrough, so MapLibre options outside a hand list (`sparse`,
+      // `encoding`, `scheme`, `promoteId`, `volatile`; raster-dem's custom-
+      // encoding factors) must not be lost on the way. The vector and raster
+      // branches used to copy a fixed set of fields and silently dropped the
+      // rest (ml-vwz) — the audit found `sparse` written and never applied.
+      // `toMapLibreSourceSpec` strips only this library's own keys (format,
+      // load, colorRamp, refresh…) and resolves cloud-native URLs.
+      this.addMapSource(
+        sourceId,
+        this.toMapLibreSourceSpec(source as unknown as Record<string, unknown>, sourceId)
+      );
     } else if (source.type === "image") {
       const imageSource = source as unknown as ImageSourceConfig;
       this.addMapSource(sourceId, {

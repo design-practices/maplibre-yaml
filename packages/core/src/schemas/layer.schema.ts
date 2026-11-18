@@ -27,6 +27,36 @@ import { getEffectsHost, type EffectBlock } from "../effects-host";
 import { LINK_TARGET_VALUES } from "../utils/html";
 
 /**
+ * The values of the style spec's `*-layer-blend` enum (`fill-layer-blend`,
+ * `line-layer-blend`, `raster-layer-blend`): how a whole layer composites
+ * over what is under it.
+ *
+ * @remarks
+ * Copied from @maplibre/maplibre-gl-style-spec 26.8's `paint_fill`
+ * (zod's enum wants a literal tuple for its type); a schema test holds the
+ * copy equal to the installed spec. The keys need maplibre-gl
+ * {@link LAYER_BLEND_RUNTIME_FLOOR | 6.18} or later: the renderer drops them
+ * with one notice on an older runtime, and emit for a lower `--target`
+ * reports them as lossy.
+ */
+export const LAYER_BLEND_VALUES = [
+  "normal",
+  "multiply",
+  "color",
+  "luminosity",
+  "plus-lighter",
+  "screen",
+  "overlay",
+] as const;
+
+/** `fill-layer-blend` / `line-layer-blend` / `raster-layer-blend` (maplibre-gl 6.18+). */
+const LayerBlendSchema = z
+  .enum(LAYER_BLEND_VALUES)
+  .describe(
+    "How the whole layer blends over what is under it (MapLibre *-layer-blend; needs maplibre-gl 6.18 or later, older runtimes drop the key with a notice)"
+  );
+
+/**
  * Reference to a root-level named source.
  *
  * @remarks
@@ -839,6 +869,7 @@ export const LineLayerSchema = BaseLayerPropertiesSchema.extend({
       "line-gradient": ColorOrExpressionSchema.optional(),
       "line-translate": z.tuple([z.number(), z.number()]).optional(),
       "line-translate-anchor": z.enum(["map", "viewport"]).optional(),
+      "line-layer-blend": LayerBlendSchema.optional(),
     })
     .passthrough()
     .optional()
@@ -891,6 +922,7 @@ export const FillLayerSchema = BaseLayerPropertiesSchema.extend({
       "fill-translate": z.tuple([z.number(), z.number()]).optional(),
       "fill-translate-anchor": z.enum(["map", "viewport"]).optional(),
       "fill-pattern": z.union([z.string(), ExpressionSchema]).optional(),
+      "fill-layer-blend": LayerBlendSchema.optional(),
     })
     .passthrough()
     .optional()
@@ -1084,6 +1116,7 @@ export const RasterLayerSchema = BaseLayerPropertiesSchema.extend({
       "raster-contrast": NumberOrExpressionSchema.optional(),
       "raster-resampling": z.enum(["linear", "nearest"]).optional(),
       "raster-fade-duration": z.number().optional(),
+      "raster-layer-blend": LayerBlendSchema.optional(),
     })
     .passthrough()
     .optional()

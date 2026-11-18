@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Layer blending</title>
+  <!--
+    PASS (maplibre-gl 6.18+) = a yellow square and a cyan square whose
+    overlap is GREEN: the cyan layer has `fill-layer-blend: multiply`, so it
+    multiplies with what is under it. PASS (older maplibre-gl) = the same two
+    squares, overlap plain cyan, and ONE console notice saying
+    `fill-layer-blend` needs maplibre-gl 6.18.0 — the key was dropped, the
+    layer was not. FAIL = a cyan square missing (MapLibre refused the layer
+    over an unknown paint property) or an error card.
+    Serve from the repo root:  pnpm verify:serve
+    Then open: http://localhost:4174/examples/verification/layer-blend.html
+  -->
+  <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; }
+    header { padding: 8px 16px; background: #1d3557; color: white; font-size: 13px; }
+    ml-map { display: block; height: 600px; }
+  </style>
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }
+  </script>
+</head>
+<body>
+  <header>PASS = yellow + cyan squares; overlap green on maplibre-gl 6.18+, cyan with one console notice before it.</header>
+  <ml-map id="map" src="./configs/layer-blend.yaml"></ml-map>
+  <script type="module" src="../../packages/core/register.js"></script>
+</body>
+</html>

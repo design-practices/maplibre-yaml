@@ -141,6 +141,7 @@ export {
   LayerSchema,
   LayerReferenceSchema,
   LayerOrReferenceSchema,
+  LAYER_BLEND_VALUES,
 } from "./layer.schema";
 
 // Thematic classes (`classify:`, 0.9)

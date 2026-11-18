@@ -15,8 +15,31 @@ import { test, expect, type Page, type Route } from "@playwright/test";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { meetsVersion } from "../packages/core/src/capabilities";
 
 const DIR = "/examples/verification/student-errors";
+
+/**
+ * maplibre-gl 6.0 to 6.16 cannot start their worker from a page with an
+ * opaque origin (`file://`, a sandboxed iframe): the module worker is made
+ * from a `blob:` URL importing the cross-origin worker, which such a page may
+ * not run, and the map reports "Worker failed to load". From 6.17.0 the
+ * worker script is fetched and started from a `data:` URL instead
+ * (maplibre-gl-js #8912), and the map renders. 4 and 5 carry the worker
+ * inline and were never affected. Checked against 6.12.0, 6.17.0 and 6.19.0.
+ */
+const OPAQUE_ORIGIN_WORKER_FLOOR = "6.17.0";
+
+/** The maplibre-gl version the page's import map resolved. */
+const runtimeVersion = (page: Page) =>
+  page.evaluate(async () => {
+    const gl: any = await import("maplibre-gl");
+    return String(gl.getVersion?.() ?? gl.default?.getVersion?.() ?? "0");
+  });
+
+/** Whether this maplibre-gl cannot start its worker from a `file://` page. */
+const workerFailsFromFile = (version: string) =>
+  Number(version.split(".")[0]) >= 6 && !meetsVersion(version, OPAQUE_ORIGIN_WORKER_FLOOR);
 
 /** Fail on page errors and off-origin requests (hermeticity). */
 async function guard(page: Page): Promise<string[]> {
@@ -339,12 +362,7 @@ test.describe("src fetch failures (ml-aot.13)", () => {
     expect(shown).not.toContain("Failed to fetch");
   });
 
-  test("file:// with inline YAML on maplibre-gl 6 says to serve the folder, not to configure a bundler", async ({ page, baseURL }) => {
-    await guard(page);
-    await openAsFile(
-      page,
-      baseURL!,
-      `<ml-map style="display:block;height:400px"><script type="text/yaml">
+  const INLINE_MAP = `<ml-map style="display:block;height:400px"><script type="text/yaml">
 type: map
 id: inline
 config:
@@ -352,18 +370,37 @@ config:
   zoom: 1
   mapStyle: "https://cdn.test/examples/verification/configs/local-style.json"
 layers: []
-</script></ml-map>`
+</script></ml-map>`;
+
+  test("file:// with inline YAML on a maplibre-gl 6 whose worker cannot start (6.0-6.16) says to serve the folder, not to configure a bundler", async ({ page, baseURL }) => {
+    await guard(page);
+    await openAsFile(page, baseURL!, INLINE_MAP);
+    const version = await runtimeVersion(page);
+    test.skip(
+      !workerFailsFromFile(version),
+      `maplibre-gl ${version} starts its worker from a file:// page (4/5 inline, 6.17+ from a data: URL); the card is for 6.0-6.16`
     );
-    const major = await page.evaluate(async () => {
-      const gl: any = await import("maplibre-gl");
-      return Number(String((gl.getVersion?.() ?? gl.default?.getVersion?.() ?? "0")).split(".")[0]);
-    });
-    // maplibre-gl 4/5 start their worker from a blob and may render here.
-    test.skip(major < 6, "only maplibre-gl 6 cannot start its worker from a file:// page");
     await expect(page.locator("ml-map .ml-map-error")).toBeVisible({ timeout: 30_000 });
     const shown = await text(page, "ml-map .ml-map-error");
     expect(shown).toContain("Open this page through a local web server");
     expect(shown).not.toContain("setWorkerUrl");
+  });
+
+  test("file:// with inline YAML renders on every other maplibre-gl, with no card", async ({ page, baseURL }) => {
+    const errors = await guard(page);
+    await openAsFile(page, baseURL!, INLINE_MAP);
+    const version = await runtimeVersion(page);
+    test.skip(workerFailsFromFile(version), `maplibre-gl ${version} cannot start its worker from a file:// page`);
+    await page.waitForFunction(
+      () => {
+        const map = (document.querySelector("ml-map") as any)?.getMap?.();
+        return Boolean(map?.loaded?.());
+      },
+      undefined,
+      { timeout: 30_000 }
+    );
+    await expect(page.locator("ml-map .ml-map-error")).toHaveCount(0);
+    expect(errors).toEqual([]);
   });
 });
 

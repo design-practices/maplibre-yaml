@@ -914,3 +914,38 @@ describe('same-origin paths in source URL fields', () => {
     }
   );
 });
+
+describe('VectorSourceSchema sparse (maplibre-gl 6.17, ml-vwz)', () => {
+  it('accepts sparse: true and sparse: false', () => {
+    for (const sparse of [true, false]) {
+      const source = { type: 'vector' as const, tiles: ['https://h.org/{z}/{x}/{y}.mvt'], sparse };
+      expect(VectorSourceSchema.parse(source)).toMatchObject(source);
+    }
+  });
+
+  it('refuses a non-boolean sparse, at the key', () => {
+    const result = VectorSourceSchema.safeParse({ type: 'vector', tiles: ['https://h.org/{z}/{x}/{y}.mvt'], sparse: 'yes' });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues[0]?.path).toEqual(['sparse']);
+  });
+
+  it('a document whose vector source sets sparse parses without unknown-key warnings', () => {
+    const result = YAMLParser.safeParseMapBlock(`type: map
+id: m
+config:
+  center: [0, 0]
+  zoom: 2
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+layers:
+  - id: parcels
+    type: fill
+    source-layer: parcels
+    source:
+      type: vector
+      tiles: ["https://h.org/{z}/{x}/{y}.mvt"]
+      sparse: true
+`);
+    expect(result.success).toBe(true);
+    expect(result.warnings.filter((w) => /Unknown key/.test(w.message))).toEqual([]);
+  });
+});
