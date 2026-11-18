@@ -23,12 +23,28 @@ import {
 
 /**
  * The maplibre-gl version the e2e vendor serves (root devDependency — the
- * same resolution `e2e/server.mjs` uses). The CI matrix overrides it per
- * leg, so version-gated twins read it here rather than assuming 5.x.
+ * same resolution `e2e/server.mjs` uses, VERIFY_MAPLIBRE_DIR for another
+ * install locally). The CI matrix overrides it per leg, so version-gated
+ * twins read it here rather than assuming 5.x.
  */
+const MAPLIBRE_DIR = process.env.VERIFY_MAPLIBRE_DIR ?? join(process.cwd(), "node_modules/maplibre-gl");
 const VENDOR_MAPLIBRE_VERSION: string = JSON.parse(
-  readFileSync(join(process.cwd(), "node_modules/maplibre-gl/package.json"), "utf8")
+  readFileSync(join(MAPLIBRE_DIR, "package.json"), "utf8")
 ).version;
+
+/**
+ * From 6.18.0, `queryRenderedFeatures` hit-tests a fill-extrusion on the
+ * globe through the projection, walls and roof included (maplibre-gl-js
+ * #8926, for #8864); before, only its footprint, through a tile-to-screen
+ * matrix. At the globe twin's zoom 0 the new path misses the ground point of
+ * its 240°-wide band — the pixel is drawn red, the point query answers
+ * nothing — while a whole-viewport query, empty under globe before (the
+ * corners are off the planet), now returns the feature. Checked against
+ * plain maplibre-gl 6.12.0, 6.17.0, 6.18.0 and 6.19.0, no maplibre-yaml in
+ * the loop. So from this floor an extrusion is proven by the whole-viewport
+ * query, and the test annotates the upstream gap instead of hiding it.
+ */
+const GLOBE_EXTRUSION_QUERY_FLOOR = "6.18.0";
 
 /**
  * True when the vendor supports `global-state` expressions. Delegates to
@@ -400,13 +416,29 @@ test.describe("gallery twins: each shipped example's YAML renders via <ml-map>",
       warnings.length = 0;
       await openExample(page, slug, [layer]);
       if (at) {
+        const type = await page.evaluate(
+          (id) => (document.getElementById("map") as any).getMap().getLayer(id)?.type,
+          layer
+        );
+        const wholeViewport =
+          type === "fill-extrusion" && meetsVersion(VENDOR_MAPLIBRE_VERSION, GLOBE_EXTRUSION_QUERY_FLOOR);
+        if (wholeViewport) {
+          test.info().annotations.push({
+            type: "upstream",
+            description:
+              `maplibre-gl ${VENDOR_MAPLIBRE_VERSION}: a point query at the drawn ground point of ` +
+              `${slug}'s fill-extrusion misses on the globe at zoom 0 (maplibre-gl-js #8864, #8926); ` +
+              "the layer is proven by a whole-viewport query instead (GLOBE_EXTRUSION_QUERY_FLOOR)",
+          });
+        }
         await page.waitForFunction(
-          ({ layerId, lngLat }) => {
+          ({ layerId, lngLat, whole }) => {
             const map = (document.getElementById("map") as any).getMap();
             const p = map.project(lngLat);
-            return map.queryRenderedFeatures([p.x, p.y], { layers: [layerId] }).length > 0;
+            const where = whole ? undefined : [p.x, p.y];
+            return map.queryRenderedFeatures(where, { layers: [layerId] }).length > 0;
           },
-          { layerId: layer, lngLat: at as unknown as [number, number] },
+          { layerId: layer, lngLat: at as unknown as [number, number], whole: wholeViewport },
           { timeout: 30_000 }
         );
       }

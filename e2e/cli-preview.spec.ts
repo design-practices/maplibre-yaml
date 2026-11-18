@@ -9,7 +9,7 @@
  *  - the map renders, on the maplibre-gl 6 the CLI's core resolves, served
  *    from the local install: no CDN request at all (the page used to pin
  *    maplibre-gl@4 from unpkg + esm.sh), and the v6 worker loads from next to
- *    its module;
+ *    its module (with the `?v=` cache-buster 6.13+ appends);
  *  - editing the YAML reloads the page with the change (live reload never
  *    fired before: `import.meta.hot` does not exist in the raw-served page);
  *  - an invalid edit shows the validation error overlay.
@@ -144,7 +144,11 @@ test("preview renders the map on the locally installed maplibre-gl 6", async ({ 
   expect(version).toBe(installedMaplibreVersion());
   expect(Number(version.split(".")[0])).toBeGreaterThanOrEqual(6);
 
-  const local = (name: string) => requests.some((r) => r.startsWith(url) && r.endsWith("/" + name));
+  // Matched on the path: from 6.13.0 maplibre-gl cache-busts its own worker
+  // URL with `?v=<version>` (maplibre-gl-js #8621), which the preview server
+  // ignores when it serves the file.
+  const local = (name: string) =>
+    requests.some((r) => r.startsWith(url) && new URL(r).pathname.endsWith("/" + name));
   expect(local("maplibre-gl.mjs"), "module not served locally").toBe(true);
   expect(local("maplibre-gl-worker.mjs"), "v6 worker not loaded from next to its module").toBe(true);
   expect(local("maplibre-gl.css"), "CSS not served locally").toBe(true);
