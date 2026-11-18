@@ -392,7 +392,7 @@ function spellForJson(message: string): string {
   if (message.startsWith("Unable to determine document type.")) {
     return (
       'Unable to determine document type. Expected an object with "type": "map" or ' +
-      '"type": "scrollytelling", or a root document with a top-level "pages" array.'
+      '"type": "scrollytelling".'
     );
   }
   const missing = /^(.*) is missing ([^\s:]+): (?:— add .*\.|(\(required.*))$/s.exec(message);

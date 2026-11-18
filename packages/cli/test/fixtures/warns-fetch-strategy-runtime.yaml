@@ -1,0 +1,15 @@
+type: map
+id: fetch-strategy-runtime
+config:
+  center: [0, 0]
+  zoom: 2
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+sources:
+  data:
+    type: geojson
+    url: "https://example.com/d.geojson"
+    fetchStrategy: runtime
+layers:
+  - id: dots
+    type: circle
+    source: data

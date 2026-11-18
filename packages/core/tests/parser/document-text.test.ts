@@ -536,7 +536,7 @@ describe("JSON wording (R7, R8)", () => {
     const out = await parseDocumentText('{ "id": "x" }');
     expect(out.result.errors[0]!.message).toBe(
       'Unable to determine document type. Expected an object with "type": "map" or ' +
-        '"type": "scrollytelling", or a root document with a top-level "pages" array.'
+        '"type": "scrollytelling".'
     );
   });
 

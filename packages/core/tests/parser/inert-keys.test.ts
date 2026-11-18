@@ -1,14 +1,15 @@
 /**
- * Keys the schema accepts but nothing acts on warn that they have no effect
- * (ml-1q8, 0.9.1; revisit in 0.10 under ml-j2p). They stay valid, so
- * existing documents keep validating, and the warning is a deprecation, so
- * `mlym validate --strict` does not fail on it.
+ * Keys that were accepted but inert (ml-1q8, 0.9.1: a "has no effect"
+ * deprecation warning) are removed in 0.11 (ml-cxo), each with an error
+ * that names the alternative:
  *
  * - `fetchStrategy: build | hybrid` (ml-j2p.1): nothing fetches at build time.
- * - a root document's `config.dataFetching` (ml-j2p.2) and `config.theme`
- *   (ml-j2p.3): nothing reads them.
- * - multi-page documents, `pages:` with content / mixed / map-fullpage blocks
- *   (ml-j2p.4): no package renders them. One warning per document.
+ *   An error naming `prefetchedData` (which the Astro loader fills). `runtime`
+ *   stays accepted for one more release, deprecated: it names what always
+ *   happens.
+ * - multi-page `pages:` documents (ml-j2p.4), with their root `config.theme`
+ *   and `config.dataFetching` (ml-j2p.2, .3): ONE error per document, saying
+ *   to write one document per page.
  */
 import { describe, it, expect } from "vitest";
 import { YAMLParser } from "../../src/parser";
@@ -19,72 +20,93 @@ const find = (warnings: ValidationWarning[], path: string, text: string) =>
   warnings.find((w) => w.path === path && w.message.includes(text));
 
 const map = (doc: string) => YAMLParser.safeParseMapBlock(doc);
-const ROOT = D.root;
 
-describe("fetchStrategy: build | hybrid has no effect (ml-j2p.1)", () => {
+describe("fetchStrategy: build | hybrid is an error (ml-cxo)", () => {
   for (const strategy of FETCH_STRATEGIES) {
-    it(`v1 ${strategy}: valid, with a deprecation warning at the key`, () => {
+    it(`v1 ${strategy}: an error at the source, naming prefetchedData`, () => {
       const result = map(D.fetchStrategy(strategy));
-      expect(result.success).toBe(true);
-      const warning = find(result.warnings, "sources.data.fetchStrategy", "has no effect");
-      expect(warning).toBeDefined();
-      expect(warning!.kind).toBe("deprecation");
-      expect(warning!.message).toContain(`fetchStrategy: ${strategy}`);
-      expect(warning!.line).toBe(11);
+      expect(result.success).toBe(false);
+      // Reported at the source, as every failure inside a source union is
+      // (the `encoding: "srtm"` case in validation-ergonomics).
+      const error = result.errors.find((e) => e.path === "sources.data");
+      expect(error).toBeDefined();
+      expect(error!.message).toBe(
+        `"fetchStrategy: ${strategy}" is not supported: maplibre-yaml fetches a source's data in the ` +
+          "browser when the map loads. To inline data fetched elsewhere (at build time, by a script), " +
+          "write it under prefetchedData: — the Astro loader fills it for you. Remove fetchStrategy:."
+      );
+      expect(error!.line).toBe(9);
+      // Not also a "runtime is deprecated" warning: that one is for runtime.
+      expect(result.warnings.some((w) => w.message.includes("fetchStrategy"))).toBe(false);
     });
   }
 
   it("v2: at runtime.fetchStrategy", () => {
     const result = YAMLParser.safeParseMapBlock(D.v2FetchStrategy);
-    expect(result.success).toBe(true);
-    expect(find(result.warnings, "style.sources.data.runtime.fetchStrategy", "has no effect")).toBeDefined();
+    expect(result.success).toBe(false);
+    const error = result.errors.find((e) => e.path === "style.sources.data");
+    expect(error?.message).toContain('"fetchStrategy: build" is not supported');
+    expect(error?.message).toContain("prefetchedData");
   });
 
-  it("runtime (what actually happens) does not warn", () => {
+  it("runtime (what actually happens) is valid, with a deprecation warning at the key", () => {
     const result = map(D.fetchStrategy("runtime"));
+    expect(result.success).toBe(true);
+    const warning = find(result.warnings, "sources.data.fetchStrategy", "is deprecated and has no effect");
+    expect(warning).toBeDefined();
+    expect(warning!.kind).toBe("deprecation");
+    expect(warning!.line).toBe(11);
+  });
+
+  it("a source without fetchStrategy: gets neither", () => {
+    const result = map(D.plainMap);
+    expect(result.success).toBe(true);
     expect(result.warnings.some((w) => w.message.includes("fetchStrategy"))).toBe(false);
   });
 });
 
-describe("multi-page root documents (ml-j2p.2, .3, .4)", () => {
-  const result = YAMLParser.safeParse(ROOT);
+describe("multi-page pages: documents are an error (ml-cxo)", () => {
+  const MESSAGE =
+    "Multi-page documents (pages:) are not supported: write one document per page " +
+    "(type: map or type: scrollytelling); Astro and the web component compose pages.";
 
-  it("still validate", () => {
+  it("safeParseAny (what mlym validate calls): one error, at the pages: key", () => {
+    const { blockType, result } = YAMLParser.safeParseAny(D.root);
+    expect(blockType).toBe("unknown");
+    expect(result.success).toBe(false);
+    expect(result.errors).toEqual([{ path: "pages", code: "schema", message: MESSAGE, line: 7, column: 1 }]);
+    expect(result.warnings).toEqual([]);
+  });
+
+  it("a present-but-null type: with pages: gets the same error, not Unknown block type", () => {
+    const { blockType, result } = YAMLParser.safeParseAny("type:\npages: []\n");
+    expect(blockType).toBe("unknown");
+    expect(result.errors.map((e) => e.message)).toEqual([MESSAGE]);
+  });
+
+  it("a type: map block with a stray pages: key quotes the same message, not a did-you-mean", () => {
+    const result = map(`type: map
+id: m
+config:
+  center: [0, 0]
+  zoom: 2
+  mapStyle: https://example.com/style.json
+pages:
+  - path: /
+    title: Home
+    blocks: []
+`);
     expect(result.success).toBe(true);
+    const warning = result.warnings.find((w) => w.path === "pages");
+    expect(warning).toMatchObject({ message: `Unknown key "pages". ${MESSAGE}`, line: 7, column: 1 });
+    expect(warning).not.toHaveProperty("suggestion");
+    expect(result.warnings.filter((w) => w.message.includes("Did you mean"))).toEqual([]);
   });
 
-  it("config.dataFetching and config.theme warn at their keys", () => {
-    const dataFetching = find(result.warnings, "config.dataFetching", "has no effect");
-    expect(dataFetching?.kind).toBe("deprecation");
-    expect(dataFetching?.line).toBe(4);
-    const theme = find(result.warnings, "config.theme", "has no effect");
-    expect(theme?.kind).toBe("deprecation");
-    expect(theme?.line).toBe(3);
-  });
-
-  it("warn once per document that nothing renders them", () => {
-    const pages = result.warnings.filter((w) => w.message.includes("aren't rendered by any maplibre-yaml package"));
-    expect(pages).toHaveLength(1);
-    expect(pages[0]!.path).toBe("pages");
-    expect(pages[0]!.kind).toBe("deprecation");
-    expect(pages[0]!.line).toBe(7);
-  });
-
-  it("safeParseAny (what mlym validate calls) reports the same", () => {
-    const any = YAMLParser.safeParseAny(ROOT);
-    expect(any.blockType).toBe("root");
-    expect(any.result.warnings.filter((w) => w.kind === "deprecation").map((w) => w.path).sort()).toEqual([
-      "config.dataFetching",
-      "config.theme",
-      "pages",
-    ]);
-  });
-
-  it("a map block's config and a story's theme do not get these warnings", () => {
-    const block = map(D.plainMap);
-    expect(block.warnings.some((w) => w.message.includes("has no effect"))).toBe(false);
+  it("a story's own theme: is untouched", () => {
     const story = YAMLParser.safeParseScrollytellingBlock(D.storyTheme);
     expect(story.success).toBe(true);
+    expect(story.data!.theme).toBe("dark");
     expect(story.warnings.some((w) => w.message.includes("has no effect") || w.message.includes("Multi-page"))).toBe(
       false
     );

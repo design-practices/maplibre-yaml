@@ -31,7 +31,7 @@ import { formatTypeMessage } from "./format-messages";
 /**
  * A non-fatal validation finding surfaced alongside errors.
  *
- * @property path - Dotted JSON path to the offending value (e.g. `pages.0.blocks.0.layers.0.paint.circle-radis`)
+ * @property path - Dotted JSON path to the offending value (e.g. `layers.0.paint.circle-radis`)
  * @property message - Human-readable description
  * @property line - 1-based source line, when it can be resolved
  * @property column - 1-based source column, when it can be resolved
@@ -112,6 +112,15 @@ export const SOURCE_TYPES = [
 
 /** Valid top-level block `type` values for the block dispatcher. */
 export const BLOCK_TYPES = ["map", "scrollytelling"] as const;
+
+/**
+ * The one error a multi-page `pages:` document gets (removed in 0.11, ml-cxo):
+ * what to write instead, and who composes pages now. Also appended to the
+ * unknown-key warning for a stray `pages:` on a map or story block.
+ */
+export const MULTI_PAGE_MESSAGE =
+  "Multi-page documents (pages:) are not supported: write one document per page " +
+  "(type: map or type: scrollytelling); Astro and the web component compose pages.";
 
 /**
  * Known MapLibre expression operators.
@@ -533,11 +542,21 @@ function walk(
           walk(value[key], fieldSchema, [...path, key], ctx);
         } else if (!open) {
           if (specKeys?.has(key)) continue; // real spec key on passthrough
+          const pos = positionForKey(ctx.doc, ctx.lineCounter, path, key);
+          if (key === "pages" && path.length === 0) {
+            // A stray `pages:` on a map or story block (ml-cxo): say what
+            // multi-page documents became, not `Did you mean "images"?`.
+            ctx.warnings.push({
+              path: key,
+              message: `Unknown key "${key}". ${MULTI_PAGE_MESSAGE}`,
+              ...(pos ? { line: pos.line, column: pos.column } : {}),
+            });
+            continue;
+          }
           const hint = suggest(
             key,
             specKeys ? [...knownKeys, ...specKeys] : knownKeys
           );
-          const pos = positionForKey(ctx.doc, ctx.lineCounter, path, key);
           ctx.warnings.push({
             path: [...path, key].join("."),
             message:
@@ -689,39 +708,18 @@ const DEPRECATIONS: DeprecationRule[] = [
       'The map already shows "Loading map…" while it starts, and a data file that fails ' +
       "to load is reported on the map. Remove loading:.",
   },
-  // Accepted but inert (ml-1q8, ml-j2p): deprecated with a warning in 0.9.1
-  // so existing documents keep validating; 0.10 implements or removes them.
-  ...(["build", "hybrid"] as const).map((strategy) => ({
-    // Nothing fetches at build time: every source is fetched in the browser.
+  {
+    // `fetchStrategy: runtime` (ml-cxo): the one value the schema still takes,
+    // for one more release. It names what always happens, so it is noise;
+    // build and hybrid are schema errors now, worded by FetchStrategySchema.
+    // v1: on the GeoJSON source itself; v2: under the source's `runtime:`.
     field: "fetchStrategy",
     applies: (value: Record<string, unknown>, path: (string | number)[]) =>
-      value.fetchStrategy === strategy &&
+      value.fetchStrategy === "runtime" &&
       ((value.type === "geojson" && path[0] !== "style") || path[path.length - 1] === "runtime"),
     message:
-      `"fetchStrategy: ${strategy}" has no effect: maplibre-yaml fetches a source's data ` +
-      "in the browser when the map loads, whatever fetchStrategy says. Remove fetchStrategy:.",
-  })),
-  ...(["dataFetching", "theme"] as const).map((field) => ({
-    // A root document's `config:` (GlobalConfigSchema): nothing reads either.
-    field,
-    applies: (_value: Record<string, unknown>, path: (string | number)[], root: unknown) =>
-      path.length === 1 && path[0] === "config" && isRootDocument(root),
-    message:
-      `"config.${field}" has no effect: nothing in maplibre-yaml reads it` +
-      (field === "theme" ? " (a story's own theme: is read; this one is not)" : "") +
-      `. Remove ${field}:.`,
-  })),
-  {
-    // Multi-page documents (pages:, and the content / mixed / map-fullpage
-    // blocks that only occur inside them): one warning per document.
-    field: "pages",
-    applies: (_value: Record<string, unknown>, path: (string | number)[], root: unknown) =>
-      path.length === 0 && isRootDocument(root),
-    message:
-      "Multi-page documents (pages:, and content, mixed and map-fullpage blocks) aren't " +
-      "rendered by any maplibre-yaml package yet: this document validates, but nothing " +
-      "displays it. To show a map or a story, use a document with type: map or " +
-      "type: scrollytelling.",
+      '"fetchStrategy: runtime" is deprecated and has no effect: it names what always happens ' +
+      "(a source's data is fetched in the browser when the map loads). Remove fetchStrategy:.",
   },
   ...DEPRECATED_ACTION_TRIGGERS.map((trigger) => ({
     field: "action",
@@ -735,11 +733,6 @@ const DEPRECATIONS: DeprecationRule[] = [
       }" event instead. It will be removed in v2.`,
   })),
 ];
-
-/** A multi-page root document: no `type:`, a `pages:` key. */
-function isRootDocument(root: unknown): boolean {
-  return isPlainObject(root) && root["type"] === undefined && root["pages"] !== undefined;
-}
 
 /**
  * Record a deprecation warning for every rule matching the walked object.

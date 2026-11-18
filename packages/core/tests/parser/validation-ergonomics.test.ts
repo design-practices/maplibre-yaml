@@ -1,7 +1,7 @@
 /**
  * Validation-ergonomics behaviours: line/column positions, the warnings
- * channel (unknown keys, deprecations, expression checks), discriminated-union
- * error messages, and root-level `$ref` source resolution.
+ * channel (unknown keys, deprecations, expression checks) and
+ * discriminated-union error messages.
  *
  * @see docs/plans/feat-validation-ergonomics.md
  */
@@ -19,6 +19,20 @@ config:
   mapStyle: "https://demotiles.maplibre.org/style.json"
 layers:
 ${layer}
+`;
+}
+
+/** A map block with a named `sources:` record (one source, as written). */
+function mapWithSource(source: string): string {
+  return `type: map
+id: m
+config:
+  center: [0, 0]
+  zoom: 2
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+sources:
+${source}
+layers: []
 `;
 }
 
@@ -43,30 +57,26 @@ describe("levenshtein / suggest", () => {
 
 describe("line/column positions", () => {
   it("populates line/column for a Zod value error", () => {
-    const result = YAMLParser.safeParse(`pages:
-  - path: "/"
-    title: "T"
-    blocks:
-      - type: map
-        id: m
-        config:
-          center: [999, 40]
-          zoom: 12
-          mapStyle: "https://demotiles.maplibre.org/style.json"
+    const result = YAMLParser.safeParseMapBlock(`type: map
+id: m
+config:
+  center: [999, 40]
+  zoom: 12
+  mapStyle: "https://demotiles.maplibre.org/style.json"
 `);
     expect(result.success).toBe(false);
     const err = result.errors.find((e) =>
       e.path.includes("center")
     );
     expect(err).toBeDefined();
-    expect(err!.line).toBe(8);
-    expect(err!.column).toBe(20);
+    expect(err!.line).toBe(4);
+    expect(err!.column).toBe(12);
   });
 
   it("populates line/column for YAML syntax errors", () => {
-    const result = YAMLParser.safeParse(`pages:
-  - path: "/"
-    title: "unterminated
+    const result = YAMLParser.safeParseMapBlock(`type: map
+id: m
+title: "unterminated
 `);
     expect(result.success).toBe(false);
     expect(result.errors[0].message).toContain("YAML syntax error");
@@ -78,23 +88,6 @@ describe("line/column positions", () => {
 });
 
 describe("discriminated-union messages (product surface — snapshot)", () => {
-  it("unknown layer type in a root layers record", () => {
-    const result = YAMLParser.safeParse(`layers:
-  l:
-    id: l
-    type: circl
-    source: { type: geojson, url: "https://example.com/d.geojson" }
-pages:
-  - path: "/"
-    title: "T"
-    blocks: []
-`);
-    expect(result.success).toBe(false);
-    expect(result.errors[0].message).toBe(
-      'Unknown layer type "circl". Valid types: circle, line, fill, symbol, raster, fill-extrusion, heatmap, hillshade, color-relief, background. Did you mean "circle"?'
-    );
-  });
-
   it("unknown layer type inside a block layers array", () => {
     const result = YAMLParser.safeParseMapBlock(
       mapBlock(`  - id: p
@@ -108,15 +101,11 @@ pages:
   });
 
   it("unknown source type", () => {
-    const result = YAMLParser.safeParse(`sources:
-  s:
+    const result = YAMLParser.safeParseMapBlock(
+      mapWithSource(`  s:
     type: geojsn
-    url: "https://example.com/d.geojson"
-pages:
-  - path: "/"
-    title: "T"
-    blocks: []
-`);
+    url: "https://example.com/d.geojson"`)
+    );
     expect(result.success).toBe(false);
     expect(result.errors[0].message).toBe(
       'Unknown source type "geojsn". Valid types: geojson, vector, raster, raster-dem, image, video, grid. Did you mean "geojson"?'
@@ -138,15 +127,11 @@ pages:
   });
 
   it('unknown source type "raster-dme" suggests raster-dem', () => {
-    const result = YAMLParser.safeParse(`sources:
-  terrain:
+    const result = YAMLParser.safeParseMapBlock(
+      mapWithSource(`  terrain:
     type: raster-dme
-    url: "https://example.com/terrain.json"
-pages:
-  - path: "/"
-    title: "T"
-    blocks: []
-`);
+    url: "https://example.com/terrain.json"`)
+    );
     expect(result.success).toBe(false);
     expect(result.errors[0].message).toContain('Did you mean "raster-dem"?');
   });
@@ -156,23 +141,19 @@ pages:
     // raster-dem from SOURCE_TYPES and this reports "Unknown source type";
     // drop it from LayerSourceSchema and union mining falls back to the
     // generic "does not match any of the expected formats".
-    const result = YAMLParser.safeParse(`sources:
-  terrain:
+    const result = YAMLParser.safeParseMapBlock(
+      mapWithSource(`  terrain:
     type: raster-dem
     encoding: srtm
-    url: "https://example.com/terrain.json"
-pages:
-  - path: "/"
-    title: "T"
-    blocks: []
-`);
+    url: "https://example.com/terrain.json"`)
+    );
     expect(result.success).toBe(false);
     const err = result.errors.find((e) => e.path === "sources.terrain");
     expect(err).toBeDefined();
     // The real per-field failure, not a generic "matched no union member".
     // Plain enum wording (ml-aot.62): the field, the value, the choices.
     expect(err!.message).toBe('encoding: "srtm" is not one of terrarium, mapbox, custom.');
-    expect(err!.line).toBe(3);
+    expect(err!.line).toBe(9);
   });
 
   it("unknown block type via safeParseAny includes a did-you-mean", () => {
@@ -187,26 +168,27 @@ id: x
 });
 
 describe("block dispatch — empty/null top-level type", () => {
-  it("routes a present-but-null `type:` with `pages:` to the root document", () => {
+  it("treats a present-but-null `type:` as missing, not as `Unknown block type: null`", () => {
     const { blockType, result } = YAMLParser.safeParseAny(`type:
-pages: []
+config:
+  center: [0, 0]
+  zoom: 2
 `);
-    // Falls through to pages-based root detection, not "Unknown block type".
-    expect(blockType).toBe("root");
+    expect(blockType).toBe("unknown");
+    expect(result.success).toBe(false);
     expect(
       result.errors.every((e) => !e.message.includes("Unknown block type"))
     ).toBe(true);
+    expect(result.errors[0].message).toContain("type: map");
   });
 
-  it("validates a null-type root document with real pages", () => {
+  it("a present-but-null `type:` with `pages:` gets the multi-page error (ml-cxo)", () => {
     const { blockType, result } = YAMLParser.safeParseAny(`type:
-pages:
-  - path: "/"
-    title: "Home"
-    blocks: []
+pages: []
 `);
-    expect(blockType).toBe("root");
-    expect(result.success).toBe(true);
+    expect(blockType).toBe("unknown");
+    expect(result.errors.map((e) => e.path)).toEqual(["pages"]);
+    expect(result.errors[0].message).toContain("Multi-page documents (pages:) are not supported");
   });
 });
 
@@ -228,15 +210,11 @@ describe("valid source type failing for another reason (not 'unknown type')", ()
     expect(err!.message).not.toContain("Unknown source type");
   });
 
-  it("reports the real url/data error for a root-level geojson source missing url/data", () => {
-    const result = YAMLParser.safeParse(`sources:
-  s:
-    type: geojson
-pages:
-  - path: "/"
-    title: "T"
-    blocks: []
-`);
+  it("reports the real url/data error for a named geojson source missing url/data", () => {
+    const result = YAMLParser.safeParseMapBlock(
+      mapWithSource(`  s:
+    type: geojson`)
+    );
     expect(result.success).toBe(false);
     expect(result.errors[0].path).toBe("sources.s");
     expect(result.errors[0].message).toContain("url");
@@ -657,65 +635,6 @@ describe("warnings channel — bounded expression checks", () => {
     );
     expect(result.success).toBe(true);
     expect(result.warnings).toHaveLength(0);
-  });
-});
-
-describe("root-level $ref source resolution", () => {
-  it("resolves a valid root-level $ref source end-to-end", () => {
-    const result = YAMLParser.safeParse(`sources:
-  boundaries:
-    type: geojson
-    url: "https://example.com/boundaries.geojson"
-pages:
-  - path: "/"
-    title: "T"
-    blocks:
-      - type: map
-        id: m
-        config:
-          center: [0, 0]
-          zoom: 2
-          mapStyle: "https://demotiles.maplibre.org/style.json"
-        layers:
-          - id: outline
-            type: line
-            source: { $ref: "#/sources/boundaries" }
-`);
-    expect(result.success).toBe(true);
-    const block = (result.data as any).pages[0].blocks[0];
-    const source = block.layers[0].source;
-    // The $ref object was replaced with the actual source definition.
-    expect(source.type).toBe("geojson");
-    expect(source.url).toBe("https://example.com/boundaries.geojson");
-    expect(source.$ref).toBeUndefined();
-  });
-
-  it("errors on a dangling $ref source with a did-you-mean suggestion", () => {
-    const result = YAMLParser.safeParse(`sources:
-  boundaries:
-    type: geojson
-    url: "https://example.com/boundaries.geojson"
-pages:
-  - path: "/"
-    title: "T"
-    blocks:
-      - type: map
-        id: m
-        config:
-          center: [0, 0]
-          zoom: 2
-          mapStyle: "https://demotiles.maplibre.org/style.json"
-        layers:
-          - id: outline
-            type: line
-            source: { $ref: "#/sources/boundarie" }
-`);
-    expect(result.success).toBe(false);
-    expect(result.errors[0].message).toContain(
-      "Source reference not found: #/sources/boundarie"
-    );
-    expect(result.errors[0].message).toContain('Did you mean "#/sources/boundaries"?');
-    expect(result.errors[0].message).toContain("Defined sources: boundaries.");
   });
 });
 

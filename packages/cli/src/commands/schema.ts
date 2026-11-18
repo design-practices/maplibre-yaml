@@ -19,7 +19,7 @@ import { EXIT_CODES } from '../types.js';
 const require = createRequire(import.meta.url);
 
 /** The block schemas emitted by @maplibre-yaml/core. */
-export const SCHEMA_BLOCKS = ['map', 'scrollytelling', 'root', 'any'] as const;
+export const SCHEMA_BLOCKS = ['map', 'scrollytelling', 'any'] as const;
 export type SchemaBlock = (typeof SCHEMA_BLOCKS)[number];
 
 /**
@@ -57,7 +57,7 @@ export const schemaCommand = defineCommand({
   meta: {
     name: 'schema',
     description:
-      'Print the JSON Schema for a block (map, scrollytelling, root, any)',
+      'Print the JSON Schema for a block (map, scrollytelling, any)',
   },
   args: {
     block: {

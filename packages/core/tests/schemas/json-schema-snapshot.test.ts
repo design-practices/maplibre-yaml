@@ -102,10 +102,10 @@ describe("emitted JSON Schema artifacts", () => {
     expect(mapDef.properties.config.additionalProperties).toBe(true);
   });
 
-  it("emits `any` as a oneOf over the three document shapes", () => {
+  it("emits `any` as a oneOf over the two document shapes", () => {
     const anyDef = (schemas.any.$defs as Record<string, any>).any;
     expect(Array.isArray(anyDef.oneOf)).toBe(true);
-    expect(anyDef.oneOf).toHaveLength(3);
+    expect(anyDef.oneOf).toHaveLength(2);
     expect(anyDef.anyOf).toBeUndefined();
   });
 });
@@ -128,15 +128,12 @@ describe("the published schemas accept what the parser normalizes (KTD6)", () =>
     config,
     chapters: [{ id: "a", title: "A", center: [0, 0], zoom: 1 }],
   };
-  const root = { $schema: "./root.schema.json", pages: [{ path: "/", title: "Home", blocks: [] }] };
 
   it.each([
     ["map", map],
     ["scrollytelling", story],
-    ["root", root],
     ["any", map],
     ["any", story],
-    ["any", root],
   ] as const)("%s accepts a root $schema and nested locale tables", (name, doc) => {
     const validate = ajv.compile(schemas[name]);
     expect(validate(doc), JSON.stringify(validate.errors)).toBe(true);
@@ -184,7 +181,7 @@ describe("deprecated fields are annotated in the published contract", () => {
     return out;
   };
 
-  it("marks the interaction actions and legacy refresh fields", () => {
+  it("marks the interaction actions, legacy refresh fields and fetchStrategy", () => {
     const schemas = buildSchemas();
     const found = [...new Set(deprecatedPaths(schemas.map))].sort();
 
@@ -195,6 +192,7 @@ describe("deprecated fields are annotated in the published contract", () => {
       "layers.interactive.click.action",
       "layers.interactive.mouseenter.action",
       "layers.interactive.mouseleave.action",
+      "sources.fetchStrategy",
       "sources.refreshInterval",
       "sources.updateKey",
       "sources.updateStrategy",

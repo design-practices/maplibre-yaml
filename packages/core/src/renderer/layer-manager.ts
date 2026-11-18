@@ -1447,11 +1447,12 @@ export class LayerManager {
     } else {
       // Falling through silently left the layer pointing at a source that
       // was never added — MapLibre then killed the document with an opaque
-      // style error (ml-tfd.8). The common cause is a `$ref` in a standalone
-      // block, which parses cleanly but nothing ever resolves.
+      // style error (ml-tfd.8). The common cause is a `$ref` in a layer that
+      // reached the renderer without going through the parser (which resolves
+      // one against the document's sources: record).
       const detail =
         "$ref" in (source as Record<string, unknown>)
-          ? `a "$ref" reference, which only resolves inside a "pages:" document`
+          ? `a "$ref" reference, which only the parser resolves (against the document's sources:)`
           : `an unrecognized source (type: ${JSON.stringify((source as any).type)})`;
       throw new Error(
         `Layer "${layer.id}" has ${detail}. ` +

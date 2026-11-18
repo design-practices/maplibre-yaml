@@ -107,7 +107,6 @@ interface ResolveBuild {
 
 /** The parser's YAML entry points, as each bundle exports them. */
 interface Parser {
-  safeParse(text: string): unknown;
   safeParseAny(text: string): unknown;
   safeParseMapBlock(text: string): unknown;
   safeParseScrollytellingBlock(text: string): unknown;
@@ -167,7 +166,7 @@ describe("stripped and unstripped schemas validate the same corpus identically",
     let failures = 0;
     for (const doc of CORPUS) {
       const calls: (keyof Parser)[] =
-        doc.kind === "map" ? ["safeParseMapBlock", "safeParseAny"] : doc.kind === "story" ? ["safeParseScrollytellingBlock", "safeParseAny"] : ["safeParseAny", "safeParse"];
+        doc.kind === "map" ? ["safeParseMapBlock", "safeParseAny"] : doc.kind === "story" ? ["safeParseScrollytellingBlock", "safeParseAny"] : ["safeParseAny"];
       for (const call of calls) {
         const plain = bundles.plain.parser[call](doc.text) as { success?: boolean; result?: { success: boolean } };
         const stripped = bundles.stripped.parser[call](doc.text);

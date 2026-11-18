@@ -22,7 +22,7 @@
  * paint properties, layout properties, popups, and legends.
  *
  * ### Content Schemas
- * Schemas for rich HTML content blocks that can be used in pages and scrollytelling.
+ * Schemas for rich HTML content items (text, images, iframes).
  *
  * ### Map Schemas
  * Schemas for map blocks, including configuration, controls, and legends.
@@ -30,45 +30,35 @@
  * ### Scrollytelling Schemas
  * Schemas for narrative scrollytelling experiences with chapters and actions.
  *
- * ### Page Schemas
- * Top-level schemas for pages, blocks, and the root configuration structure.
+ * ### Global Config Schema
+ * Site-wide map defaults (the Astro integration's `loadGlobalMapConfig`).
  *
  * @example
  * Basic schema usage
  * ```typescript
- * import { RootSchema } from '@maplibre-yaml/core/schemas';
+ * import { MapBlockSchema } from '@maplibre-yaml/core/schemas';
  *
- * const config = {
- *   pages: [
- *     {
- *       path: '/',
- *       title: 'Home',
- *       blocks: [
- *         {
- *           type: 'map',
- *           id: 'main-map',
- *           config: {
- *             center: [0, 0],
- *             zoom: 2,
- *             mapStyle: 'https://example.com/style.json'
- *           }
- *         }
- *       ]
- *     }
- *   ]
+ * const block = {
+ *   type: 'map',
+ *   id: 'main-map',
+ *   config: {
+ *     center: [0, 0],
+ *     zoom: 2,
+ *     mapStyle: 'https://example.com/style.json'
+ *   }
  * };
  *
- * const validated = RootSchema.parse(config);
+ * const validated = MapBlockSchema.parse(block);
  * ```
  *
  * @example
  * Type inference from schemas
  * ```typescript
  * import { z } from 'zod/v3';
- * import { LayerSchema, PageSchema } from '@maplibre-yaml/core/schemas';
+ * import { LayerSchema, MapBlockSchema } from '@maplibre-yaml/core/schemas';
  *
  * type Layer = z.infer<typeof LayerSchema>;
- * type Page = z.infer<typeof PageSchema>;
+ * type MapBlock = z.infer<typeof MapBlockSchema>;
  * ```
  */
 
@@ -156,7 +146,6 @@ export {
   ValidTagNames,
   ContentElementSchema,
   ContentItemSchema,
-  ContentBlockSchema,
 } from "./content.schema";
 
 // Map schemas
@@ -166,7 +155,6 @@ export {
   LegendConfigSchema,
   MapConfigSchema,
   MapBlockSchema,
-  MapFullPageBlockSchema,
 
   StateSchema,
   MarkerSchema,
@@ -188,7 +176,6 @@ export type {
   LegendConfig,
   MapConfig,
   MapBlock,
-  MapFullPageBlock,
 
   State,
   Parameters,
@@ -236,18 +223,6 @@ export {
 } from "./scrollytelling.schema";
 export type { Chapter, ChapterAction, ChapterLayers, ScrollytellingBlock } from "./scrollytelling.schema";
 
-// Page schemas
-export {
-  MixedBlockSchema,
-  BlockSchema,
-  PageSchema,
-  GlobalConfigSchema,
-  RootSchema,
-} from "./page.schema";
-export type {
-  MixedBlock,
-  Block,
-  Page,
-  GlobalConfig,
-  RootConfig,
-} from "./page.schema";
+// Site-wide map defaults (the Astro integration's `loadGlobalMapConfig`)
+export { GlobalConfigSchema } from "./global-config.schema";
+export type { GlobalConfig } from "./global-config.schema";

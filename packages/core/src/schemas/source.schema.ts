@@ -43,7 +43,7 @@ export {
   RefreshConfigSchema,
   type RefreshConfig,
 } from "./sources/shared";
-export { GeoJSONSourceSchema, type GeoJSONSource } from "./sources/geojson";
+export { GeoJSONSourceSchema, FetchStrategySchema, fetchStrategyRemovedMessage, type GeoJSONSource } from "./sources/geojson";
 export { VectorSourceSchema, type VectorSource } from "./sources/vector";
 export { RasterSourceSchema, type RasterSource } from "./sources/raster";
 export { RasterDEMSourceSchema, type RasterDEMSource } from "./sources/raster-dem";

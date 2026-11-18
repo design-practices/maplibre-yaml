@@ -1,8 +1,10 @@
+type: map
+id: m
+config:
+  center: [0, 0]
+  zoom: 2
+  mapStyle: "https://demotiles.maplibre.org/style.json"
 sources:
   quakes:
     type: geojsn
     url: "https://example.com/quakes.geojson"
-pages:
-  - path: "/"
-    title: "Bad source type"
-    blocks: []

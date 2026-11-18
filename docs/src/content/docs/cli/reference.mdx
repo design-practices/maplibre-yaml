@@ -129,7 +129,7 @@ A folder of maps often holds other JSON too: GeoJSON, a `package.json`, a
 `style.json`. So under a folder argument, a `.json` or `.toml` file is
 validated only if its first 64 KB (for a larger JSON file, also its last
 64 KB, where sorted keys put the root `type`) show it is a document: it names a `type`
-of `map` or `scrollytelling`, has a top-level `pages` key, or carries a
+of `map` or `scrollytelling`, has a top-level `pages` key (reported as an error), or carries a
 `$schema` (or a TOML `#:schema` line) under
 `https://docs.maplibre-yaml.org/schema/`. The check reads the text and
 doesn't parse it, so a document with a syntax error, or one that can't be
@@ -373,7 +373,7 @@ npx maplibre-yaml@latest schema [block] [options]
 
 | Argument | Required | Default | Description                                          |
 | -------- | -------- | ------- | ---------------------------------------------------- |
-| `block`  | No       | `map`   | One of `map`, `scrollytelling`, `root`, `any`        |
+| `block`  | No       | `map`   | One of `map`, `scrollytelling`, `any`                |
 
 | Option  | Alias | Type   | Description                                     |
 | ------- | ----- | ------ | ----------------------------------------------- |

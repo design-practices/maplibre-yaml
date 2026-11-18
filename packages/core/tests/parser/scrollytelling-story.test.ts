@@ -4,8 +4,8 @@
  * @description
  * ml-ddg: `location:` / `region:` / `route:` sugar on a story layer's source
  * surfaced the raw "GeoJSON source requires url/data/prefetchedData" error,
- * on every scrollytelling entry path (standalone parse, value validation,
- * and a story nested in a `pages:` document).
+ * on every scrollytelling entry path (standalone parse and value
+ * validation).
  *
  * ml-t2x: a story's map was `config:` + `layers:` only; `sources:`,
  * `markers:`, `legend:`, `state:`/`parameters:` were unknown keys. The story
@@ -62,28 +62,6 @@ describe("geo sugar on story layer sources (ml-ddg)", () => {
     const result = YAMLParser.safeParseScrollytellingBlockValue(value);
     expect(result.errors).toEqual([]);
     expect((result.data!.layers[0] as any).source.data.geometry.type).toBe("LineString");
-  });
-
-  it("a story nested in a pages: document expands it too", () => {
-    const result = YAMLParser.safeParse(`pages:
-  - path: /
-    title: Home
-    blocks:
-      - type: scrollytelling
-        id: s
-        config: { center: [0, 0], zoom: 2, mapStyle: "https://demotiles.maplibre.org/style.json" }
-        layers:
-          - id: fuji
-            type: circle
-            source:
-              type: geojson
-              location: { coordinates: [138.7274, 35.3606] }
-        chapters:
-          - { id: a, title: A, center: [0, 0], zoom: 3 }
-`);
-    expect(result.errors).toEqual([]);
-    const block = (result.data as any).pages[0].blocks[0];
-    expect(block.layers[0].source.data.geometry.type).toBe("Point");
   });
 
   it("a bad sugar value reports its own error at the sugar key", () => {

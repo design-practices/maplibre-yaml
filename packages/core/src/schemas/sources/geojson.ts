@@ -103,6 +103,33 @@ import {
  * @see {@link StreamConfigSchema} for streaming options
  * @see {@link https://maplibre.org/maplibre-style-spec/sources/#geojson | MapLibre GeoJSON Source}
  */
+/**
+ * How a GeoJSON source's `fetchStrategy:` is read: `runtime` only.
+ *
+ * @remarks
+ * `build` and `hybrid` were accepted and inert from the start (nothing in
+ * maplibre-yaml fetches at build time) and warned since 0.9.1; they are
+ * errors since 0.11 (ml-cxo). The error names the alternative: `prefetchedData`,
+ * which the Astro loader fills. `runtime` stays accepted for one more
+ * release, deprecated, because it names what always happens.
+ */
+export const FetchStrategySchema = z.enum(["runtime"], {
+  errorMap: (issue, ctx) =>
+    issue.code === "invalid_enum_value"
+      ? { message: fetchStrategyRemovedMessage(issue.received) }
+      : { message: ctx.defaultError },
+});
+
+/** The error for `fetchStrategy: build` / `hybrid` (and any other value). */
+export function fetchStrategyRemovedMessage(received: unknown): string {
+  return (
+    `"fetchStrategy: ${String(received)}" is not supported: maplibre-yaml fetches a source's data ` +
+    "in the browser when the map loads. To inline data fetched elsewhere (at build time, by a " +
+    "script), write it under prefetchedData: — the Astro loader fills it for you. " +
+    "Remove fetchStrategy:."
+  );
+}
+
 export const GeoJSONSourceSchema = z
   .object({
     type: z.literal("geojson").describe("Source type"),
@@ -127,12 +154,9 @@ export const GeoJSONSourceSchema = z
       .any()
       .optional()
       .describe("Pre-fetched data from build time"),
-    fetchStrategy: z
-      .enum(["runtime", "build", "hybrid"])
-      .default("runtime")
-      .describe(
-        "No effect (deprecated): data is always fetched in the browser when the map loads. build and hybrid warn and do nothing"
-      ),
+    fetchStrategy: FetchStrategySchema.default("runtime").describe(
+      "Deprecated: runtime is the only value and names what always happens (data is fetched in the browser when the map loads), so remove it. build and hybrid are errors: to inline data fetched elsewhere, write it under prefetchedData (the Astro loader fills it)"
+    ),
     stream: StreamConfigSchema.optional().describe(
       "WebSocket/SSE streaming configuration"
     ),

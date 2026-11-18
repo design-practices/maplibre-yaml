@@ -185,23 +185,10 @@ layers:
     expect(deprecation(result.warnings, "style.sources.live.runtime.loading")).toBeDefined();
   });
 
-  it("a story and a multi-page root document warn too", () => {
+  it("a story warns too", () => {
     const s = story(indent(`type: geojson\nurl: https://example.com/v.geojson\n${LOADING}`, 4));
     expect(s.success).toBe(true);
     expect(deprecation(s.warnings, "sources.live.loading")).toBeDefined();
-
-    const root = YAMLParser.safeParse(`sources:
-  live:
-    type: geojson
-    url: https://example.com/v.geojson
-    loading: { enabled: true }
-pages:
-  - path: /
-    title: Home
-    blocks: []
-`);
-    expect(root.success).toBe(true);
-    expect(deprecation(root.warnings, "sources.live.loading")).toBeDefined();
   });
 
   it("a source without loading: gets no such warning", () => {

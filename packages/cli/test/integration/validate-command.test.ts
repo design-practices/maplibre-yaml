@@ -50,13 +50,17 @@ describe('validate command (integration)', () => {
     expect(stdout).toContain('valid-scrollytelling.yaml');
   });
 
-  it('exits with 0 for root pages document, warning that nothing renders it', async () => {
-    // A deprecation warning (ml-j2p.4): exit 0 even under --strict.
-    const { stdout } = await execAsync(
-      `node "${CLI}" validate --strict "test/fixtures/valid-root.yaml"`
-    );
-    expect(stdout).toContain('valid-root.yaml');
-    expect(stdout).toContain("aren't rendered by any maplibre-yaml package yet");
+  it('exits with 1 for a multi-page pages: document, saying what to write instead (ml-cxo)', async () => {
+    try {
+      await execAsync(`node "${CLI}" validate "test/fixtures/pages-document.yaml"`);
+      expect.unreachable('should have exited non-zero');
+    } catch (error: any) {
+      expect(error.code).toBe(1);
+      const output = error.stdout + error.stderr;
+      expect(output).toContain('pages-document.yaml');
+      expect(output).toContain('Multi-page documents (pages:) are not supported');
+      expect(output).toContain('write one document per page');
+    }
   });
 
   it('exits with 1 and lists valid types for unknown block type', async () => {
@@ -186,6 +190,17 @@ describe('validate command (integration)', () => {
 
   // Skipping help test - citty's help output timing is inconsistent in CI
   // Help functionality is provided by the framework and works reliably
+
+  it('passes --strict with a deprecated fetchStrategy: runtime (a deprecation, not promoted) (ml-cxo)', async () => {
+    const { stdout } = await execAsync(
+      `node "${CLI}" validate --strict "test/fixtures/warns-fetch-strategy-runtime.yaml"`
+    );
+    // execAsync resolves only on exit 0: a deprecation is not promoted by --strict.
+    expect(stdout).toContain('warns-fetch-strategy-runtime.yaml');
+    expect(stdout).toContain('"fetchStrategy: runtime" is deprecated and has no effect');
+    expect(stdout).toContain('1 file(s) with warnings');
+    expect(stdout).not.toContain('error');
+  });
 
   it('respects --strict flag', async () => {
     // Create a test case where we'd have warnings if they existed

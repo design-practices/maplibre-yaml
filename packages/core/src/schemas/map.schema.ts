@@ -303,24 +303,6 @@ export type FitToConfig = z.infer<typeof FitToSchema>;
  *   mapStyle: "https://tiles.openfreemap.org/styles/liberty"
  * ```
  *
- * @example Map with Global Style Inheritance
- * ```yaml
- * # Root config sets default style
- * config:
- *   defaultMapStyle: "https://tiles.openfreemap.org/styles/liberty"
- *
- * pages:
- *   - path: "/"
- *     title: "Home"
- *     blocks:
- *       - type: map
- *         id: simple-map
- *         config:
- *           center: [-74.006, 40.7128]
- *           zoom: 12
- *           # mapStyle inherited from config.defaultMapStyle
- * ```
- *
  * @example 3D View
  * ```yaml
  * config:
@@ -907,8 +889,11 @@ export const MapDescriptionSchema = z
  *     zoom: 12
  *     mapStyle: "https://tiles.openfreemap.org/styles/liberty"
  *   layers:
- *     - $ref: "#/layers/bikeLayer"
- *     - $ref: "#/layers/parkLayer"
+ *     - id: bikes
+ *       type: line
+ *       source:
+ *         type: geojson
+ *         url: "https://example.com/bikes.geojson"
  *   controls:
  *     navigation: true
  *     scale: true
@@ -987,84 +972,3 @@ export const MapBlockSchema: z.ZodObject<any> = z
 /** Inferred type for map block. */
 export type MapBlock = z.infer<typeof MapBlockSchema>;
 
-/**
- * Full-page map block.
- *
- * @remarks
- * Creates a map that fills the entire viewport. Automatically handles
- * viewport sizing and positioning. Ideal for map-focused pages.
- *
- * @example Full-Page Map
- * ```yaml
- * - type: map-fullpage
- *   id: fullpage-map
- *   config:
- *     center: [-122.4194, 37.7749]
- *     zoom: 13
- *     pitch: 45
- *     mapStyle: "https://tiles.openfreemap.org/styles/liberty"
- *   layers:
- *     - id: buildings
- *       type: fill-extrusion
- *       source:
- *         type: vector
- *         url: "https://example.com/buildings.json"
- *       source-layer: buildings
- *       paint:
- *         fill-extrusion-color: "#aaa"
- *         fill-extrusion-height: ["get", "height"]
- *   controls:
- *     navigation: true
- *     fullscreen: true
- * ```
- */
-export const MapFullPageBlockSchema: z.ZodObject<any> = z
-  .object({
-    type: z.literal("map-fullpage").describe("Block type"),
-    id: z.string().describe("Unique block identifier"),
-    className: z.string().optional().describe("CSS class name for container"),
-    style: z.string().optional().describe("Inline CSS styles for container"),
-    title: MapTitleSchema.optional(),
-    description: MapDescriptionSchema.optional(),
-    config: MapConfigSchema,
-    sources: z
-      .record(z.string(), LayerSourceSchema)
-      .optional()
-      .describe("Map sources"),
-    layers: z.array(LayerOrReferenceSchema).default([]).describe("Map layers"),
-    controls: ControlsConfigSchema.optional().describe("Map controls"),
-    legend: LegendConfigSchema.optional().describe("Legend configuration"),
-    state: StateSchema.optional().describe(
-      "Runtime-tunable values, readable from expressions via `global-state`"
-    ),
-    parameters: ParametersSchema.optional().describe(
-      "Presentation metadata for `state` keys — label, type, range"
-    ),
-    markers: MarkersSchema.optional().describe(
-      "Standalone markers — DOM pins live, symbol layers + sprite on export"
-    ),
-    popups: PopupsSchema.optional().describe(
-      "Standalone popups open at a coordinate — no layer, no marker"
-    ),
-    images: ImagesSchema.optional().describe(
-      "Named images for symbol layers and patterns — loaded live, merged into the sprite on export"
-    ),
-    terrain: TerrainSchema.optional().describe(
-      "3D terrain from a raster-dem source — setTerrain live, style.json `terrain` on export"
-    ),
-    sky: SkySchema.optional().describe(
-      "Sky, fog, and globe atmosphere — setSky live (maplibre-gl >= 4.5), style.json `sky` on export"
-    ),
-    projection: ProjectionSchema.optional().describe(
-      "Map projection (`globe` needs maplibre-gl >= 5) — style.json `projection` on export"
-    ),
-    light: LightSchema.optional().describe(
-      "The style-spec light shading fill-extrusion faces — map.setLight live, style.json `light` on export"
-    ),
-  })
-  .describe(
-    "Full-page map block (multi-page documents only). No effect (deprecated): no maplibre-yaml package renders it yet"
-  );
-
-/** Inferred type for full-page map block. */
-export type MapFullPageBlock = z.infer<typeof MapFullPageBlockSchema>;

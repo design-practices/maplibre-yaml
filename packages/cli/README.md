@@ -72,8 +72,8 @@ reload the page.
   format, listing on stderr what the target can't keep (comments, anchors,
   nulls). `-o` writes a file, `--strict` fails on any loss
   ([JSON & TOML documents](https://docs.maplibre-yaml.org/guides/json-and-toml/)).
-- **`schema [block]`** prints the JSON Schema for `map`, `scrollytelling`,
-  `root` or `any`, matching the installed core.
+- **`schema [block]`** prints the JSON Schema for `map`, `scrollytelling` or
+  `any`, matching the installed core.
 - **`bake [preset]`** regenerates the pattern images of the `crosshatch` and
   `blueprint` classic styles (and `crosshatch-walls`, an optional wall hatch).
 

@@ -47,7 +47,6 @@ export const NEVER_MOVE = [
   "/guides/data-sources/#csv-and-spreadsheets", // core's error text
   "/schema/latest/map.schema.json", // editor modelines
   "/schema/latest/scrollytelling.schema.json",
-  "/schema/latest/root.schema.json",
   "/schema/latest/any.schema.json",
   "/guides/export-classes/", // linked from 3 READMEs
   "/getting-started/installation/#using-a-bundler-vite",

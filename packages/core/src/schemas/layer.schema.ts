@@ -27,35 +27,30 @@ import { getEffectsHost, type EffectBlock } from "../effects-host";
 import { LINK_TARGET_VALUES } from "../utils/html";
 
 /**
- * Reference to a root-level named source.
+ * Reference to a named source.
  *
  * @remarks
- * A layer's `source:` may point at a source declared in the root document's
+ * A layer's `source:` may point at a source declared in the document's
  * top-level `sources:` map using JSON-pointer syntax. The reference is resolved
  * at parse time (see {@link YAMLParser.resolveReferences}); a dangling
  * reference produces a clear error with a did-you-mean suggestion.
  *
  * @example
  * ```yaml
+ * type: map
+ * id: boundary-map
+ * config:
+ *   center: [-74.006, 40.7128]
+ *   zoom: 10
+ *   mapStyle: "https://tiles.openfreemap.org/styles/liberty"
  * sources:
  *   boundaries:
  *     type: geojson
  *     url: "https://example.com/boundaries.geojson"
- *
- * pages:
- *   - path: "/"
- *     title: "Boundaries"
- *     blocks:
- *       - type: map
- *         id: boundary-map
- *         config:
- *           center: [-74.006, 40.7128]
- *           zoom: 10
- *           mapStyle: "https://tiles.openfreemap.org/styles/liberty"
- *         layers:
- *           - id: outline
- *             type: line
- *             source: { $ref: "#/sources/boundaries" }
+ * layers:
+ *   - id: outline
+ *     type: line
+ *     source: { $ref: "#/sources/boundaries" }
  * ```
  */
 export const SourceReferenceSchema = z
@@ -1420,40 +1415,13 @@ export const LayerSchema: z.ZodDiscriminatedUnion<"type", LayerUnionMembers> =
 export type Layer = z.infer<typeof LayerSchema>;
 
 /**
- * Layer reference for reusing global layer definitions.
+ * Layer reference by JSON pointer.
  *
  * @remarks
- * References a layer defined in the global `layers` object using
- * JSON Pointer-like syntax: `#/layers/layerName`
- *
- * @example
- * ```yaml
- * # Global definition (a multi-page root document)
- * layers:
- *   bikeLayer:
- *     id: bikes
- *     type: line
- *     source:
- *       type: geojson
- *       url: "https://example.com/bikes.geojson"
- *     paint:
- *       line-color: "#16a34a"
- *       line-width: 2
- *
- * # Reference in a map
- * pages:
- *   - path: "/"
- *     title: "Bike lanes"
- *     blocks:
- *       - type: map
- *         id: bike-map
- *         config:
- *           center: [-74.006, 40.7128]
- *           zoom: 12
- *           mapStyle: "https://tiles.openfreemap.org/styles/liberty"
- *         layers:
- *           - $ref: "#/layers/bikeLayer"
- * ```
+ * `{ $ref: "#/layers/name" }` names an entry of a top-level `layers:` record.
+ * A map or story document's `layers:` is a list, so the reference resolves
+ * nowhere and validation reports it at the `$ref` line: write the layer
+ * inline, and reuse one with a YAML anchor (`&name` / `*name`).
  */
 export const LayerReferenceSchema = z
   .object({

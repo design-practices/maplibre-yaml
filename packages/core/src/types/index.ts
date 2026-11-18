@@ -8,7 +8,7 @@
  *
  * @example
  * ```typescript
- * import type { MapConfig, Layer, Page, RootConfig } from '@maplibre-yaml/core/types';
+ * import type { MapConfig, Layer, MapBlock } from '@maplibre-yaml/core/types';
  *
  * const config: MapConfig = {
  *   mapStyle: 'https://tiles.openfreemap.org/styles/liberty',
@@ -54,16 +54,9 @@ import type {
   LegendConfigSchema,
   MapBlockSchema,
 
-  // Content types
-  ContentBlockSchema,
-
   // Scrollytelling types
   ChapterSchema,
   ScrollytellingBlockSchema,
-
-  // Page and root types
-  PageSchema,
-  RootSchema,
 } from "../schemas";
 
 // GeoJSON types
@@ -103,19 +96,12 @@ export type ControlsConfig = z.infer<typeof ControlsConfigSchema>;
 export type LegendConfig = z.infer<typeof LegendConfigSchema>;
 export type MapBlock = z.infer<typeof MapBlockSchema>;
 
-// Content types
-export type ContentBlock = z.infer<typeof ContentBlockSchema>;
-
 // Scrollytelling types
 export type Chapter = z.infer<typeof ChapterSchema>;
 export type ScrollytellingBlock = z.infer<typeof ScrollytellingBlockSchema>;
 
-// Page and root types
-export type Page = z.infer<typeof PageSchema>;
-export type RootConfig = z.infer<typeof RootSchema>;
-
 // Union types for convenience
-export type Block = MapBlock | ContentBlock | ScrollytellingBlock;
+export type Block = MapBlock | ScrollytellingBlock;
 export type AnyLayer =
   | CircleLayer
   | LineLayer

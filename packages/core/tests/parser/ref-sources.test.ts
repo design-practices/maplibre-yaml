@@ -1,16 +1,15 @@
 /**
  * A `$ref` that resolves nowhere fails validation at the `$ref` line, with a
  * did-you-mean (ml-aot.147) — the `$ref` twin of ml-aot.133's check for a
- * bare `source:` name, in the same document kinds: v1 maps, stories and
- * multi-page root documents, through every entry point (`mlym validate` =
- * safeParseAny, `<ml-map>` = safeParseMapBlock / safeParseMapBlockValue, the
- * throwing parse()).
+ * bare `source:` name, in the same document kinds: v1 maps and stories,
+ * through every entry point (`mlym validate` = safeParseAny, `<ml-map>` =
+ * safeParseMapBlock / safeParseMapBlockValue, the throwing parseMapBlock()).
  *
  * Before 0.9.1 a story's `source: { $ref: "#/sources/quake" }` passed
  * `mlym validate` while the story's `<ml-map>` showed "Source reference not
- * found"; a map or root document failed, but with no line, and only once
- * every other error was fixed. The message is the runtime's own, so the CLI
- * and the page say the same thing.
+ * found"; a map failed, but with no line, and only once every other error
+ * was fixed. The message is the runtime's own, so the CLI and the page say
+ * the same thing.
  */
 import { describe, it, expect } from "vitest";
 import { YAMLParser } from "../../src/parser";
@@ -101,7 +100,26 @@ describe("v1 maps", () => {
     const error = errorAt(result.errors, "layers.0.$ref");
     expect(error).toMatchObject({ line: 12 });
     expect(error!.message).toContain("Layer reference not found: #/layers/quakes.");
-    expect(error!.message).toContain("only a multi-page (pages:) document has");
+    expect(error!.message).toContain("which a map or story document does not have");
+  });
+
+  it("a layers: entry $ref naming a list index or property is the same one error, and resolves nothing", () => {
+    // `#/layers/0` must not duplicate layer 0, `#/layers/1` must not leave
+    // the raw { $ref } in the layers, `#/layers/length` must not paste a 2.
+    for (const pointer of ["#/layers/0", "#/layers/1", "#/layers/length"]) {
+      const result = YAMLParser.safeParseMapBlock(
+        map(`  - id: dots
+    type: circle
+    source: quakes
+  - $ref: "${pointer}"
+`)
+      );
+      expect(result.success, pointer).toBe(false);
+      expect(result.data, pointer).toBeUndefined();
+      expect(result.errors.map((e) => e.path), pointer).toEqual(["layers.1.$ref"]);
+      expect(result.errors[0]!.message, pointer).toContain(`Layer reference not found: ${pointer}.`);
+      expect(result.errors[0]!.message, pointer).toContain("(its layers: is a list)");
+    }
   });
 });
 
@@ -156,78 +174,6 @@ ${layers}chapters:
     const result = YAMLParser.safeParseScrollytellingBlock(story(`  - $ref: "#/layers/dots"\n`));
     expect(result.success).toBe(false);
     expect(errorAt(result.errors, "layers.0.$ref")?.message).toContain("Layer reference not found: #/layers/dots.");
-  });
-});
-
-describe("multi-page root documents", () => {
-  const root = (blockRef: string, recordRef = "#/sources/quakes") => `config:
-  defaultMapStyle: https://example.com/style.json
-sources:
-  quakes:
-    type: geojson
-    data: ${EMPTY}
-layers:
-  shared:
-    id: shared
-    type: circle
-    source: { $ref: "${recordRef}" }
-pages:
-  - path: /
-    title: Home
-    blocks:
-      - type: map
-        id: a
-        config: { center: [0, 0], zoom: 2 }
-        sources:
-          parks:
-            type: geojson
-            data: ${EMPTY}
-        layers:
-          - id: dots
-            type: circle
-            source: { $ref: "${blockRef}" }
-          - $ref: "#/layers/shared"
-`;
-
-  it("a root source by $ref is fine, in a block and in the layers: record", () => {
-    const result = YAMLParser.safeParseAny(root("#/sources/quakes")).result;
-    expect(result.errors).toEqual([]);
-    expect(result.success).toBe(true);
-  });
-
-  it("a missing one is an error at its line, in a block and in the layers: record", () => {
-    const block = YAMLParser.safeParseAny(root("#/sources/quake")).result;
-    expect(block.success).toBe(false);
-    expect(errorAt(block.errors, "pages.0.blocks.0.layers.0.source.$ref")).toMatchObject({
-      message: NOT_FOUND,
-      line: 26,
-      suggestion: "#/sources/quakes",
-    });
-
-    const record = YAMLParser.safeParseAny(root("#/sources/quakes", "#/sources/quake")).result;
-    expect(record.success).toBe(false);
-    expect(errorAt(record.errors, "layers.shared.source.$ref")).toMatchObject({ message: NOT_FOUND, line: 11 });
-
-    expect(() => YAMLParser.parse(root("#/sources/quake"))).toThrow(/Source reference not found: #\/sources\/quake\./);
-  });
-
-  it("a $ref to the block's own source: a $ref only looks at the root sources:", () => {
-    const result = YAMLParser.safeParseAny(root("#/sources/parks")).result;
-    expect(result.success).toBe(false);
-    const message = errorAt(result.errors, "pages.0.blocks.0.layers.0.source.$ref")!.message;
-    expect(message).toContain("Source reference not found: #/sources/parks.");
-    expect(message).toContain("write source: parks instead");
-  });
-
-  it("a layers: entry $ref naming no layer is an error at its line", () => {
-    const result = YAMLParser.safeParseAny(
-      root("#/sources/quakes").replace('- $ref: "#/layers/shared"', '- $ref: "#/layers/shard"')
-    ).result;
-    expect(result.success).toBe(false);
-    expect(errorAt(result.errors, "pages.0.blocks.0.layers.1.$ref")).toMatchObject({
-      line: 27,
-      suggestion: "#/layers/shared",
-    });
   });
 });
 

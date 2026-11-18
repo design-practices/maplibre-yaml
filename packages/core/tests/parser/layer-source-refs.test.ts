@@ -1,9 +1,9 @@
 /**
  * A layer whose `source:` names a source that doesn't exist fails validation
  * at the layer's `source:` line, with a did-you-mean (ml-aot.133) — in v1
- * maps, v2 `style.sources`, stories and multi-page root documents, through
- * every entry point (`mlym validate` = safeParseAny, `<ml-map>` =
- * safeParseMapBlock / safeParseMapBlockValue, the throwing parse()).
+ * maps, v2 `style.sources` and stories, through every entry point (`mlym
+ * validate` = safeParseAny, `<ml-map>` = safeParseMapBlock /
+ * safeParseMapBlockValue, the throwing parseMapBlock()).
  *
  * The exception is a name a basemap style URL might hold: a raster layer, or
  * one with `source-layer:`. There only a near miss warns, as before.
@@ -132,34 +132,3 @@ describe("stories", () => {
   });
 });
 
-describe("multi-page root documents", () => {
-  const root = D.root;
-
-  it("a block's layer may use a root source or its own", () => {
-    expect(YAMLParser.safeParseAny(root("quakes")).result.errors).toEqual([]);
-    expect(YAMLParser.safeParseAny(root("parks")).result.errors).toEqual([]);
-  });
-
-  it("a root layers: entry may use a source a block defines (it lands in that block by $ref)", () => {
-    expect(YAMLParser.safeParseAny(root("quakes", "parks")).result.errors).toEqual([]);
-  });
-
-  it("an undefined name is an error, in a block and in the layers: record", () => {
-    const block = YAMLParser.safeParseAny(root("quaks")).result;
-    expect(block.success).toBe(false);
-    expect(sourceError(block.errors, "pages.0.blocks.0.layers.0.source")).toMatchObject({ suggestion: "quakes" });
-
-    const record = YAMLParser.safeParseAny(root("quakes", "prks")).result;
-    expect(record.success).toBe(false);
-    expect(sourceError(record.errors, "layers.shared.source")).toMatchObject({ suggestion: "parks" });
-
-    expect(() => YAMLParser.parse(root("quaks"))).toThrow(/uses source "quaks"/);
-  });
-
-  it("a source defined only in another page's block is not in scope", () => {
-    const doc = D.rootOtherPageSource;
-    const result = YAMLParser.safeParseAny(doc).result;
-    expect(result.success).toBe(false);
-    expect(sourceError(result.errors, "pages.1.blocks.0.layers.0.source")).toBeDefined();
-  });
-});

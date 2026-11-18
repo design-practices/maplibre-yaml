@@ -1,0 +1,10 @@
+pages:
+  - path: "/"
+    title: "Home"
+    blocks:
+      - type: map
+        id: home
+        config:
+          center: [0, 0]
+          zoom: 2
+          mapStyle: "https://demotiles.maplibre.org/style.json"
