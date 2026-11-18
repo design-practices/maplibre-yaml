@@ -73,8 +73,15 @@ async function open(page: Page): Promise<void> {
     { timeout: 60_000 }
   );
   // One more frame so the blend pass is on the canvas before the screenshot.
+  // The map may already be idle (then `once("idle")` alone never fires), so
+  // ask for a repaint and wait for the idle that follows it.
   await page.evaluate(
-    () => new Promise<void>((done) => (document.getElementById("map") as any).getMap().once("idle", () => done()))
+    () =>
+      new Promise<void>((done) => {
+        const map = (document.getElementById("map") as any).getMap();
+        map.once("idle", () => done());
+        map.triggerRepaint();
+      })
   );
 }
 
