@@ -87,6 +87,7 @@ import {
 } from "../scrollytelling/render";
 import { injectScrollytellingStyles } from "../scrollytelling/styles";
 import { normalizeDocumentBase } from "../utils/document-base.js";
+import { serializeDocument } from "../parser/serialize-document.js";
 import { displayPath } from "../parser/validation-utils.js";
 import { noteStoryImageRefs } from "../utils/image-refs.js";
 import { ML_MAP_SLOTS, registerMLMap, type MLMap } from "./ml-map.js";
@@ -682,12 +683,13 @@ export class MLScrollytelling extends BaseElement {
     // The parsed document goes in as the property, so the map never parses
     // the story's text a second time (KTD3). The attribute keeps a copy on
     // the element, so it re-renders if the story is moved in the DOM; it is
-    // the JSON of the value just assigned, which the map reads as a no-op.
-    // Both are set before the map connects, so it never reports "No
-    // configuration provided" (ml-4al).
+    // the text of the value just assigned, which the map reads as a no-op
+    // (serializeDocument, not JSON.stringify: an open-longitude maxBounds
+    // would come back as nulls on a reload). Both are set before the map
+    // connects, so it never reports "No configuration provided" (ml-4al).
     const handOff = (el: MLMap) => {
       el.config = mapValue as never;
-      el.setAttribute("config", JSON.stringify(mapValue));
+      el.setAttribute("config", serializeDocument(mapValue));
     };
     if (!mapEl) {
       mapEl = doc.createElement("ml-map") as MLMap;

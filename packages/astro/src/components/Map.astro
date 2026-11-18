@@ -63,6 +63,7 @@
 
 import type { MapProps } from "../types";
 import { withBase } from "../utils/base-url";
+import { serializeDocument } from "@maplibre-yaml/core";
 // MapLibre's stylesheet as PAGE css, imported here rather than in the
 // client script: Astro then links it in the page head in dev and build alike.
 // From the script, astro dev injected it with JS as a <style> the server
@@ -101,8 +102,9 @@ if (src && config) {
 // (`document.getElementById(id).update(doc)`), or a generated one.
 const mapId = id ?? `map-${Math.random().toString(36).substring(2, 11)}`;
 
-// Serialize config for client-side if provided
-const serializedConfig = config ? JSON.stringify(config) : null;
+// Serialize config for client-side if provided. Not `JSON.stringify`: an
+// open-longitude `maxBounds` (`[-.inf, -60, .inf, 75]`) would arrive as nulls.
+const serializedConfig = config ? serializeDocument(config) : null;
 
 // `/configs/map.yaml` lives at `/<base>/configs/map.yaml` on a site deployed
 // under a subpath (GitHub Pages project sites) -- see utils/base-url.ts.

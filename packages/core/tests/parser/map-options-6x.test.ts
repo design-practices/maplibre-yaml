@@ -19,7 +19,7 @@
 import { describe, it, expect } from "vitest";
 import { YAMLParser } from "../../src/parser/yaml-parser";
 import { MapConfigSchema } from "../../src/schemas/map.schema";
-import { MAPLIBRE_MAP_OPTIONS } from "../../src/parser/document-checks";
+import { MAPLIBRE_MAP_OPTIONS, mapOptionsWarnings } from "../../src/parser/document-checks";
 import { boundsProblem, toFlatBounds } from "../../src/utils/bounds";
 
 const STYLE = '"https://demotiles.maplibre.org/style.json"';
@@ -152,5 +152,48 @@ describe("MapOptions names a host passes through config: (transformStyle, global
     const warning = result.warnings.find((w) => w.path === "runtime.map.globalState");
     expect(warning).toBeDefined();
     expect(warning!.message).toContain("state:");
+  });
+});
+
+describe("function-typed MapOptions written in a document (transformStyle, transformRequest, transformCameraUpdate, transformConstrain)", () => {
+  it("a non-function value warns that a document cannot express a function, at the key, and is valid", () => {
+    const result = parse(v1("  transformStyle: style.json\n  transformRequest: 3"));
+    expect(result.success).toBe(true);
+    for (const [key, line] of [["transformStyle", 6], ["transformRequest", 7]] as const) {
+      const warning = result.warnings.find((w) => w.path === `config.${key}`);
+      expect(warning, key).toBeDefined();
+      expect(warning!.message).toContain("takes a function");
+      expect(warning!.message).toContain("a document cannot express");
+      expect(warning!.line).toBe(line);
+    }
+    expect(result.warnings.filter((w) => w.message.includes("Unknown key"))).toEqual([]);
+  });
+
+  it("v2 runtime.map warns the same way", () => {
+    const result = parse(v2("    transformCameraUpdate: yes\n    transformConstrain: [1, 2]"));
+    expect(result.success).toBe(true);
+    expect(result.warnings.map((w) => w.path).filter((p) => p.startsWith("runtime.map.transform")).sort()).toEqual([
+      "runtime.map.transformCameraUpdate",
+      "runtime.map.transformConstrain",
+    ]);
+  });
+
+  it("a real function (a host's config object) does not warn; every non-function does, globalState beside them", () => {
+    // Through the check itself: the value entry point stringifies to YAML and
+    // refuses a function outright ("Tag not resolved for Function value"), so a
+    // host's functions reach the renderer as a config object, never the parser.
+    const fn = () => undefined;
+    expect(mapOptionsWarnings({ transformStyle: fn, transformRequest: fn, center: [0, 0] }, ["config"])).toEqual([]);
+    const paths = mapOptionsWarnings(
+      { transformStyle: "x", transformRequest: 1, transformCameraUpdate: null, transformConstrain: {}, globalState: {} },
+      ["runtime", "map"]
+    ).map((w) => w.path);
+    expect(paths.sort()).toEqual([
+      "runtime.map.globalState",
+      "runtime.map.transformCameraUpdate",
+      "runtime.map.transformConstrain",
+      "runtime.map.transformRequest",
+      "runtime.map.transformStyle",
+    ]);
   });
 });

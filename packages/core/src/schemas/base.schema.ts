@@ -165,14 +165,6 @@ export const LngLatBoundsLikeSchema = z
 /** Inferred type for {@link LngLatBoundsLikeSchema}. */
 export type LngLatBoundsLike = z.infer<typeof LngLatBoundsLikeSchema>;
 
-/**
- * A `maxBounds` longitude: finite, or `-Infinity` west with `Infinity` east
- * (MapLibre's open longitude, checked as a pair by {@link MaxBoundsSchema}).
- * Not `.finite()`, unlike `BOUNDS_LONGITUDE`: the JSON Schema stays
- * `type: number`, and the pair rule is what rejects a half-open value.
- */
-const MAX_BOUNDS_LONGITUDE = z.number();
-
 const openOk = { message: OPEN_LONGITUDE_RULE };
 
 /**
@@ -186,7 +178,9 @@ const openOk = { message: OPEN_LONGITUDE_RULE };
  * throws on a half-open pair, so the schema refuses it with MapLibre's own
  * message ({@link OPEN_LONGITUDE_RULE}). The latitudes stay within ±90 as in
  * every bounds. `bounds` (the initial fit) keeps {@link LngLatBoundsLikeSchema}:
- * a fit to an infinite box has no meaning.
+ * a fit to an infinite box has no meaning. The longitudes are a plain
+ * `z.number()`, not `.finite()` like `BOUNDS_LONGITUDE`: the JSON Schema
+ * stays `type: number`, and the pair rule is what rejects a half-open value.
  *
  * @example YAML
  * ```yaml
@@ -198,12 +192,12 @@ const openOk = { message: OPEN_LONGITUDE_RULE };
 export const MaxBoundsSchema = z
   .union([
     z
-      .tuple([MAX_BOUNDS_LONGITUDE, LatitudeSchema, MAX_BOUNDS_LONGITUDE, LatitudeSchema])
+      .tuple([z.number(), LatitudeSchema, z.number(), LatitudeSchema])
       .refine(([west, , east]) => longitudesOk(west, east), openOk),
     z
       .tuple([
-        z.tuple([MAX_BOUNDS_LONGITUDE, LatitudeSchema]),
-        z.tuple([MAX_BOUNDS_LONGITUDE, LatitudeSchema]),
+        z.tuple([z.number(), LatitudeSchema]),
+        z.tuple([z.number(), LatitudeSchema]),
       ])
       .refine(([[west], [east]]) => longitudesOk(west, east), openOk),
   ])

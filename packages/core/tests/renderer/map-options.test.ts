@@ -21,7 +21,6 @@ import {
   dragRotateForRuntime,
   maxBoundsForRuntime,
   globalStateForRuntime,
-  hasOpenLongitude,
 } from "../../src/renderer/map-options";
 import {
   DRAG_ROTATE_OPTIONS_RUNTIME_FLOOR,
@@ -68,13 +67,13 @@ describe("dragRotate (6.15: DragRotateOptions)", () => {
 });
 
 describe("maxBounds with an open longitude (6.16: setMaxBounds)", () => {
-  it("recognises MapLibre's shape: west -Infinity and east Infinity together, in either bounds form", () => {
-    expect(hasOpenLongitude([-Infinity, 40.5, Infinity, 40.9])).toBe(true);
-    expect(hasOpenLongitude([[-Infinity, 40.5], [Infinity, 40.9]])).toBe(true);
-    expect(hasOpenLongitude([-74.3, 40.5, -73.7, 40.9])).toBe(false);
-    expect(hasOpenLongitude([[-74.3, 40.5], [-73.7, 40.9]])).toBe(false);
-    expect(hasOpenLongitude(undefined)).toBe(false);
-    expect(hasOpenLongitude(null)).toBe(false);
+  it("recognises MapLibre's open shape only: west -Infinity and east Infinity together, in either form; anything else passes through below the floor", () => {
+    const below = "6.12.0";
+    expect(maxBoundsForRuntime([-Infinity, 40.5, Infinity, 40.9], below).notice).toBeDefined();
+    expect(maxBoundsForRuntime([[-Infinity, 40.5], [Infinity, 40.9]], below).notice).toBeDefined();
+    for (const value of [[-74.3, 40.5, -73.7, 40.9], [[-74.3, 40.5], [-73.7, 40.9]], [-Infinity, 40.5, 10, 40.9], [null, 40.5, null, 40.9], undefined, null, "x"]) {
+      expect(maxBoundsForRuntime(value, below), JSON.stringify(value)).toEqual({ value });
+    }
   });
 
   it("passes finite bounds through on any runtime, without a notice", () => {

@@ -299,7 +299,7 @@ import {
   type ValidationWarning,
 } from "./validation-utils";
 import { isLikelyMisspelling } from "../utils/suggest";
-import { checkDocument, chapterLabel, checkLocaleKeys, globalStateOptionWarning, missingBasemapWarning, pmtilesBasemapNote } from "./document-checks";
+import { checkDocument, chapterLabel, checkLocaleKeys, mapOptionsWarnings, missingBasemapWarning, pmtilesBasemapNote } from "./document-checks";
 import { SOURCE_RUNTIME_KEYS } from "../model/normalize";
 import { checkSourceFormats } from "./format-checks";
 import { applyCogDefaults, checkCogSources } from "./cog-checks";
@@ -1123,13 +1123,11 @@ export class YAMLParser {
         ["runtime", "map", "locale"],
         positioned ? { doc: m.doc, lineCounter: m.lineCounter } : undefined
       );
-      // `globalState` among the map options: `state:` is the place (ml-vwz).
-      const globalState = globalStateOptionWarning(
-        runtimeMap,
-        ["runtime", "map"],
-        positioned ? { doc: m.doc, lineCounter: m.lineCounter } : undefined
+      // `globalState` among the map options (`state:` is the place) and a
+      // function-typed option written as a value (ml-vwz).
+      localeWarnings.push(
+        ...mapOptionsWarnings(runtimeMap, ["runtime", "map"], positioned ? { doc: m.doc, lineCounter: m.lineCounter } : undefined)
       );
-      if (globalState) localeWarnings.push(globalState);
       const withLocale = localeWarnings.length === 0 ? v2 : { ...v2, warnings: [...v2.warnings, ...localeWarnings] };
       return withRuntimeKeyHints(withLocale);
     }

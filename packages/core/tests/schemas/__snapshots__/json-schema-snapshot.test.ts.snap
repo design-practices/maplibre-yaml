@@ -313,7 +313,7 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                           "$ref": "#/$defs/any/oneOf/0/properties/config/properties/center/items/1"
                         },
                         {
-                          "$ref": "#/$defs/any/oneOf/0/properties/config/properties/maxBounds/anyOf/0/items/0"
+                          "type": "number"
                         },
                         {
                           "$ref": "#/$defs/any/oneOf/0/properties/config/properties/center/items/1"
@@ -331,7 +331,7 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                           "maxItems": 2,
                           "items": [
                             {
-                              "$ref": "#/$defs/any/oneOf/0/properties/config/properties/maxBounds/anyOf/0/items/0"
+                              "type": "number"
                             },
                             {
                               "$ref": "#/$defs/any/oneOf/0/properties/config/properties/center/items/1"
@@ -344,7 +344,7 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                           "maxItems": 2,
                           "items": [
                             {
-                              "$ref": "#/$defs/any/oneOf/0/properties/config/properties/maxBounds/anyOf/0/items/0"
+                              "type": "number"
                             },
                             {
                               "$ref": "#/$defs/any/oneOf/0/properties/config/properties/center/items/1"
@@ -5205,7 +5205,7 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                       "$ref": "#/$defs/map/properties/config/properties/center/items/1"
                     },
                     {
-                      "$ref": "#/$defs/map/properties/config/properties/maxBounds/anyOf/0/items/0"
+                      "type": "number"
                     },
                     {
                       "$ref": "#/$defs/map/properties/config/properties/center/items/1"
@@ -5223,7 +5223,7 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                       "maxItems": 2,
                       "items": [
                         {
-                          "$ref": "#/$defs/map/properties/config/properties/maxBounds/anyOf/0/items/0"
+                          "type": "number"
                         },
                         {
                           "$ref": "#/$defs/map/properties/config/properties/center/items/1"
@@ -5236,7 +5236,7 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                       "maxItems": 2,
                       "items": [
                         {
-                          "$ref": "#/$defs/map/properties/config/properties/maxBounds/anyOf/0/items/0"
+                          "type": "number"
                         },
                         {
                           "$ref": "#/$defs/map/properties/config/properties/center/items/1"
@@ -12394,7 +12394,7 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                                       "$ref": "#/$defs/root/properties/config/properties/defaultCenter/items/1"
                                     },
                                     {
-                                      "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/maxBounds/anyOf/0/items/0"
+                                      "type": "number"
                                     },
                                     {
                                       "$ref": "#/$defs/root/properties/config/properties/defaultCenter/items/1"
@@ -12412,7 +12412,7 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                                       "maxItems": 2,
                                       "items": [
                                         {
-                                          "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/maxBounds/anyOf/0/items/0"
+                                          "type": "number"
                                         },
                                         {
                                           "$ref": "#/$defs/root/properties/config/properties/defaultCenter/items/1"
@@ -12425,7 +12425,7 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                                       "maxItems": 2,
                                       "items": [
                                         {
-                                          "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/maxBounds/anyOf/0/items/0"
+                                          "type": "number"
                                         },
                                         {
                                           "$ref": "#/$defs/root/properties/config/properties/defaultCenter/items/1"
@@ -14074,7 +14074,7 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                       "$ref": "#/$defs/scrollytelling/properties/config/properties/center/items/1"
                     },
                     {
-                      "$ref": "#/$defs/scrollytelling/properties/config/properties/maxBounds/anyOf/0/items/0"
+                      "type": "number"
                     },
                     {
                       "$ref": "#/$defs/scrollytelling/properties/config/properties/center/items/1"
@@ -14092,7 +14092,7 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                       "maxItems": 2,
                       "items": [
                         {
-                          "$ref": "#/$defs/scrollytelling/properties/config/properties/maxBounds/anyOf/0/items/0"
+                          "type": "number"
                         },
                         {
                           "$ref": "#/$defs/scrollytelling/properties/config/properties/center/items/1"
@@ -14105,7 +14105,7 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                       "maxItems": 2,
                       "items": [
                         {
-                          "$ref": "#/$defs/scrollytelling/properties/config/properties/maxBounds/anyOf/0/items/0"
+                          "type": "number"
                         },
                         {
                           "$ref": "#/$defs/scrollytelling/properties/config/properties/center/items/1"

@@ -69,7 +69,7 @@ export const GLOBAL_STATE_OPTION_RUNTIME_FLOOR = "6.14.0";
  * `DragRotateHandler.enable` take `DragRotateOptions` — `{ around:
  * 'pointer' }` or `{ around: 'center', movement: 'circular' | 'linear' }`
  * (ml-vwz). Below it the renderer passes `true`, so the map still rotates,
- * and warns once.
+ * and warns.
  */
 export const DRAG_ROTATE_OPTIONS_RUNTIME_FLOOR = "6.15.0";
 
@@ -78,7 +78,7 @@ export const DRAG_ROTATE_OPTIONS_RUNTIME_FLOOR = "6.15.0";
  * longitude, `[-Infinity, south, Infinity, north]` — "an unconstrained
  * longitude range, with finite latitude limits" (ml-vwz). Below it an
  * infinite longitude breaks the constrain maths, so the renderer closes the
- * longitude at ±180 (the latitude limit still holds) and warns once.
+ * longitude at ±180 (the latitude limit still holds) and warns.
  */
 export const MAX_BOUNDS_OPEN_LONGITUDE_RUNTIME_FLOOR = "6.16.0";
 

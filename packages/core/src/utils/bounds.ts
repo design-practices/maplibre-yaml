@@ -131,6 +131,17 @@ export function boundsProblem(value: unknown, key = "bounds"): string | undefine
     return `${key} ${written} has a latitude outside -90 to 90. ${expected}.`;
   }
 
+  // An open longitude that did not arrive as one (ml-vwz): `null` is what
+  // JSON.stringify makes of Infinity; a bare `Infinity` / `inf` is a string.
+  const slots: unknown[] = value.length === 4 ? value : value.length === 2 && value.every(Array.isArray) ? (value as unknown[][]).flat() : [];
+  const lngs = [slots[0], slots[2]];
+  if (slots.length === 4 && lngs.some((v) => v === null)) {
+    return `${key}: an open longitude does not survive JSON (Infinity becomes null); pass the document as YAML text, with -.inf west and .inf east.`;
+  }
+  if (slots.length === 4 && lngs.some((v) => typeof v === "string" && /^[-+]?(\.?inf(inity)?)$/i.test(v))) {
+    return `${key}: an open longitude is written -.inf west and .inf east (YAML's infinity), not ${lngs.filter((v) => typeof v === "string").join(" / ")}.`;
+  }
+
   const numbers = value.filter(isNumber).length;
   if (numbers === value.length) {
     return `${key} has ${value.length} number${value.length === 1 ? "" : "s"}; it needs 4. ${expected}.`;

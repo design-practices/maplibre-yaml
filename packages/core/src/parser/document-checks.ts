@@ -75,32 +75,59 @@ export const MAPLIBRE_MAP_OPTIONS: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * `globalState` written among the map options (v1 `config.globalState`, v2
- * `runtime.map.globalState`, ml-vwz). It is a MapLibre `MapOptions` key
- * (6.14), so not unknown — but a document declares its global state under
- * `state:`, and the renderer hands THOSE defaults to the constructor on a
- * 6.14+ runtime (and writes them with `setGlobalStateProperty` on older
- * ones). A second copy here would be a second source of truth, so it is
- * replaced by `state:` and the author is told where it belongs.
+ * The `MapOptions` that take a function: a document cannot express one, and
+ * MapLibre calls the value as it is (`transformStyle: "x"` throws at style
+ * load). The parser warns ({@link mapOptionsWarnings}) and the renderer drops
+ * a non-function value before the constructor.
+ */
+export const MAPLIBRE_FUNCTION_OPTIONS: ReadonlySet<string> = new Set([
+  "transformStyle", "transformRequest", "transformCameraUpdate", "transformConstrain",
+]);
+
+/**
+ * Map options a document writes that MapLibre would read differently from
+ * what the author meant (v1 `config`, v2 `runtime.map`, ml-vwz):
+ *
+ * - `globalState`: a `MapOptions` key (6.14), so not unknown — but a document
+ *   declares its global state under `state:`, and the renderer hands THOSE
+ *   defaults to the constructor (6.14+) or `setGlobalStateProperty`. A second
+ *   copy would be a second source of truth, so the renderer drops it and the
+ *   author is told where it belongs.
+ * - a function-typed option ({@link MAPLIBRE_FUNCTION_OPTIONS}) with a value
+ *   that is not a function (always, from YAML): dropped by the renderer.
  *
  * @param mapOptions - the options table (`config`, or `runtime.map`).
  * @param path - where the table sits, e.g. `["config"]`.
  */
-export function globalStateOptionWarning(
+export function mapOptionsWarnings(
   mapOptions: unknown,
   path: (string | number)[],
   positions?: Positions
-): ValidationWarning | undefined {
-  if (!isObject(mapOptions) || !("globalState" in mapOptions)) return undefined;
+): ValidationWarning[] {
+  if (!isObject(mapOptions)) return [];
   const where = path.join(".");
-  return {
-    path: `${where}.globalState`,
-    message:
-      `globalState under ${where}: is not read; a document declares its global state at the ` +
-      `top level as \`state: { key: { default: value } }\`. Move the keys there.`,
-    ...atKey(positions, path, "globalState"),
-    onPage: true,
-  };
+  const warnings: ValidationWarning[] = [];
+  if ("globalState" in mapOptions) {
+    warnings.push({
+      path: `${where}.globalState`,
+      message:
+        `globalState under ${where}: is not read; a document declares its global state at the ` +
+        `top level as \`state: { key: { default: value } }\`. Move the keys there.`,
+      ...atKey(positions, path, "globalState"),
+      onPage: true,
+    });
+  }
+  for (const key of MAPLIBRE_FUNCTION_OPTIONS) {
+    if (!(key in mapOptions) || typeof mapOptions[key] === "function") continue;
+    warnings.push({
+      path: `${where}.${key}`,
+      message:
+        `${key} takes a function, which a document cannot express, so this value is ignored. ` +
+        `Set it from JS on the map, or through the host's config object.`,
+      ...atKey(positions, path, key),
+    });
+  }
+  return warnings;
 }
 
 /** Keys the map `config:` schema itself lists. */
@@ -415,9 +442,13 @@ export function checkDocument(
   if (isObject(config)) {
     const misplaced = misplacedRootKeys(kind);
     const known = [...configKeys(), ...MAPLIBRE_MAP_OPTIONS];
+    // ml-vwz — `globalState` (state: is the place) and a function-typed option.
+    const optionWarnings = mapOptionsWarnings(config, ["config"], positions);
+    warnings.push(...optionWarnings);
+    const warned = new Set(optionWarnings.map((w) => w.path));
     for (const key of Object.keys(config)) {
       const path = `config.${key}`;
-      if (already.has(path) || key.startsWith("x-")) continue;
+      if (already.has(path) || warned.has(path) || key.startsWith("x-")) continue;
       if (misplaced.has(key)) {
         warnings.push({
           path,
@@ -427,11 +458,6 @@ export function checkDocument(
           ...atKey(positions, ["config"], key),
           onPage: true,
         });
-        continue;
-      }
-      if (key === "globalState") {
-        const warning = globalStateOptionWarning(config, ["config"], positions);
-        if (warning) warnings.push(warning);
         continue;
       }
       if (known.includes(key)) continue;

@@ -57,6 +57,7 @@ import {
   chaptersHTML,
   footerHTML,
   railHTML,
+  serializeDocument,
 } from "@maplibre-yaml/core/scrollytelling";
 // The element injects these rules itself; importing the file too styles a
 // server-rendered story from the first paint.
@@ -91,8 +92,9 @@ const storyId = `scrolly-${Math.random().toString(36).substring(2, 11)}`;
 // The story for the element (it validates it again in the browser), and the
 // map half as a real map document, rendered straight onto <ml-map> so the map
 // starts loading before the element upgrades.
-const serializedConfig = config ? JSON.stringify(config) : undefined;
-const mapDocument = config ? JSON.stringify(storyMapDocument(config)) : undefined;
+// Not `JSON.stringify`: an open-longitude `maxBounds` would arrive as nulls.
+const serializedConfig = config ? serializeDocument(config) : undefined;
+const mapDocument = config ? serializeDocument(storyMapDocument(config)) : undefined;
 const chapterMarkup = config ? chaptersHTML(config, { base: documentBase }) + footerHTML(config) : "";
 const railMarkup = config ? railHTML(config) : "";
 

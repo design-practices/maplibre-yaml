@@ -6,7 +6,7 @@
  * MapLibre 6.14–6.16 gave three `Map` options a shape the library mirrors
  * verbatim (`config:` is MapLibre's own vocabulary). Each has a floor; below
  * it the value is shaped so the map still does the nearest right thing, and
- * one notice says what was declared and what the runtime does instead (the
+ * a notice says what was declared and what the runtime does instead (the
  * declared-absence posture, as `scene-3d.ts` does for terrain and sky):
  *
  * - `dragRotate: { around, movement }` (6.15, `DragRotateOptions`): below the
@@ -34,7 +34,7 @@ import {
 import { toFlatBounds } from "../utils/bounds";
 import { stateDefault } from "./params-builder";
 
-/** A value as the runtime takes it, and the one notice to print when it was reshaped. */
+/** A value as the runtime takes it, and the notice to print when it was reshaped. */
 export interface RuntimeShaped<T> {
   value: T;
   notice?: string;
@@ -58,20 +58,18 @@ export function dragRotateForRuntime(value: unknown, version: string | undefined
   };
 }
 
-/** Whether a bounds value leaves longitude open: `-Infinity` west with `Infinity` east, in either form. */
-export function hasOpenLongitude(bounds: unknown): boolean {
-  const flat = toFlatBounds(bounds, { openLongitude: true });
-  return flat !== null && flat[0] === -Infinity && flat[2] === Infinity;
-}
-
 /**
- * `maxBounds` as the running maplibre-gl takes it: finite bounds on any
- * runtime; an open longitude from 6.16, closed at ±180 with a notice before
- * that (the same bounds form the author wrote).
+ * `maxBounds` as the running maplibre-gl takes it: anything but an open
+ * longitude (`-Infinity` west with `Infinity` east, in either bounds form)
+ * passes through on any runtime; an open longitude passes through from 6.16
+ * and before that is closed at ±180 — as the flat `[-180, south, 180, north]`
+ * whatever form the author wrote, since MapLibre takes either — with a notice.
  */
 export function maxBoundsForRuntime(value: unknown, version: string | undefined): RuntimeShaped<unknown> {
-  if (!hasOpenLongitude(value) || meetsVersion(version, MAX_BOUNDS_OPEN_LONGITUDE_RUNTIME_FLOOR)) return { value };
-  const [, south, , north] = toFlatBounds(value, { openLongitude: true })!;
+  const flat = toFlatBounds(value, { openLongitude: true });
+  const open = flat !== null && flat[0] === -Infinity && flat[2] === Infinity;
+  if (!open || meetsVersion(version, MAX_BOUNDS_OPEN_LONGITUDE_RUNTIME_FLOOR)) return { value };
+  const [, south, , north] = flat;
   return {
     value: [-180, south, 180, north],
     notice: notice("maxBounds", `[-.inf, ${south}, .inf, ${north}]`, MAX_BOUNDS_OPEN_LONGITUDE_RUNTIME_FLOOR, version, "the latitude limits hold with longitude closed at ±180"),

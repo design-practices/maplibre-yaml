@@ -20,6 +20,7 @@ import FullPageMap from "../../src/components/FullPageMap.astro";
 import Scrollytelling from "../../src/components/Scrollytelling.astro";
 import Chapter from "../../src/components/Chapter.astro";
 import { buildPolygonMapConfig } from "../../src/utils/map-builders";
+import { parseDocumentText } from "@maplibre-yaml/core";
 
 /**
  * The attributes of the first `<name ...>` open tag, values as written.
@@ -102,6 +103,49 @@ describe("Map", () => {
     await expect(
       container.renderToString(Map as any, { props: {} })
     ).rejects.toThrow(/requires either 'src' or 'config'/);
+  });
+});
+
+describe("an open-longitude maxBounds survives the trip into the config attribute (ml-vwz review P1)", () => {
+  /** The attribute text, entity-decoded, as the element's attribute parser receives it. */
+  function attrText(html: string, tag = "ml-map"): string {
+    const m = html.match(new RegExp(`<${tag}[^>]*\\sconfig="([^"]*)"`));
+    expect(m, `${tag} carries a config attribute`).toBeTruthy();
+    return m![1].replace(/&#34;|&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
+  }
+  const OPEN = { ...MAP_CONFIG, config: { ...MAP_CONFIG.config, maxBounds: [-Infinity, -60, Infinity, 75] } };
+
+  it("Map: the attribute reads back with the infinities, not null", async () => {
+    const html = await container.renderToString(Map as any, { props: { config: OPEN } });
+    const text = attrText(html);
+    expect(text).toContain("[-.inf,-60,.inf,75]");
+    const read = await parseDocumentText(text, { kind: "map" });
+    expect(read.success, JSON.stringify(read)).toBe(true);
+    expect((read as any).data.config.maxBounds).toEqual([-Infinity, -60, Infinity, 75]);
+  });
+
+  it("FullPageMap: the same", async () => {
+    const html = await container.renderToString(FullPageMap as any, { props: { config: OPEN } });
+    const read = await parseDocumentText(attrText(html), { kind: "map" });
+    expect(read.success, JSON.stringify(read)).toBe(true);
+    expect((read as any).data.config.maxBounds).toEqual([-Infinity, -60, Infinity, 75]);
+  });
+
+  it("Scrollytelling: both the story attribute and the pre-rendered map document", async () => {
+    const story = {
+      type: "scrollytelling",
+      id: "tour",
+      config: { center: [0, 30] as [number, number], zoom: 2, maxBounds: [-Infinity, -60, Infinity, 75], mapStyle: "https://demotiles.maplibre.org/style.json" },
+      layers: [],
+      chapters: [{ id: "a", title: "A", center: [0, 0] as [number, number], zoom: 2 }],
+    };
+    const html = await container.renderToString(Scrollytelling as any, { props: { config: story } });
+    const storyRead = await parseDocumentText(attrText(html, "ml-scrollytelling"), { kind: "story" });
+    expect(storyRead.success, JSON.stringify(storyRead)).toBe(true);
+    expect((storyRead as any).data.config.maxBounds).toEqual([-Infinity, -60, Infinity, 75]);
+    const mapRead = await parseDocumentText(attrText(html, "ml-map"), { kind: "map" });
+    expect(mapRead.success, JSON.stringify(mapRead)).toBe(true);
+    expect((mapRead as any).data.config.maxBounds).toEqual([-Infinity, -60, Infinity, 75]);
   });
 });
 

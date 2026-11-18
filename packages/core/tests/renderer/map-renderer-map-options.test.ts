@@ -167,6 +167,31 @@ describe("state: defaults at construction (globalState, 6.14)", () => {
     const { ctor } = render({ globalState: { year: 1999, other: 1 } } as never, { state: STATE });
     expect(ctor["globalState"]).toEqual({ year: 2010 });
   });
+
+  it("a host globalState without state: is dropped (the parser's 'is not read' holds), on any runtime", () => {
+    for (const version of ["6.18.0", "5.6.0"]) {
+      runtime.version = version;
+      const { ctor } = render({ globalState: { year: 1999 } } as never);
+      expect("globalState" in ctor, version).toBe(false);
+      const declared = render({ globalState: { year: 1999 } } as never, { state: { year: {} } });
+      expect("globalState" in declared.ctor, `${version}, no default`).toBe(false);
+    }
+  });
+});
+
+describe("function-typed map options (transformStyle, transformRequest, ...)", () => {
+  it("a non-function value never reaches the constructor; a function does", () => {
+    const fn = () => undefined;
+    const { ctor } = render({ transformStyle: "style.json", transformCameraUpdate: 1, transformConstrain: fn } as never);
+    expect("transformStyle" in ctor).toBe(false);
+    expect("transformCameraUpdate" in ctor).toBe(false);
+    expect(ctor["transformConstrain"]).toBe(fn);
+  });
+
+  it("a non-function transformRequest is dropped too (the renderer's own wrapper only wraps a function)", () => {
+    const { ctor } = render({ transformRequest: { url: "x" }, mapStyle: { version: 8, sources: {}, layers: [] } } as never);
+    expect("transformRequest" in ctor).toBe(false);
+  });
 });
 
 describe("dragRotate (6.15: around pointer / center)", () => {
@@ -236,6 +261,18 @@ describe("live updates (the runtime host)", () => {
     await renderer.update({ config: { ...BASE, dragRotate: { around: "pointer" } }, layers: [], sources: {}, options: {} } as never);
     expect(map.dragRotate.enable).toHaveBeenCalledWith(true);
     expect(warnings().filter((w) => w.includes("dragRotate"))).toHaveLength(1);
+  });
+
+  it("a removed dragRotate key on an interactive: false map disables, as MapLibre would at construction", async () => {
+    runtime.version = "6.18.0";
+    const { renderer, map } = await loaded({ interactive: false, dragRotate: true });
+    await renderer.update({ config: { ...BASE, interactive: false }, layers: [], sources: {}, options: {} } as never);
+    expect(map.dragRotate.disable).toHaveBeenCalledTimes(1);
+    expect(map.dragRotate.enable).not.toHaveBeenCalled();
+    // On an interactive map the default is enabled.
+    const on = await loaded({ dragRotate: false });
+    await on.renderer.update({ config: { ...BASE }, layers: [], sources: {}, options: {} } as never);
+    expect(on.map.dragRotate.enable).toHaveBeenCalledWith(true);
   });
 
   it("a changed maxBounds goes through setMaxBounds with the runtime's shape", async () => {

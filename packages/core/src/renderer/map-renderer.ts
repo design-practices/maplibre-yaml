@@ -32,6 +32,7 @@ import { geojsonBounds, type Bounds } from '../interactions/geometry-bounds';
 import { swappedCenter } from '../utils/swapped-center';
 import { COLOR_RELIEF_RUNTIME_FLOOR, meetsVersion } from '../capabilities';
 import { dragRotateForRuntime, globalStateForRuntime, maxBoundsForRuntime } from './map-options';
+import { MAPLIBRE_FUNCTION_OPTIONS } from '../parser/document-checks';
 import { loadDocumentImages } from './images-loader';
 import { ChromeLayout, type ChromeCorner } from './chrome-layout';
 import {
@@ -2230,6 +2231,13 @@ export class MapRenderer {
       if (notice) console.warn(`[maplibre-yaml] ${notice}`);
       shaped[key] = value;
     }
+    // `config` is the constructor's own copy (a rest of the document's
+    // config): a host's `globalState` never reaches MapLibre — `state:` is
+    // the one source of truth (the parser says so at the key) — and a
+    // function-typed option a document spelled as a value (the parser warns)
+    // is dropped before MapLibre would call it.
+    delete config['globalState'];
+    for (const key of MAPLIBRE_FUNCTION_OPTIONS) if (key in config && typeof config[key] !== 'function') delete config[key];
     const globalState = globalStateForRuntime(state, version);
     if (globalState) shaped['globalState'] = globalState;
     return shaped;
@@ -2240,13 +2248,15 @@ export class MapRenderer {
    * (ml-vwz, live documents KTD7): `dragRotate` through the handler's
    * `enable(options)` / `disable()`, `maxBounds` through `setMaxBounds`
    * (`undefined`, a removed key, clears it). The same shaping as construction.
+   * A removed `dragRotate` goes back to MapLibre's own default, which is
+   * enabled only on an interactive map (`interactive && dragRotate`).
    */
   private applyMapOption(option: 'dragRotate' | 'maxBounds', value: unknown): void {
     const version = this.mapVersion();
     if (option === 'dragRotate') {
       const handler = (this.map as unknown as { dragRotate?: { enable?: (o?: unknown) => void; disable?: () => void } }).dragRotate;
       if (!handler) return;
-      if (value === false) {
+      if (value === false || (value === undefined && this.applied.config.interactive === false)) {
         handler.disable?.();
         return;
       }
