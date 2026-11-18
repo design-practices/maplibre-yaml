@@ -86,6 +86,34 @@ describe("*-layer-blend below maplibre-gl 6.18", () => {
     expect(hints).toHaveLength(1);
   });
 
+  it("gates a live paint update the same way: no setPaintProperty below the floor, one hint", async () => {
+    const { map } = mockMap("6.12.0");
+    map.setPaintProperty = vi.fn();
+    const manager = new LayerManager(map, { onLayerHint: (id, m) => hints.push([id, m]) });
+    await manager.addLayer({ ...BLENDED_FILL, paint: { "fill-color": "#3366cc" } } as any);
+    map.getLayer = vi.fn(() => ({ id: "shade" }));
+
+    manager.setLayerProperty("shade", "paint", "fill-layer-blend", "screen");
+    expect(map.setPaintProperty).not.toHaveBeenCalled();
+    expect(hints).toHaveLength(1);
+    expect(hints[0]![1]).toContain("fill-layer-blend");
+    expect(hints[0]![1]).toContain(LAYER_BLEND_RUNTIME_FLOOR);
+    // Other paint keys still update.
+    manager.setLayerProperty("shade", "paint", "fill-opacity", 0.5);
+    expect(map.setPaintProperty).toHaveBeenCalledWith("shade", "fill-opacity", 0.5);
+  });
+
+  it("lets a live paint update through at the floor", async () => {
+    const { map } = mockMap(LAYER_BLEND_RUNTIME_FLOOR);
+    map.setPaintProperty = vi.fn();
+    const manager = new LayerManager(map, { onLayerHint: (id, m) => hints.push([id, m]) });
+    await manager.addLayer({ ...BLENDED_FILL, paint: { "fill-color": "#3366cc" } } as any);
+    map.getLayer = vi.fn(() => ({ id: "shade" }));
+    manager.setLayerProperty("shade", "paint", "fill-layer-blend", "screen");
+    expect(map.setPaintProperty).toHaveBeenCalledWith("shade", "fill-layer-blend", "screen");
+    expect(hints).toHaveLength(0);
+  });
+
   it("forwards the key at the floor", async () => {
     const { map, added } = mockMap(LAYER_BLEND_RUNTIME_FLOOR);
     const manager = new LayerManager(map, { onLayerHint: (id, m) => hints.push([id, m]) });

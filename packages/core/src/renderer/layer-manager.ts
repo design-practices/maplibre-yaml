@@ -569,19 +569,33 @@ export class LayerManager {
   private dropLayerBlendBelowFloor(layerSpec: { id: string; paint?: Record<string, unknown> }): void {
     const paint = layerSpec.paint;
     if (!paint) return;
-    const keys = Object.keys(paint).filter((key) => key.endsWith("-layer-blend"));
-    if (keys.length === 0 || !this.runtimeBelow(LAYER_BLEND_RUNTIME_FLOOR)) return;
+    const keys = Object.keys(paint).filter((key) => this.layerBlendBelowFloor(layerSpec.id, key));
+    if (keys.length === 0) return;
     const rest = { ...paint };
-    for (const key of keys) {
-      delete rest[key];
-      this.hintOnce(
-        layerSpec.id,
-        key,
-        `Layer \`${layerSpec.id}\`: \`${key}\` needs maplibre-gl ${LAYER_BLEND_RUNTIME_FLOOR} or later ` +
-          `(running ${this.runtimeVersion()}), so the key is ignored and the layer draws with normal blending.`
-      );
-    }
+    for (const key of keys) delete rest[key];
     layerSpec.paint = rest;
+  }
+
+  /**
+   * True when `key` is a `*-layer-blend` paint property the running
+   * maplibre-gl does not know; the author hears once per layer and key. Shared
+   * by addLayer and the live paint update, so neither path hands MapLibre a
+   * key it would reject.
+   */
+  private layerBlendBelowFloor(layerId: string, key: string): boolean {
+    if (!key.endsWith("-layer-blend") || !this.runtimeBelow(LAYER_BLEND_RUNTIME_FLOOR)) return false;
+    this.hintOnce(
+      layerId,
+      key,
+      `Layer \`${layerId}\`: \`${key}\` ` +
+        this.floorNotice(LAYER_BLEND_RUNTIME_FLOOR, "the layer draws with normal blending")
+    );
+    return true;
+  }
+
+  /** "needs maplibre-gl X or later (running Y), so the key is ignored and <tail>." */
+  private floorNotice(floor: string, tail: string): string {
+    return `needs maplibre-gl ${floor} or later (running ${this.runtimeVersion()}), so the key is ignored and ${tail}.`;
   }
 
   /**
@@ -597,8 +611,7 @@ export class LayerManager {
     if (sourceId && this.firstHint(`${sourceId}\0sparse`)) {
       this.callbacks.onSourceHint?.(
         sourceId,
-        `Source \`${sourceId}\`: \`sparse\` needs maplibre-gl ${SPARSE_SOURCE_RUNTIME_FLOOR} or later ` +
-          `(running ${this.runtimeVersion()}), so the key is ignored and missing tiles stay empty.`
+        `Source \`${sourceId}\`: \`sparse\` ` + this.floorNotice(SPARSE_SOURCE_RUNTIME_FLOOR, "missing tiles stay empty")
       );
     }
     return rest;
@@ -1224,6 +1237,9 @@ export class LayerManager {
     }
     switch (target) {
       case "paint":
+        // Below the floor MapLibre's setPaintProperty throws on the unknown
+        // key before validating it; the same drop-and-hint as addLayer.
+        if (this.layerBlendBelowFloor(layerId, property)) return;
         // The property name is the document's, not one of MapLibre's keyed unions.
         this.map.setPaintProperty(layerId, property as any, value);
         return;

@@ -217,12 +217,16 @@ jobs:
               run: |
                   node -e "
                     const path = require('path');
-                    const want = process.env.MAPLIBRE_VERSION.match(/\d+/)[0];
+                    // Major must match and the minor must be at least the leg's:
+                    // two v6 legs (6.12 floor, 6.19 newest) would otherwise both
+                    // pass on the lockfile's 6.12 if the override no-ops.
+                    const [, wantMajor, wantMinor] = process.env.MAPLIBRE_VERSION.match(/(\d+)\.(\d+)/);
                     for (const p of ['.', 'packages/core', 'packages/astro', 'packages/effects']) {
                       const v = require(path.resolve(p, 'node_modules/maplibre-gl/package.json')).version;
+                      const [major, minor] = v.split('.');
                       console.log(p, 'maplibre-gl', v);
-                      if (v.split('.')[0] !== want) {
-                        console.error('matrix leg wants major ' + want + ', resolved ' + v + ' in ' + p);
+                      if (major !== wantMajor || Number(minor) < Number(wantMinor)) {
+                        console.error('matrix leg wants ' + process.env.MAPLIBRE_VERSION + ', resolved ' + v + ' in ' + p);
                         process.exit(1);
                       }
                     }
