@@ -33,17 +33,25 @@ describe('schema command (integration)', () => {
     expect(schema.$id).toContain('/map.schema.json');
   });
 
-  it('prints the `any` schema as a oneOf over three shapes', async () => {
+  it('prints the `any` schema as a oneOf over two shapes', async () => {
     const { stdout } = await execAsync(`node "${CLI}" schema any`);
     const schema = JSON.parse(stdout);
-    expect(schema.$defs.any.oneOf).toHaveLength(3);
+    expect(schema.$defs.any.oneOf).toHaveLength(2);
   });
 
-  it('prints scrollytelling and root schemas', async () => {
-    for (const block of ['scrollytelling', 'root']) {
-      const { stdout } = await execAsync(`node "${CLI}" schema ${block}`);
-      const schema = JSON.parse(stdout);
-      expect(schema.$id).toContain(`/${block}.schema.json`);
+  it('prints the scrollytelling schema', async () => {
+    const { stdout } = await execAsync(`node "${CLI}" schema scrollytelling`);
+    const schema = JSON.parse(stdout);
+    expect(schema.$id).toContain('/scrollytelling.schema.json');
+  });
+
+  it('no longer has a root (pages:) schema (ml-cxo)', async () => {
+    try {
+      await execAsync(`node "${CLI}" schema root`);
+      expect.unreachable('should have exited non-zero');
+    } catch (error: any) {
+      expect(error.code).toBe(1);
+      expect(error.stderr).toContain('Unknown schema "root". Expected one of: map, scrollytelling, any.');
     }
   });
 
@@ -69,7 +77,7 @@ describe('schema command (integration)', () => {
     } catch (error: any) {
       expect(error.code).toBe(1);
       const out = `${error.stdout}${error.stderr}`;
-      expect(out).toContain('map, scrollytelling, root, any');
+      expect(out).toContain('map, scrollytelling, any');
     }
   });
 });

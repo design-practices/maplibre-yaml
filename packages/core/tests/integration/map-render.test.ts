@@ -146,22 +146,16 @@ describe("Map Rendering Integration", () => {
   describe("Basic Map Rendering", () => {
     it("renders a basic map from YAML config", async () => {
       const yaml = `
-pages:
-  - id: test
-    path: "/"
-    title: "Test"
-    blocks:
-      - type: map
-        id: test-map
-        config:
-          center: [-74.006, 40.7128]
-          zoom: 12
-          mapStyle: "https://demotiles.maplibre.org/style.json"
-        layers: []
+type: map
+id: test-map
+config:
+  center: [-74.006, 40.7128]
+  zoom: 12
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+layers: []
 `;
 
-      const config = YAMLParser.parse(yaml);
-      const mapBlock = config.pages[0].blocks[0];
+      const mapBlock = YAMLParser.parseMapBlock(yaml);
 
       expect(mapBlock.type).toBe("map");
       expect(mapBlock.id).toBe("test-map");
@@ -184,8 +178,7 @@ pages:
       const yamlPath = path.join(__dirname, "../fixtures/simple-map.yaml");
       const yaml = fs.readFileSync(yamlPath, "utf-8");
 
-      const config = YAMLParser.parse(yaml);
-      const mapBlock = config.pages[0].blocks[0];
+      const mapBlock = YAMLParser.parseMapBlock(yaml);
 
       expect(mapBlock.type).toBe("map");
       expect(mapBlock.layers).toHaveLength(1);
@@ -292,26 +285,45 @@ pages:
     });
   });
 
-  describe("Reference Resolution", () => {
-    it("resolves layer references from global layers", () => {
-      const yamlPath = path.join(__dirname, "../fixtures/global-layers.yaml");
-      const yaml = fs.readFileSync(yamlPath, "utf-8");
+  describe("Config Validation", () => {
+    it("validates correct config", () => {
+      const yaml = `
+type: map
+id: test-map
+config:
+  center: [-74.006, 40.7128]
+  zoom: 12
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+layers: []
+`;
 
-      const config = YAMLParser.parse(yaml);
-      const mapBlock = config.pages[0].blocks[0];
-
-      expect(mapBlock.layers).toHaveLength(2);
-      expect(mapBlock.layers![0]).toHaveProperty("id", "bikes");
-      expect(mapBlock.layers![0]).toHaveProperty("paint");
-      expect(mapBlock.layers![1]).toHaveProperty("id", "parks");
-      expect(mapBlock.layers![1]).toHaveProperty("paint");
+      expect(() => YAMLParser.parseMapBlock(yaml)).not.toThrow();
     });
 
-    it("resolves references correctly", () => {
+    it("throws on invalid config", () => {
       const yaml = `
+type: map
+id: test-map
+config:
+  center: "invalid"
+  zoom: 12
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+layers: []
+`;
+
+      expect(() => YAMLParser.parseMapBlock(yaml)).toThrow();
+    });
+
+    it("validates layer config", () => {
+      const yaml = `
+type: map
+id: test-map
+config:
+  center: [0, 0]
+  zoom: 1
+  mapStyle: "https://demotiles.maplibre.org/style.json"
 layers:
-  sharedLayer:
-    id: shared
+  - id: test
     type: circle
     visible: true
     toggleable: false
@@ -320,99 +332,9 @@ layers:
       data:
         type: FeatureCollection
         features: []
-    paint:
-      circle-color: "#ff0000"
-
-pages:
-  - id: test
-    path: "/"
-    title: "Test"
-    blocks:
-      - type: map
-        id: test
-        config:
-          center: [0, 0]
-          zoom: 1
-          mapStyle: "https://demotiles.maplibre.org/style.json"
-        layers:
-          - $ref: "#/layers/sharedLayer"
 `;
 
-      const config = YAMLParser.parse(yaml);
-      const mapBlock = config.pages[0].blocks[0];
-
-      expect(mapBlock.layers).toHaveLength(1);
-      expect(mapBlock.layers![0]).toHaveProperty("id", "shared");
-      expect(mapBlock.layers![0]).toHaveProperty("paint");
-      expect(mapBlock.layers![0].paint).toHaveProperty("circle-color", "#ff0000");
-    });
-  });
-
-  describe("Config Validation", () => {
-    it("validates correct config", () => {
-      const yaml = `
-pages:
-  - id: test
-    path: "/"
-    title: "Test"
-    blocks:
-      - type: map
-        id: test-map
-        config:
-          center: [-74.006, 40.7128]
-          zoom: 12
-          mapStyle: "https://demotiles.maplibre.org/style.json"
-        layers: []
-`;
-
-      expect(() => YAMLParser.parse(yaml)).not.toThrow();
-    });
-
-    it("throws on invalid config", () => {
-      const yaml = `
-pages:
-  - id: test
-    path: "/"
-    title: "Test"
-    blocks:
-      - type: map
-        id: test-map
-        config:
-          center: "invalid"
-          zoom: 12
-          mapStyle: "https://demotiles.maplibre.org/style.json"
-        layers: []
-`;
-
-      expect(() => YAMLParser.parse(yaml)).toThrow();
-    });
-
-    it("validates layer config", () => {
-      const yaml = `
-pages:
-  - id: test
-    path: "/"
-    title: "Test"
-    blocks:
-      - type: map
-        id: test-map
-        config:
-          center: [0, 0]
-          zoom: 1
-          mapStyle: "https://demotiles.maplibre.org/style.json"
-        layers:
-          - id: test
-            type: circle
-            visible: true
-            toggleable: false
-            source:
-              type: geojson
-              data:
-                type: FeatureCollection
-                features: []
-`;
-
-      expect(() => YAMLParser.parse(yaml)).not.toThrow();
+      expect(() => YAMLParser.parseMapBlock(yaml)).not.toThrow();
     });
   });
 
@@ -628,29 +550,23 @@ pages:
 
     it("renders controls and legend from a parsed YAML block", async () => {
       const yaml = `
-pages:
-  - id: test
-    path: "/"
-    title: "Test"
-    blocks:
-      - type: map
-        id: test-map
-        config:
-          center: [0, 0]
-          zoom: 1
-          mapStyle: "https://demotiles.maplibre.org/style.json"
-        controls:
-          navigation: true
-        legend:
-          title: "Legend"
-          items:
-            - color: "#00ff00"
-              label: "Green Areas"
-        layers: []
+type: map
+id: test-map
+config:
+  center: [0, 0]
+  zoom: 1
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+controls:
+  navigation: true
+legend:
+  title: "Legend"
+  items:
+    - color: "#00ff00"
+      label: "Green Areas"
+layers: []
 `;
 
-      const config = YAMLParser.parse(yaml);
-      const mapBlock = config.pages[0].blocks[0];
+      const mapBlock = YAMLParser.parseMapBlock(yaml);
 
       const renderer = new MapRenderer(
         container,

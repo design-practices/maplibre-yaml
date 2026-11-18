@@ -20,7 +20,7 @@ const fixturesDir = join(
 
 interface Expectation {
   file: string;
-  blockType: "map" | "scrollytelling" | "root" | "unknown";
+  blockType: "map" | "scrollytelling" | "unknown";
   path: string;
   line?: number;
   column?: number;
@@ -30,10 +30,10 @@ interface Expectation {
 const CORPUS: Expectation[] = [
   {
     file: "invalid-longitude.yaml",
-    blockType: "root",
-    path: "pages.0.blocks.0.config.center.0",
-    line: 8,
-    column: 20,
+    blockType: "map",
+    path: "config.center.0",
+    line: 4,
+    column: 12,
     messageContains: "Value must be <= 180",
   },
   {
@@ -46,10 +46,10 @@ const CORPUS: Expectation[] = [
   },
   {
     file: "title-wrong-type.yaml",
-    blockType: "root",
-    path: "pages.0.title",
+    blockType: "map",
+    path: "title",
     line: 3,
-    column: 12,
+    column: 8,
     messageContains: "Expected string, got number",
   },
   {
@@ -63,9 +63,9 @@ const CORPUS: Expectation[] = [
   },
   {
     file: "unknown-source-type.yaml",
-    blockType: "root",
+    blockType: "map",
     path: "sources.quakes",
-    line: 3,
+    line: 9,
     column: 5,
     messageContains:
       'Unknown source type "geojsn". Valid types: geojson, vector, raster, raster-dem, image, video, grid. Did you mean "geojson"?',
@@ -85,6 +85,16 @@ const CORPUS: Expectation[] = [
     line: 5,
     column: 1,
     messageContains: "YAML syntax error",
+  },
+  {
+    // Multi-page documents were removed in 0.10 (ml-cxo): one error, at the key.
+    file: "pages-document.yaml",
+    blockType: "unknown",
+    path: "pages",
+    line: 1,
+    column: 1,
+    messageContains:
+      "Multi-page documents (pages:) are not supported: write one document per page (type: map or type: scrollytelling); Astro and the web component compose pages.",
   },
 ];
 

@@ -47,12 +47,11 @@ const CONFIGS_DIR = join(PUBLIC_DIR, 'configs');
 
 const SITE = 'https://docs.maplibre-yaml.org';
 /** Every schema core emits. All are served: editor modelines pin each one. */
-const BLOCKS = ['map', 'scrollytelling', 'root', 'any'];
+const BLOCKS = ['map', 'scrollytelling', 'any'];
 /**
- * The schemas llms.txt recommends and llms-full.txt prints. `root` (the
- * multi-page `pages:` document) stays served for the modelines that point at
- * it, but it is deprecated: such a document validates, nothing renders it,
- * and validation warns "has no effect". Agents aren't steered to it.
+ * The schemas llms.txt recommends and llms-full.txt prints: all of them.
+ * (`root`, the multi-page `pages:` document, was removed in 0.10, ml-cxo: such
+ * a document is an error now, and its schema is no longer emitted or served.)
  */
 export const RECOMMENDED_BLOCKS = ['map', 'scrollytelling', 'any'];
 
@@ -570,15 +569,21 @@ instead of the losses as prose on stderr.
 
 ## Don't write these
 
-They validate, but do nothing or have a newer form, and validation warns:
+These are errors:
 
-- Multi-page \`pages:\` documents (\`root.schema.json\`): nothing renders them.
-  Write a \`type: map\` or \`type: scrollytelling\` document instead. (Their
-  root \`theme:\` and \`dataFetching:\` do nothing; a story's own \`theme:\`
-  works.)
-- On a source: \`loading:\` and \`fetchStrategy:\` (no effect; delete them);
-  top-level \`refreshInterval\`, \`updateStrategy\`, \`updateKey\` (move them
-  into \`refresh:\`).
+- Multi-page \`pages:\` documents: not supported. Write one document per page
+  (\`type: map\` or \`type: scrollytelling\`); Astro and the web component
+  compose pages. (A root \`config.theme\` and \`config.dataFetching\` went with
+  them; a story's own \`theme:\` works.)
+- On a source: \`fetchStrategy: build\` or \`hybrid\`. Data is fetched in the
+  browser when the map loads; to inline data fetched elsewhere, write it under
+  \`prefetchedData:\` (the Astro loader fills it).
+
+These validate, but do nothing or have a newer form, and validation warns:
+
+- On a source: \`loading:\` and \`fetchStrategy: runtime\` (no effect; delete
+  them); top-level \`refreshInterval\`, \`updateStrategy\`, \`updateKey\` (move
+  them into \`refresh:\`).
 - \`interactive.mouseenter\` / \`mouseleave\`: use \`hover:\`.
 - Schema descriptions that start "No effect (deprecated)" or "Deprecated"
   mark the rest.
@@ -690,8 +695,7 @@ export function buildLlmsFullTxt(version) {
       'document follows: the same files the schema URLs above serve. ' +
       'Keys whose description starts "No effect ' +
       '(deprecated)" or "Deprecated" are accepted for old documents; don\'t ' +
-      'write them. root.schema.json (multi-page `pages:` documents) is ' +
-      'deprecated and not printed here.\n',
+      'write them.\n',
   );
   for (const block of RECOMMENDED_BLOCKS.filter((b) => b !== 'any')) {
     const schema = readSchema(block);

@@ -3,12 +3,12 @@
  * @module @maplibre-yaml/core/schemas/content
  *
  * @description
- * Zod schemas for non-map content blocks including text, images, iframes,
- * and other HTML elements with dynamic property interpolation.
+ * Zod schemas for rich content items: text, images, iframes and other HTML
+ * elements with dynamic property interpolation.
  *
  * @example
  * ```typescript
- * import { ContentBlockSchema } from '@maplibre-yaml/core/schemas';
+ * import { ContentItemSchema } from '@maplibre-yaml/core/schemas';
  * ```
  */
 
@@ -176,137 +176,3 @@ export const ContentItemSchema = z
 /** Inferred type for content item. */
 export type ContentItem = z.infer<typeof ContentItemSchema>;
 
-/**
- * Content block for rich text and media.
- *
- * @remarks
- * Content blocks allow you to add non-map content to your pages.
- * They render as HTML with support for dynamic property interpolation.
- *
- * **Use Cases:**
- * - Introductory text
- * - Explanatory sections
- * - Embedded images and videos
- * - Interactive elements
- * - Mixed content layouts
- *
- * **Properties are resolved from:**
- * 1. Page-level context (passed to renderer)
- * 2. Global configuration
- * 3. URL query parameters (if configured)
- *
- * @example Basic Text Content
- * ```yaml
- * type: content
- * id: intro
- * content:
- *   - h1:
- *       - str: "Welcome"
- *   - p:
- *       - str: "This is a simple text block."
- * ```
- *
- * @example Dynamic Content
- * ```yaml
- * type: content
- * id: user-info
- * className: user-section
- * content:
- *   - h2:
- *       - str: "User Profile"
- *   - p:
- *       - str: "Name: "
- *       - property: "userName"
- *         else: "Unknown"
- *   - p:
- *       - str: "Location: "
- *       - property: "userCity"
- *         else: "Not specified"
- * ```
- *
- * @example Rich Content with Media
- * ```yaml
- * type: content
- * id: article
- * content:
- *   - h1:
- *       - str: "Article Title"
- *   - img:
- *       - src: "https://example.com/header.jpg"
- *         alt: "Header image"
- *         width: "100%"
- *   - p:
- *       - str: "Article text goes here..."
- *   - blockquote:
- *       - str: "An inspiring quote."
- *   - a:
- *       - str: "Read more"
- *         href: "https://example.com/full-article"
- *         target: "_blank"
- * ```
- *
- * @example Styled Content
- * ```yaml
- * type: content
- * id: styled
- * className: "card shadow"
- * style: "padding: 20px; background: #f5f5f5;"
- * content:
- *   - h3:
- *       - str: "Card Title"
- *         classList: "text-primary"
- *   - p:
- *       - str: "Card content"
- * ```
- *
- * @example List Content
- * ```yaml
- * type: content
- * id: features
- * content:
- *   - h2:
- *       - str: "Features"
- *   - ul:
- *       - li:
- *           - str: "Fast rendering"
- *       - li:
- *           - str: "Easy configuration"
- *       - li:
- *           - str: "Fully customizable"
- * ```
- *
- * @example Embedded Content
- * ```yaml
- * type: content
- * id: video
- * content:
- *   - h2:
- *       - str: "Tutorial Video"
- *   - iframe:
- *       - src: "https://www.youtube.com/embed/VIDEO_ID"
- *         width: "560"
- *         height: "315"
- * ```
- */
-export const ContentBlockSchema = z
-  .object({
-    type: z.literal("content").describe("Block type"),
-    id: z.string().optional().describe("Unique block identifier"),
-    className: z
-      .string()
-      .optional()
-      .describe("CSS class name for the block container"),
-    style: z
-      .string()
-      .optional()
-      .describe("Inline CSS styles for the block container"),
-    content: z
-      .array(ContentItemSchema)
-      .describe("Array of content items to render"),
-  })
-  .describe(
-    "Content block (multi-page documents only). No effect (deprecated): no maplibre-yaml package renders it yet"
-  );
-
-/** Inferred type for content block. */
-export type ContentBlock = z.infer<typeof ContentBlockSchema>;

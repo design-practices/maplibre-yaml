@@ -350,12 +350,11 @@ export async function createPreviewServer(
       }
 
       if (blockType !== 'map') {
-        // Valid document, but not something preview can render yet
-        const kind = blockType === 'root' ? 'multi-page root document' : '"' + blockType + '" block';
+        // A successful parse is a map or a story; kept so a new block kind
+        // fails here in words rather than rendering as a map.
         currentConfig = null;
-        currentError = 'Visual preview currently supports only map and story documents (a type of map or scrollytelling).\n\n'
-          + 'This file is a valid ' + kind + ' -- it passed validation, but preview cannot render it yet. '
-          + 'Preview support for ' + (blockType === 'root' ? 'root documents' : blockType) + ' is planned for a future release.';
+        currentError = 'Visual preview supports map and story documents (type: map or type: scrollytelling); '
+          + 'this is a "' + blockType + '" document.';
         return { valid: false, error: currentError };
       }
 

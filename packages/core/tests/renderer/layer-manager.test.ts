@@ -308,7 +308,7 @@ describe("LayerManager", () => {
           toggleable: false,
           source: { $ref: "#/sources/cities" },
         } as any)
-      ).rejects.toThrow(/"\$ref" reference.*"pages:" document/);
+      ).rejects.toThrow(/"\$ref" reference, which only the parser resolves/);
     });
 
     it("adds a background layer without resolving any source (ml-chf)", async () => {

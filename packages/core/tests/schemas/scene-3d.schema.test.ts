@@ -8,7 +8,6 @@ import {
   SkySchema,
   ProjectionSchema,
   MapBlockSchema,
-  MapFullPageBlockSchema,
   ControlsConfigSchema,
 } from "../../src/schemas/map.schema";
 import { MapBlockV2Schema } from "../../src/schemas/map-v2.schema";
@@ -69,17 +68,11 @@ describe("the trio is a document-root key in v1 and a style key in v2", () => {
     projection: { type: "globe" },
   };
 
-  it("v1 map and map-fullpage blocks accept it at the root", () => {
+  it("a v1 map block accepts it at the root", () => {
     const map = MapBlockSchema.parse({ type: "map", id: "m", config, ...trio });
     expect(map["terrain"]).toEqual(trio.terrain);
     expect(map["projection"]).toEqual(trio.projection);
-    const full = MapFullPageBlockSchema.parse({
-      type: "map-fullpage",
-      id: "m",
-      config,
-      ...trio,
-    });
-    expect(full["sky"]).toEqual(trio.sky);
+    expect(map["sky"]).toEqual(trio.sky);
   });
 
   it("v2 accepts it under style:", () => {

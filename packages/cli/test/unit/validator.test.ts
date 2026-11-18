@@ -27,10 +27,16 @@ describe('validator', () => {
       expect(result.errors).toHaveLength(0);
     });
 
-    it('returns valid for root pages document', async () => {
-      const result = await validateFile('./test/fixtures/valid-root.yaml');
-      expect(result.valid).toBe(true);
-      expect(result.errors).toHaveLength(0);
+    it('rejects a multi-page pages: document with one error naming the alternative (ml-cxo)', async () => {
+      const result = await validateFile('./test/fixtures/pages-document.yaml');
+      expect(result.valid).toBe(false);
+      expect(result.errors).toHaveLength(1);
+      expect(result.errors[0].path).toBe('pages');
+      expect(result.errors[0].message).toBe(
+        'Multi-page documents (pages:) are not supported: write one document per page '
+          + '(type: map or type: scrollytelling); Astro and the web component compose pages.',
+      );
+      expect(result.errors[0].line).toBe(1);
     });
 
     it('returns clear error for unknown block type', async () => {

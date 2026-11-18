@@ -56,6 +56,7 @@ import {
   LightSchema,
 } from "./map.schema";
 import {
+  FetchStrategySchema,
   GeoJSONSourceSchema,
   VectorSourceSchema,
   RasterSourceSchema,
@@ -139,12 +140,9 @@ export const SourceRuntimeSchema = z
       .any()
       .optional()
       .describe("Pre-fetched data from build time"),
-    fetchStrategy: z
-      .enum(["runtime", "build", "hybrid"])
-      .optional()
-      .describe(
-        "No effect (deprecated): data is always fetched in the browser when the map loads. build and hybrid warn and do nothing"
-      ),
+    fetchStrategy: FetchStrategySchema.optional().describe(
+      "Deprecated: runtime is the only value and names what always happens (data is fetched in the browser when the map loads), so remove it. build and hybrid are errors: to inline data fetched elsewhere, write it under prefetchedData (the Astro loader fills it)"
+    ),
     // Cloud-native formats (0.9, ml-cnv): how the file is read.
     format: SourceFormatSchema.optional(),
     load: SourceLoadSchema.optional(),

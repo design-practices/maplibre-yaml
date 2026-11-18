@@ -14,7 +14,7 @@ import { formatNamedAsType } from "../formats/detect";
  * The fix for a file format written as a source `type:` (`type: pmtiles`,
  * `type: fgb`, `type: mbtiles` …) — or `undefined` when `received` names no
  * format. Used by the parser's unknown-source-type path, so it applies to
- * every document shape (v1, v2, stories, pages).
+ * every document shape (v1, v2, stories).
  */
 export function formatTypeMessage(received: unknown): string | undefined {
   const format = formatNamedAsType(received);

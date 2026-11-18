@@ -20,27 +20,23 @@
  * import { YAMLParser } from '@maplibre-yaml/core/parser';
  *
  * const yaml = `
- * pages:
- *   - path: "/"
- *     title: "My Map"
- *     blocks:
- *       - type: map
- *         id: main
- *         config:
- *           center: [0, 0]
- *           zoom: 2
- *           mapStyle: "https://example.com/style.json"
+ * type: map
+ * id: main
+ * config:
+ *   center: [0, 0]
+ *   zoom: 2
+ *   mapStyle: "https://example.com/style.json"
  * `;
  *
- * const config = YAMLParser.parse(yaml);
+ * const block = YAMLParser.parseMapBlock(yaml);
  * ```
  *
  * @example
  * Safe parsing with error handling
  * ```typescript
- * const result = YAMLParser.safeParse(yaml);
+ * const result = YAMLParser.safeParseMapBlock(yaml);
  * if (result.success) {
- *   console.log('Valid config:', result.data);
+ *   console.log('Valid block:', result.data);
  * } else {
  *   result.errors.forEach(err => {
  *     console.error(`${err.path}: ${err.message}`);
@@ -52,22 +48,19 @@
  * Reference resolution
  * ```typescript
  * const yaml = `
+ * type: map
+ * id: main
+ * config: { center: [0, 0], zoom: 2, mapStyle: "https://example.com/style.json" }
+ * sources:
+ *   quakes: { type: geojson, url: "https://example.com/quakes.geojson" }
  * layers:
- *   myLayer:
- *     id: shared
+ *   - id: dots
  *     type: circle
- *     source: { type: geojson, data: {...} }
- *
- * pages:
- *   - path: "/"
- *     blocks:
- *       - type: map
- *         layers:
- *           - $ref: "#/layers/myLayer"
+ *     source: { $ref: "#/sources/quakes" }
  * `;
  *
- * const config = YAMLParser.parse(yaml);
- * // References are automatically resolved
+ * const block = YAMLParser.parseMapBlock(yaml);
+ * // The $ref is replaced by the named source
  * ```
  */
 
@@ -267,14 +260,12 @@ function toJSSafe(doc: Document): { value: unknown } | { error: ParseError } {
 import { ZodError, type ZodIssue } from "zod/v3";
 import {
   expandSugarInMapBlock,
-  expandSugarInRoot,
   expandSugarInScrollytellingBlock,
   type SugarRemap,
 } from "./expand-sugar";
 import { checkClassify, checkClassifiedLegendItems } from "../classify/checks";
 import { checkLayerSources, refNotFoundMessage } from "./source-refs";
 import { restoreCategoryOrder, type AuthoredOrder } from "../classify/category-order";
-import { RootSchema } from "../schemas/page.schema";
 import { MapBlockSchema } from "../schemas/map.schema";
 import { MapBlockV2Schema, type MapBlockV2 } from "../schemas/map-v2.schema";
 import { ScrollytellingBlockSchema } from "../schemas/scrollytelling.schema";
@@ -348,14 +339,6 @@ function readingFrom<T>(source: ValueSource, parse: () => T): T {
 export type { ValidationWarning } from "./validation-utils";
 
 /**
- * Type alias for the root configuration object
- *
- * @remarks
- * Inferred from the RootSchema Zod schema
- */
-export type RootConfig = z.infer<typeof RootSchema>;
-
-/**
  * Type alias for a single map block
  *
  * @remarks
@@ -374,7 +357,7 @@ export type ScrollytellingBlock = z.infer<typeof ScrollytellingBlockSchema>;
 /**
  * Error information for a single validation or parsing error
  *
- * @property path - JSON path to the error location (e.g., "pages[0].blocks[1].config.center")
+ * @property path - JSON path to the error location (e.g., "layers.0.source.url")
  * @property message - Human-readable error description
  * @property line - Optional line number in the YAML file where error occurred
  * @property column - Optional column number in the YAML file where error occurred
@@ -429,7 +412,7 @@ export interface ParseError {
  * @property warnings - Non-fatal findings (unknown keys, deprecations, bounded
  *   expression checks). Present on both success and failure; always an array.
  */
-export interface ParseResult<T = RootConfig> {
+export interface ParseResult<T = unknown> {
   success: boolean;
   data?: T;
   errors: ParseError[];
@@ -437,6 +420,24 @@ export interface ParseResult<T = RootConfig> {
   /** The format the document was read as. Set by `parseDocumentText`. */
   format?: DocumentFormat;
 }
+
+/**
+ * What a `$ref` resolves against: a document's top-level `sources:` record
+ * (and, for a `#/layers/name` pointer, a `layers:` record, which a map or
+ * story document does not have — its `layers:` is a list).
+ */
+export interface RefScope {
+  layers?: unknown;
+  sources?: unknown;
+}
+
+/**
+ * The one error a multi-page `pages:` document gets (removed in 0.10, ml-cxo):
+ * what to write instead, and who composes pages now.
+ */
+export const MULTI_PAGE_MESSAGE =
+  "Multi-page documents (pages:) are not supported: write one document per page " +
+  "(type: map or type: scrollytelling); Astro and the web component compose pages.";
 
 /**
  * Discriminated result returned by {@link YAMLParser.safeParseAny}
@@ -449,15 +450,14 @@ export interface ParseResult<T = RootConfig> {
  *   The `result` may carry either a v1 {@link MapBlock} or a format-v2
  *   {@link MapBlockV2} block, since `safeParseMapBlock` dispatches on `version:`.
  * - `'scrollytelling'` — document had `type: scrollytelling`, validated with {@link YAMLParser.safeParseScrollytellingBlock}
- * - `'root'` — document had no `type:` but a `pages:` array, validated with {@link YAMLParser.safeParse}
  * - `'unknown'` — the document type could not be determined (unrecognized
- *   `type:` value, YAML syntax error, or a document that is neither a block
- *   nor a root config); `result` is always a failure with a descriptive error
+ *   `type:` value, YAML syntax error, a multi-page `pages:` document, or a
+ *   document that is neither block); `result` is always a failure with a
+ *   descriptive error
  */
 export type SafeParseAnyResult =
   | { blockType: "map"; result: ParseResult<MapBlock | MapBlockV2> }
   | { blockType: "scrollytelling"; result: ParseResult<ScrollytellingBlock> }
-  | { blockType: "root"; result: ParseResult<RootConfig> }
   | { blockType: "unknown"; result: ParseResult<never> };
 
 /**
@@ -469,106 +469,21 @@ export type SafeParseAnyResult =
  * sections. All methods are static as the parser maintains no internal state.
  *
  * @example
- * Parse and validate YAML (throws on error)
+ * Parse and validate a map document (throws on error)
  * ```typescript
- * const config = YAMLParser.parse(yamlString);
+ * const block = YAMLParser.parseMapBlock(yamlString);
  * ```
  *
  * @example
  * Safe parse (returns result object)
  * ```typescript
- * const result = YAMLParser.safeParse(yamlString);
+ * const result = YAMLParser.safeParseMapBlock(yamlString);
  * if (!result.success) {
  *   console.error('Validation errors:', result.errors);
  * }
  * ```
  */
 export class YAMLParser {
-  /**
-   * Parse YAML string and validate against schema
-   *
-   * @param yaml - YAML string to parse
-   * @returns Validated configuration object
-   * @throws {Error} If YAML syntax is invalid
-   * @throws {ZodError} If validation fails
-   *
-   * @remarks
-   * This method parses the YAML, validates it against the RootSchema,
-   * resolves all references, and returns the validated config. If any
-   * step fails, it throws an error.
-   *
-   * @example
-   * ```typescript
-   * try {
-   *   const config = YAMLParser.parse(yamlString);
-   *   console.log('Valid config:', config);
-   * } catch (error) {
-   *   console.error('Parse error:', error.message);
-   * }
-   * ```
-   */
-  static parse(yaml: string): RootConfig {
-    // Parse YAML string to JavaScript object
-    let parsed: unknown;
-    try {
-      parsed = parseYAML(yaml, YAML_PARSE_OPTIONS);
-    } catch (error) {
-      throw new Error(
-        `YAML syntax error: ${
-          error instanceof Error ? error.message : String(error)
-        }`
-      );
-    }
-
-    normalizeOrThrow(parsed);
-    // Expand geo-sugar before the schema sees the block, so the expanded
-    // `data:` is what validates (mirrors the safeParse seam). A sugar error
-    // becomes a thrown Error here — acceptable on the throwing path.
-    const expansion = expandSugarInRoot(parsed);
-    if ("error" in expansion) {
-      throw new Error(expansion.error.message);
-    }
-
-    // Validate against schema
-    const validated = RootSchema.parse(parsed);
-    throwOnClassifyErrors(parsed);
-
-    // Resolve references
-    return this.resolveReferences(validated);
-  }
-
-  /**
-   * Parse YAML string and validate, returning a result object
-   *
-   * @param yaml - YAML string to parse
-   * @returns Result object with success flag and either data or errors
-   *
-   * @remarks
-   * This is the non-throwing version of {@link parse}. Instead of throwing
-   * errors, it returns a result object that indicates success or failure.
-   * Use this when you want to handle errors gracefully without try/catch.
-   *
-   * @example
-   * ```typescript
-   * const result = YAMLParser.safeParse(yamlString);
-   * if (result.success) {
-   *   console.log('Config:', result.data);
-   * } else {
-   *   result.errors.forEach(err => {
-   *     console.error(`Error at ${err.path}: ${err.message}`);
-   *   });
-   * }
-   * ```
-   */
-  static safeParse(yaml: string): ParseResult {
-    return this.safeParseWithSchema(
-      yaml,
-      RootSchema,
-      true,
-      expandSugarInRoot
-    ) as ParseResult;
-  }
-
   /**
    * Parse a YAML document while preserving source positions.
    *
@@ -780,9 +695,7 @@ export class YAMLParser {
 
     if (resolveRefs) {
       try {
-        const resolved = this.resolveReferences(
-          result.data as unknown as RootConfig
-        );
+        const resolved = this.resolveReferences(result.data as RefScope);
         return {
           success: true,
           data: resolved as unknown as T,
@@ -804,53 +717,6 @@ export class YAMLParser {
     }
 
     return { success: true, data: result.data, warnings, errors: [] };
-  }
-
-  /**
-   * Shared safe-parse implementation with position mapping and warnings.
-   *
-   * @internal
-   * @remarks
-   * A single {@link materialize} feeding {@link validateAgainst}. Callers that
-   * validate against a fixed schema (RootSchema, scrollytelling) use this;
-   * {@link safeParseMapBlock} inlines the same two steps so it can pick the
-   * schema by version between them.
-   */
-  private static safeParseWithSchema<T>(
-    yaml: string,
-    schema: z.ZodType<T>,
-    resolveRefs: boolean,
-    expand?: (value: unknown) =>
-      | { remaps: SugarRemap[] }
-      | { error: ParseError }
-  ): ParseResult<T> {
-    const materialized = this.materialize(yaml);
-    if ("error" in materialized) {
-      return { success: false, errors: [materialized.error], warnings: [] };
-    }
-    // Optional pre-validation seam (RootSchema carries the geo-sugar walker; a
-    // fixed-schema caller like scrollytelling passes none). Runs after
-    // materialize (post DoS-guard) and before validation, exactly as the
-    // map-block path does.
-    let remaps: SugarRemap[] = [];
-    if (expand) {
-      const expansion = expand(materialized.value);
-      if ("error" in expansion) {
-        return withNormalized({ success: false, errors: [expansion.error], warnings: [] }, materialized.normalized);
-      }
-      remaps = expansion.remaps;
-    }
-    return withNormalized(
-      this.validateAgainst(
-        materialized.value,
-        materialized.doc,
-        materialized.lineCounter,
-        schema,
-        resolveRefs,
-        remaps
-      ),
-      materialized.normalized
-    );
   }
 
   /**
@@ -908,42 +774,6 @@ export class YAMLParser {
   }
 
   /**
-   * Validate a JavaScript object against the schema
-   *
-   * @param config - JavaScript object to validate
-   * @returns Validated configuration object
-   * @throws {ZodError} If validation fails
-   *
-   * @remarks
-   * This method bypasses YAML parsing and directly validates a JavaScript object.
-   * Useful when you already have a parsed object (e.g., from JSON.parse) and just
-   * want to validate and resolve references.
-   *
-   * @example
-   * ```typescript
-   * const jsConfig = JSON.parse(jsonString);
-   * const validated = YAMLParser.validate(jsConfig);
-   * ```
-   */
-  static validate(config: unknown): RootConfig {
-    // `expandSugarInRoot` mutates its argument in place (deletes the sugar key,
-    // writes `data`). Every other caller feeds it a freshly-materialized,
-    // disposable value; `validate` receives the *caller's* object, so clone
-    // first — a consumer that reuses its input must not find a sugar key
-    // silently rewritten under it.
-    // Dates become text first: structuredClone keeps them as Date objects.
-    const cloned = structuredClone(normalizeDates(config));
-    normalizeOrThrow(cloned);
-    const expansion = expandSugarInRoot(cloned);
-    if ("error" in expansion) {
-      throw new Error(expansion.error.message);
-    }
-    const validated = RootSchema.parse(cloned);
-    throwOnClassifyErrors(cloned);
-    return this.resolveReferences(validated);
-  }
-
-  /**
    * Parse YAML string for a single map block and validate against MapBlockSchema
    *
    * @param yaml - YAML string to parse (should be a map block, not a full document)
@@ -953,8 +783,8 @@ export class YAMLParser {
    *
    * @remarks
    * This method is specifically for parsing individual map blocks (e.g., in documentation
-   * or component usage). Unlike {@link parse}, it validates against MapBlockSchema rather
-   * than RootSchema, so it expects a single map configuration without the pages array wrapper.
+   * or component usage). It validates against MapBlockSchema (or MapBlockV2Schema for a
+   * `version: 2` document): one map, the unit `<ml-map>` renders.
    *
    * @example
    * ```typescript
@@ -1219,8 +1049,8 @@ export class YAMLParser {
    *
    * @remarks
    * This method is specifically for parsing individual scrollytelling blocks (e.g., in documentation
-   * or component usage). Unlike {@link parse}, it validates against ScrollytellingBlockSchema rather
-   * than RootSchema, so it expects a single scrollytelling configuration without the pages array wrapper.
+   * or component usage). It validates against ScrollytellingBlockSchema: one story, the unit
+   * `<ml-scrollytelling>` renders.
    *
    * @example
    * ```typescript
@@ -1394,7 +1224,7 @@ export class YAMLParser {
    * Detect the document type of a YAML string and validate it against the
    * matching schema
    *
-   * @param yaml - YAML string to parse (a map block, a scrollytelling block, or a root document)
+   * @param yaml - YAML string to parse (a map block or a scrollytelling block)
    * @returns Discriminated result with the detected block type and the corresponding safeParse result
    *
    * @remarks
@@ -1402,11 +1232,11 @@ export class YAMLParser {
    *
    * - `type: map` → {@link safeParseMapBlock}
    * - `type: scrollytelling` → {@link safeParseScrollytellingBlock}
-   * - no `type:` but a `pages:` key → {@link safeParse} (root document)
    *
    * Any other `type:` value produces a failure result listing the valid
-   * values, as does a document that has neither `type:` nor `pages:`.
-   * This method never throws.
+   * values, as does a document without one. A multi-page `pages:` document
+   * (removed in 0.10, ml-cxo) fails with one error saying to write one
+   * document per page. This method never throws.
    *
    * A `source` says that `yaml` was synthesized from a value read from other
    * text (TOML): positions then point into that text.
@@ -1425,7 +1255,7 @@ export class YAMLParser {
     if (source) return readingFrom(source, () => this.safeParseAny(yaml));
     // Parse once (with a LineCounter) to inspect the top-level `type:`
     // discriminator and surface positioned syntax errors.
-    const { doc: yamlDoc, syntaxError } = this.parseToDocument(yaml);
+    const { doc: yamlDoc, lineCounter, syntaxError } = this.parseToDocument(yaml);
     if (syntaxError) {
       return {
         blockType: "unknown",
@@ -1462,7 +1292,7 @@ export class YAMLParser {
     }
 
     // Treat a present-but-null `type:` (e.g. `type:` with no value) the same as
-    // a missing one, so it falls through to `pages`-based root detection rather
+    // a missing one, so it falls through to the shape-based hints below rather
     // than being reported as `Unknown block type: null`.
     if (type != null) {
       const hint =
@@ -1476,8 +1306,7 @@ export class YAMLParser {
               path: "type",
               message:
                 `Unknown block type: ${JSON.stringify(type)}. ` +
-                `Expected one of: ${BLOCK_TYPES.join(", ")}. ` +
-                `Root documents omit "type" and use a top-level "pages:" array instead.` +
+                `Expected one of: ${BLOCK_TYPES.join(", ")}.` +
                 (hint ? ` Did you mean "${hint}"?` : ""),
               ...(hint ? { suggestion: hint } : {}),
             },
@@ -1487,8 +1316,25 @@ export class YAMLParser {
       };
     }
 
+    // A multi-page `pages:` document (removed in 0.10, ml-cxo): one error,
+    // at the key, saying what to write instead.
     if (doc !== null && "pages" in doc) {
-      return { blockType: "root", result: this.safeParse(yaml) };
+      const pos = positionForKey(yamlDoc, lineCounter, [], "pages");
+      return {
+        blockType: "unknown",
+        result: {
+          success: false,
+          errors: [
+            {
+              path: "pages",
+              code: "schema",
+              message: MULTI_PAGE_MESSAGE,
+              ...(pos ? { line: pos.line, column: pos.column } : {}),
+            },
+          ],
+          warnings: [],
+        },
+      };
     }
 
     // A block whose `type:` line was deleted (ml-aot.62): its shape says
@@ -1518,7 +1364,7 @@ export class YAMLParser {
           {
             path: "",
             message:
-              'Unable to determine document type. Expected a block with "type: map" or "type: scrollytelling", or a root document with a top-level "pages:" array.',
+              'Unable to determine document type. Expected a block with "type: map" or "type: scrollytelling".',
           },
         ],
         warnings: [],
@@ -1541,28 +1387,25 @@ export class YAMLParser {
    *
    * ## Reference Syntax
    *
-   * - `#/layers/myLayer` - Reference to a layer in the global `layers` section
-   * - `#/sources/mySource` - Reference to a source in the global `sources` section
+   * - `#/sources/mySource` - Reference to a source in the document's top-level `sources:` record
+   * - `#/layers/myLayer` - Reference to an entry of a top-level `layers:` record. A map or
+   *   story document's `layers:` is a list, so this never resolves there; validation reports it.
    *
    * @example
    * ```typescript
-   * const config = {
-   *   layers: {
-   *     myLayer: { id: 'layer1', type: 'circle', ... }
+   * const block = {
+   *   type: 'map',
+   *   sources: {
+   *     quakes: { type: 'geojson', url: 'https://example.com/quakes.geojson' }
    *   },
-   *   pages: [{
-   *     blocks: [{
-   *       type: 'map',
-   *       layers: [{ $ref: '#/layers/myLayer' }]
-   *     }]
-   *   }]
+   *   layers: [{ id: 'dots', type: 'circle', source: { $ref: '#/sources/quakes' } }]
    * };
    *
-   * const resolved = YAMLParser.resolveReferences(config);
-   * // resolved.pages[0].blocks[0].layers[0] now contains the full layer object
+   * const resolved = YAMLParser.resolveReferences(block);
+   * // resolved.layers[0].source now contains the full source object
    * ```
    */
-  static resolveReferences(config: RootConfig): RootConfig {
+  static resolveReferences<T extends RefScope>(config: T): T {
     /**
      * Recursively walk an object and resolve references
      */
@@ -1592,17 +1435,11 @@ export class YAMLParser {
           const [, section, name] = match;
 
           // Look up the referenced item
-          if (section === "layers") {
-            if (!config.layers || !(name in config.layers)) {
-              throw new Error(refNotFoundMessage(ref, "layers", config.layers));
-            }
-            return config.layers[name];
-          } else if (section === "sources") {
-            if (!config.sources || !(name in config.sources)) {
-              throw new Error(refNotFoundMessage(ref, "sources", config.sources));
-            }
-            return config.sources[name];
+          const record = section === "layers" ? config.layers : config.sources;
+          if (!record || typeof record !== "object" || !(name in record)) {
+            throw new Error(refNotFoundMessage(ref, section as "layers" | "sources", record));
           }
+          return (record as Record<string, unknown>)[name];
         }
 
         // Recursively process all properties
@@ -1644,7 +1481,7 @@ export class YAMLParser {
    * @example
    * ```typescript
    * try {
-   *   RootSchema.parse(invalidConfig);
+   *   MapBlockSchema.parse(invalidConfig);
    * } catch (error) {
    *   if (error instanceof ZodError) {
    *     const formatted = YAMLParser.formatZodErrors(error);
@@ -1749,6 +1586,13 @@ export class YAMLParser {
         }
 
         case "invalid_enum_value": {
+          // A message the schema wrote itself (`fetchStrategy: build` says
+          // what to write instead) beats the generic one; zod's own default
+          // starts "Invalid enum value." (ml-cxo).
+          if (err.message && !err.message.startsWith("Invalid enum value")) {
+            message = err.message;
+            break;
+          }
           // `alignment: middle`: name the field, list the values in plain
           // words and suggest the likely one (ml-aot.62).
           const key = String(err.path[err.path.length - 1] ?? "value");
@@ -2578,47 +2422,9 @@ function throwOnClassifyErrors(value: unknown): void {
 }
 
 /**
- * Convenience function to parse YAML config
- *
- * @param yaml - YAML string to parse
- * @returns Validated configuration object
- * @throws {Error} If parsing or validation fails
- *
- * @remarks
- * This is an alias for {@link YAMLParser.parse} for convenient imports.
- *
- * @example
- * ```typescript
- * import { parseYAMLConfig } from '@maplibre-yaml/core/parser';
- * const config = parseYAMLConfig(yamlString);
- * ```
- */
-export const parseYAMLConfig = YAMLParser.parse.bind(YAMLParser);
-
-/**
- * Convenience function to safely parse YAML config
- *
- * @param yaml - YAML string to parse
- * @returns Result object with success flag and data or errors
- *
- * @remarks
- * This is an alias for {@link YAMLParser.safeParse} for convenient imports.
- *
- * @example
- * ```typescript
- * import { safeParseYAMLConfig } from '@maplibre-yaml/core/parser';
- * const result = safeParseYAMLConfig(yamlString);
- * if (result.success) {
- *   console.log(result.data);
- * }
- * ```
- */
-export const safeParseYAMLConfig = YAMLParser.safeParse.bind(YAMLParser);
-
-/**
  * Convenience function to detect and validate any supported document type
  *
- * @param yaml - YAML string to parse (map block, scrollytelling block, or root document)
+ * @param yaml - YAML string to parse (map block or scrollytelling block)
  * @returns Discriminated result with the detected block type and safeParse result
  *
  * @remarks

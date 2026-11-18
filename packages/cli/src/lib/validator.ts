@@ -54,7 +54,7 @@ export async function validateFile(filePath: string): Promise<ValidationResult> 
     };
   }
 
-  // Detect the document type (map, scrollytelling, or root) and validate
+  // Detect the document type (map or scrollytelling) and validate
   // against the matching schema. The front door strips a byte-order mark,
   // which Node's readFile keeps, and words errors for the file's format.
   let parsed: DocumentTextResult;

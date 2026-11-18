@@ -119,7 +119,7 @@ chapters:
   });
 
   it("defaultMapStyle takes the string form too", async () => {
-    const { GlobalConfigSchema } = await import("../../src/schemas/page.schema");
+    const { GlobalConfigSchema } = await import("../../src/schemas/global-config.schema");
     const r = GlobalConfigSchema.safeParse({ defaultMapStyle: "data/nyc.pmtiles" });
     expect(r.success && r.data.defaultMapStyle).toEqual({ pmtiles: "data/nyc.pmtiles" });
   });
@@ -185,8 +185,8 @@ chapters:
     expect(r.error!.issues[0]!.message).toMatch(/both MapLibre style keys .* and pmtiles:/);
   });
 
-  it("defaultMapStyle (pages documents, Astro) takes the shorthand too", async () => {
-    const { GlobalConfigSchema } = await import("../../src/schemas/page.schema");
+  it("defaultMapStyle (the Astro site-wide defaults) takes the shorthand too", async () => {
+    const { GlobalConfigSchema } = await import("../../src/schemas/global-config.schema");
     expect(GlobalConfigSchema.safeParse({ defaultMapStyle: { pmtiles: "data/nyc.pmtiles" } }).success).toBe(true);
     expect(GlobalConfigSchema.safeParse({ defaultMapStyle: { pmtiles: "data/nyc.pmtiles", flavor: "x" } }).success).toBe(false);
   });

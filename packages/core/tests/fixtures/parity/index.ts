@@ -721,23 +721,6 @@ chapters:
         value: "=red"
 `
   ),
-  pagesDocument: rp(
-    "any",
-    "pages-document",
-    `pages:
-  - path: /
-    title: Home
-    blocks:
-      - type: map
-        id: m
-        config: { center: [0, 0], zoom: 2, mapStyle: ${RP_STYLE} }
-        layers:
-          - id: l
-            type: symbol
-            source: { type: geojson, data: { type: FeatureCollection, features: [] } }
-            layout: { text-field: "=name" }
-`
-  ),
 };
 
 // ---------------------------------------------------------------------------
@@ -796,35 +779,6 @@ chapters:
     center: [0, 0]
     zoom: 2
     layers: { show: [dots] }
-`;
-
-const lsRoot = (blockLayerSource: string, recordLayerSource = "quakes") => `config:
-  defaultMapStyle: https://example.com/style.json
-sources:
-  quakes:
-    type: geojson
-    data: ${EMPTY}
-layers:
-  shared:
-    id: shared
-    type: circle
-    source: ${recordLayerSource}
-pages:
-  - path: /
-    title: Home
-    blocks:
-      - type: map
-        id: a
-        config: { center: [0, 0], zoom: 2 }
-        sources:
-          parks:
-            type: geojson
-            data: ${EMPTY}
-        layers:
-          - id: dots
-            type: circle
-            source: ${blockLayerSource}
-          - $ref: "#/layers/shared"
 `;
 
 export const layerSourceRefs = {
@@ -964,32 +918,6 @@ layers:
   ),
   v2: each(ls, "map", "v2", ["quakes", "quaks"], lsV2),
   story: each(ls, "story", "story", ["quakes", "quake"], lsStory),
-  /** `root(blockLayerSource, recordLayerSource)`, for the rows the suite parses. */
-  root: lsRoot,
-  rootBlockQuakes: ls("any", "root-block-quakes", lsRoot("quakes")),
-  rootBlockParks: ls("any", "root-block-parks", lsRoot("parks")),
-  rootRecordUsesBlockSource: ls("any", "root-record-uses-block-source", lsRoot("quakes", "parks")),
-  rootBlockTypo: ls("any", "root-block-typo", lsRoot("quaks")),
-  rootRecordTypo: ls("any", "root-record-typo", lsRoot("quakes", "prks")),
-  rootOtherPageSource: ls(
-    "any",
-    "root-other-page-source",
-    lsRoot("parks").replace(
-      "          - $ref: \"#/layers/shared\"\n",
-      `          - $ref: "#/layers/shared"
-  - path: /other
-    title: Other
-    blocks:
-      - type: map
-        id: b
-        config: { center: [0, 0], zoom: 2 }
-        layers:
-          - id: more
-            type: circle
-            source: parks
-`
-    )
-  ),
 };
 
 // ---------------------------------------------------------------------------
@@ -1508,6 +1436,7 @@ style:
       source: data
 `
   ),
+  /** A multi-page document, with the root config keys that went with it. */
   root: ik(
     "any",
     "root",
@@ -1521,26 +1450,12 @@ pages:
   - path: /
     title: Home
     blocks:
-      - type: content
-        content:
-          - h1: [{ str: Hello }]
-      - type: mixed
-        blocks:
-          - type: content
-            content:
-              - p: [{ str: Side }]
-      - type: map-fullpage
-        id: full
+      - type: map
+        id: home
         config:
           center: [0, 0]
           zoom: 2
           mapStyle: https://example.com/style.json
-  - path: /two
-    title: Two
-    blocks:
-      - type: content
-        content:
-          - p: [{ str: Again }]
 `
   ),
   plainMap: ik("map", "plain-map", ikMap("")),

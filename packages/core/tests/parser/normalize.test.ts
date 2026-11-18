@@ -204,7 +204,7 @@ describe("root $schema", () => {
     }
   });
 
-  it("is stripped from stories and root documents too", () => {
+  it("is stripped from stories too", () => {
     const story = YAMLParser.safeParseScrollytellingBlock(`${HEAD}type: scrollytelling
 id: s
 config: { center: [0, 0], zoom: 1, mapStyle: "${STYLE}" }
@@ -212,9 +212,6 @@ chapters: [{ id: a, title: A, center: [0, 0], zoom: 1 }]
 `);
     expect(story.errors).toEqual([]);
     expect(story.warnings.filter((w) => w.path === "$schema")).toEqual([]);
-    const root = YAMLParser.safeParse(`${HEAD}pages:\n  - path: /\n    title: Home\n    blocks: []\n`);
-    expect(root.errors).toEqual([]);
-    expect(root.warnings.filter((w) => w.path === "$schema")).toEqual([]);
   });
 
   it("a $schema nested in a layer still warns", () => {

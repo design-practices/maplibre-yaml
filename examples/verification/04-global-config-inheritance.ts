@@ -14,7 +14,6 @@ import {
 import { ConfigResolutionError, type GlobalConfig } from "@maplibre-yaml/core";
 
 const globalConfig: GlobalConfig = {
-  theme: "light",
   defaultMapStyle: "https://demotiles.maplibre.org/style.json",
   defaultZoom: 8,
   defaultCenter: [-73.0, 41.0],

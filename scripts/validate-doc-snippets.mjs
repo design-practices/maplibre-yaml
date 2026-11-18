@@ -7,7 +7,6 @@
  *
  *  - a standalone map or scrollytelling document (a top-level `type: map` or
  *    `type: scrollytelling` key), as written;
- *  - a multi-page root document (no `type:`, a top-level `pages:` key);
  *  - a fragment readers paste into a map: a list of layers (every item has an
  *    `id:` and a layer `type:`), or a mapping whose keys are all map-block
  *    keys (`config:`, `layers:`, `sources:`, `controls:`, `legend:` …). The
@@ -25,8 +24,9 @@
  * with core's `parseDocumentText` in that format. A fence is a document by
  * the rule `mlym validate` uses to pick JSON and TOML files out of a folder
  * (KTD11), applied to the fence's text: it names a `type` of `map` or
- * `scrollytelling`, has a top-level `pages` key, or carries a `$schema` (or,
- * in TOML, a `#:schema` directive) under docs.maplibre-yaml.org/schema/.
+ * `scrollytelling`, has a top-level `pages` key (an error since 0.10), or
+ * carries a `$schema` (or, in TOML, a `#:schema` directive) under
+ * docs.maplibre-yaml.org/schema/.
  * Every other JSON fence (a style.json, GeoJSON, package.json, editor
  * settings, the CLI's JSON output) and every TOML fragment is skipped, and
  * fragments are not wrapped. `no-validate` opts a document fence out too.
@@ -130,11 +130,6 @@ function placeholderSources(layers) {
   if (names.length === 0) return undefined;
   const empty = { type: "geojson", data: { type: "FeatureCollection", features: [] } };
   return Object.fromEntries(names.map((name) => [name, empty]));
-}
-
-/** True for a root document: no top-level `type:`, a top-level `pages:` key. */
-function isRootDocument(content) {
-  return /^pages:/m.test(content);
 }
 
 /** Recursively collect files under `dir` matching one of `exts`. */
@@ -284,9 +279,6 @@ for (const file of files) {
       // Generated from core's JSDoc: only whole documents are checked there.
       skipped++;
       continue;
-    } else if (type === null && isRootDocument(fence.content)) {
-      result = YAMLParser.safeParse(fence.content);
-      kind = " (root document)";
     } else if (type === null) {
       const wrapped = wrapFragment(fence.content);
       if (wrapped === null) {

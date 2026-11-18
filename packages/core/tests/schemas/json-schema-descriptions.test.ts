@@ -89,10 +89,10 @@ function collectUndescribed(doc: Schema): string[] {
 }
 
 describe("schema descriptions (the generated YAML reference's source text)", () => {
-  it("covers all four document shapes, including format v2", () => {
+  it("covers all three document shapes, including format v2", () => {
     const doc = buildReferenceSchema();
     const shapes = (doc.$defs as Schema).reference.anyOf as Schema[];
-    expect(shapes).toHaveLength(4);
+    expect(shapes).toHaveLength(3);
     expect(shapes[1]!.properties.version.const).toBe(2);
     expect(Object.keys(shapes[1]!.properties)).toEqual(
       expect.arrayContaining(["style", "runtime"]),

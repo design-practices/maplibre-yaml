@@ -49,13 +49,6 @@ describe('the reserved "=" prefix (ml-3e9)', () => {
     expect(reserved(result.warnings).map((w) => w.path)).toEqual(["chapters.0.onChapterEnter.0.value"]);
   });
 
-  it("checks maps inside a pages: document", () => {
-    const result = YAMLParser.safeParse(D.pagesDocument);
-    expect(reserved(result.warnings).map((w) => w.path)).toEqual([
-      "pages.0.blocks.0.layers.0.layout.text-field",
-    ]);
-  });
-
   it("the value entry point (a JSON config) warns too, without line numbers", () => {
     const result = YAMLParser.safeParseMapBlockValue({
       type: "map",

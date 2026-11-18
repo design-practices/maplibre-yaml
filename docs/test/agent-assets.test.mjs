@@ -40,16 +40,15 @@ test("llms.txt names the current core version and its CDN release line", () => {
   assert.ok(llms.includes(`@maplibre-yaml/core@${line}/register.js`), `CDN pin is @${line}`);
 });
 
-test("llms.txt recommends format v1 and doesn't recommend the root (pages:) schema", () => {
+test("llms.txt recommends format v1 and has no root (pages:) schema (ml-cxo)", () => {
   assert.ok(!RECOMMENDED_BLOCKS.includes("root"));
-  assert.ok(!llms.includes("/schema/latest/root.schema.json"), "no link to the deprecated root schema");
+  assert.ok(!llms.includes("root.schema.json"), "the removed root schema is not named");
   assert.match(llms, /Write format v1, the default/);
   for (const b of RECOMMENDED_BLOCKS) {
     assert.ok(llms.includes(`https://docs.maplibre-yaml.org/schema/latest/${b}.schema.json`), b);
   }
-  // root.schema.json is named only to say not to write it.
-  const mentions = llms.split("\n").filter((l) => l.includes("root.schema.json"));
-  assert.ok(mentions.every((l) => /pages:/.test(l)), mentions.join("\n"));
+  // A pages: document is an error, and the text says what to write instead.
+  assert.match(llms, /Multi-page `pages:` documents: not supported\. Write one document per page/);
 });
 
 test("every curated config exists and opens in the playground", () => {
@@ -126,7 +125,7 @@ test("the JSON and TOML examples in llms-full.txt validate with no warnings", as
   }
 });
 
-test("llms-full.txt prints the map and story schemas, not the deprecated root one", { skip: !haveSchemas && "core schemas not built" }, () => {
+test("llms-full.txt prints the map and story schemas, and no root (pages:) one", { skip: !haveSchemas && "core schemas not built" }, () => {
   assert.ok(full.includes("----- map.schema.json -----"));
   assert.ok(full.includes("----- scrollytelling.schema.json -----"));
   assert.ok(!full.includes("----- root.schema.json -----"));

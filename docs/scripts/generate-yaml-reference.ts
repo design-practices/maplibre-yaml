@@ -9,8 +9,8 @@
  * Source of truth: `buildReferenceSchema()` in
  * packages/core/scripts/emit-json-schema.ts — the SAME emit pipeline
  * (zod-to-json-schema + strictness + `deprecated` annotations) that produces
- * the published `schemas/*.schema.json`, run over all four document shapes
- * (v1 map, v2 map, scrollytelling, `pages:` root) in one document. Every
+ * the published `schemas/*.schema.json`, run over all three document shapes
+ * (v1 map, v2 map, scrollytelling) in one document. Every
  * description on these pages is a `.describe()` string in
  * packages/core/src/schemas/ — fix wording there, never here.
  *
@@ -48,7 +48,6 @@ const PTR = {
   layers: `${REF}/0/properties/layers/items`,
   mapV2: `${REF}/1`,
   scrollytelling: `${REF}/2`,
-  root: `${REF}/3`,
 };
 
 type Schema = Record<string, any>;
@@ -102,8 +101,8 @@ const PAGES: PageDef[] = [
     noun: "layer",
     order: 3,
     intro:
-      "An entry of a block's `layers:` list: either a full layer (the `type` key " +
-      "selects the variant) or a `$ref` to a named layer in a root document. " +
+      "An entry of a block's `layers:` list: a full layer (the `type` key " +
+      "selects the variant). " +
       "For narrative and examples see [Layers & styling](/guides/layers/), " +
       "[Popups, hover & controls](/guides/popups/) and " +
       "[Sources & layers](/schema/sources-and-layers/).",
@@ -133,19 +132,6 @@ const PAGES: PageDef[] = [
       "A `type: scrollytelling` block: one map plus an ordered list of chapters that " +
       "drive the camera and layer visibility as the reader scrolls. For narrative " +
       "and examples see [Writing a story file](/schema/scrollytelling/).",
-  },
-  {
-    slug: "root",
-    title: "Root document (pages)",
-    description: "Every key of a multi-page `pages:` root document, generated from the schemas.",
-    root: PTR.root,
-    prefix: "",
-    order: 6,
-    intro:
-      "A root document: global `config`, shared named `layers` and `sources`, and a " +
-      "`pages:` list whose blocks are content, map, scrollytelling, or mixed blocks. " +
-      "No maplibre-yaml package renders it, and it is never the `src` of `<ml-map>`: " +
-      "write [map documents](/schema/map-config/) and [story maps](/schema/scrollytelling/) instead.",
   },
 ];
 
@@ -859,7 +845,7 @@ function renderIndex(): string {
       "",
       "The same schemas are published as JSON Schema for editors and agents (format v1):",
       "",
-      ...["map", "scrollytelling", "root", "any"].map(
+      ...["map", "scrollytelling", "any"].map(
         (b) => `- [\`${b}.schema.json\`](${SCHEMA_URL}/${b}.schema.json)`,
       ),
       "",

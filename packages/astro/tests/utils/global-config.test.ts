@@ -29,7 +29,6 @@ describe("loadGlobalMapConfig", () => {
 defaultMapStyle: "https://example.com/style.json"
 defaultZoom: 10
 defaultCenter: [-74.006, 40.7128]
-theme: dark
 `,
     );
 
@@ -38,7 +37,6 @@ theme: dark
     expect(config.defaultMapStyle).toBe("https://example.com/style.json");
     expect(config.defaultZoom).toBe(10);
     expect(config.defaultCenter).toEqual([-74.006, 40.7128]);
-    expect(config.theme).toBe("dark");
   });
 
   it("loads valid YAML with minimal fields", async () => {
@@ -53,7 +51,6 @@ defaultMapStyle: "https://example.com/style.json"
     const config = await loadGlobalMapConfig(yamlPath);
 
     expect(config.defaultMapStyle).toBe("https://example.com/style.json");
-    expect(config.theme).toBe("light"); // default
     expect(config.defaultZoom).toBeUndefined();
     expect(config.defaultCenter).toBeUndefined();
   });
@@ -83,7 +80,7 @@ defaultZoom: 30
 
     const config = await loadGlobalMapConfig(yamlPath);
 
-    expect(config.theme).toBe("light"); // default
+    expect(config).toEqual({});
     expect(config.defaultMapStyle).toBeUndefined();
   });
 });

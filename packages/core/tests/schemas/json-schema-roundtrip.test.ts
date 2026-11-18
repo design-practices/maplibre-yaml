@@ -24,7 +24,7 @@ const REPO_ROOT = join(process.cwd(), "..", "..");
 const CONFIGS_DIR = join(REPO_ROOT, "docs", "public", "configs");
 const TEMPLATES_DIR = join(REPO_ROOT, "packages", "cli", "templates");
 
-let validators: Record<"map" | "scrollytelling" | "root" | "any", ValidateFunction>;
+let validators: Record<"map" | "scrollytelling" | "any", ValidateFunction>;
 
 beforeAll(() => {
   const schemas = buildSchemas();
@@ -33,14 +33,13 @@ beforeAll(() => {
   validators = {
     map: ajv.compile(schemas.map),
     scrollytelling: ajv.compile(schemas.scrollytelling),
-    root: ajv.compile(schemas.root),
     any: ajv.compile(schemas.any),
   };
 });
 
 /** Pick the type-specific validator + Zod parse for a parsed document. */
 function classify(doc: any): {
-  kind: "map" | "scrollytelling" | "root";
+  kind: "map" | "scrollytelling";
   zod: (yaml: string) => { success: boolean; errors: unknown[] };
 } {
   if (doc?.type === "map") {
@@ -52,7 +51,7 @@ function classify(doc: any): {
       zod: (y) => YAMLParser.safeParseScrollytellingBlock(y),
     };
   }
-  return { kind: "root", zod: (y) => YAMLParser.safeParse(y) };
+  throw new Error(`not a map or story document: type ${JSON.stringify(doc?.type)}`);
 }
 
 function renderTemplate(content: string, vars: Record<string, string>): string {

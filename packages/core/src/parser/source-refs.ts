@@ -21,23 +21,22 @@
  * | anything else (a basemap URL could hold it: a raster layer, or one with `source-layer:`) | warning, only when it nearly names a defined source |
  *
  * Scope follows how documents nest: a block's `sources:` (v1 maps and
- * stories) or `style.sources:` (v2); in a multi-page root document, also the
- * root `sources:`. A root `layers:` record entry is pasted into blocks by
- * `$ref`, so any source the document defines anywhere is in its scope.
+ * stories) or `style.sources:` (v2).
  *
  * ## `$ref` (0.9.1, ml-aot.147)
  *
- * `source: { $ref: "#/sources/quakes" }` and a layer entry
- * `- $ref: "#/layers/shared"` are resolved when the document is read (see
- * `YAMLParser.resolveReferences`, and `<ml-map>` for a story's map), always
- * against the document's top-level `sources:` / `layers:` record. A `$ref`
- * that resolves nowhere used to pass `mlym validate` for a story (and failed
- * a map or root document without a line number) while `<ml-map>` showed an
- * error card. It is now an error at the `$ref` line, worded as the runtime
- * words it ({@link refNotFoundMessage}), so validation and the page agree.
- * v2 documents don't resolve `$ref` (their schema rejects one), so they are
- * not checked here. A reference written as a string (`source:
- * "#/sources/quakes"`) is never resolved, so it is an error on any layer.
+ * `source: { $ref: "#/sources/quakes" }` is resolved when the document is
+ * read (see `YAMLParser.resolveReferences`), against the document's top-level
+ * `sources:` record. A `$ref` that resolves nowhere used to pass `mlym
+ * validate` for a story (and failed a map without a line number) while
+ * `<ml-map>` showed an error card. It is now an error at the `$ref` line,
+ * worded as the runtime words it ({@link refNotFoundMessage}), so validation
+ * and the page agree. A layer entry `- $ref: "#/layers/shared"` names an
+ * entry of a `layers:` record, which only the multi-page documents removed in
+ * 0.10 (ml-cxo) had: it is an error on any layer now. v2 documents don't
+ * resolve `$ref` (their schema rejects one), so they are not checked here. A
+ * reference written as a string (`source: "#/sources/quakes"`) is never
+ * resolved, so it is an error on any layer.
  */
 
 import type { Document, LineCounter } from "yaml";
@@ -102,7 +101,7 @@ interface Context {
   warnings: ValidationWarning[];
   positions?: { doc: Document; lineCounter: LineCounter };
   /** What a `$ref` resolves against: the document's top-level records. */
-  refs: { sources: unknown; layers: unknown; root: boolean };
+  refs: { sources: unknown; layers: unknown };
 }
 
 /**
@@ -142,7 +141,6 @@ function checkRef(
   ref: string,
   want: "layers" | "sources",
   refPath: Path,
-  scope: Scope,
   ctx: Context
 ): void {
   const match = REF.exec(ref);
@@ -161,15 +159,10 @@ function checkRef(
 
   let message = refNotFoundMessage(ref, want, record);
   const hint = suggest(name, isObject(record) ? Object.keys(record) : []);
-  if (want === "sources" && ctx.refs.root && scope.defined.includes(name)) {
-    // A block's own source: a $ref looks only at the root sources: record.
+  if (want === "layers") {
     message +=
-      ` "${name}" is defined in this block's sources:, which a $ref doesn't look in:` +
-      ` write source: ${name} instead.`;
-  } else if (want === "layers" && !ctx.refs.root) {
-    message +=
-      " A layer $ref names an entry of the root layers: record, which only a multi-page" +
-      " (pages:) document has: write the layer here instead.";
+      " A layer $ref names an entry of a layers: record, which a map or story document" +
+      " does not have (its layers: is a list): write the layer here instead.";
   }
   ctx.errors.push({
     path: refPath.join("."),
@@ -210,12 +203,12 @@ function checkLayer(layer: unknown, path: Path, scope: Scope, ctx: Context): voi
   const resolvesRefs = scope.home !== "style.sources:";
   // Any object with a string `$ref` is replaced whole, as the runtime does.
   if (resolvesRefs && typeof layer["$ref"] === "string") {
-    checkRef(layer["$ref"], "layers", [...path, "$ref"], scope, ctx);
+    checkRef(layer["$ref"], "layers", [...path, "$ref"], ctx);
     return;
   }
   const source = layer["source"];
   if (resolvesRefs && isObject(source) && typeof source["$ref"] === "string") {
-    checkRef(source["$ref"], "sources", [...path, "source", "$ref"], scope, ctx);
+    checkRef(source["$ref"], "sources", [...path, "source", "$ref"], ctx);
     return;
   }
   if (typeof source !== "string" || source === "") return;
@@ -300,30 +293,15 @@ function checkLayer(layer: unknown, path: Path, scope: Scope, ctx: Context): voi
   });
 }
 
-/** Every source name defined anywhere in the document (for a root `layers:` record). */
-function allDefined(node: unknown, out: Set<string>, depth = 0): void {
-  if (depth > 12) return;
+function walk(node: unknown, path: Path, inherited: Scope, ctx: Context): void {
   if (Array.isArray(node)) {
-    for (const item of node) allDefined(item, out, depth + 1);
-    return;
-  }
-  if (!isObject(node)) return;
-  if (isObject(node["sources"])) for (const k of Object.keys(node["sources"])) out.add(k);
-  for (const [key, value] of Object.entries(node)) {
-    if (key === "data" || key === "prefetchedData" || key === "properties" || key === "sources") continue;
-    allDefined(value, out, depth + 1);
-  }
-}
-
-function walk(node: unknown, path: Path, inherited: Scope, ctx: Context, rootAll?: string[]): void {
-  if (Array.isArray(node)) {
-    node.forEach((item, i) => walk(item, [...path, i], inherited, ctx, rootAll));
+    node.forEach((item, i) => walk(item, [...path, i], inherited, ctx));
     return;
   }
   if (!isObject(node)) return;
 
-  // This node's scope: its own `sources:` (a v1 block, a story, the root),
-  // or v2's `style:` (its sources, layers and basemap sit together there).
+  // This node's scope: its own `sources:` (a v1 block, a story), or v2's
+  // `style:` (its sources, layers and basemap sit together there).
   const scope: Scope = {
     defined: [...inherited.defined],
     generated: [...inherited.generated],
@@ -333,9 +311,8 @@ function walk(node: unknown, path: Path, inherited: Scope, ctx: Context, rootAll
   };
   if (isObject(node["sources"])) scope.defined.push(...Object.keys(node["sources"]));
   const config = node["config"];
-  if (isObject(config)) {
-    if (config["mapStyle"] !== undefined) scope.basemap = basemapSources(config["mapStyle"]);
-    else if (config["defaultMapStyle"] !== undefined) scope.basemap = basemapSources(config["defaultMapStyle"]);
+  if (isObject(config) && config["mapStyle"] !== undefined) {
+    scope.basemap = basemapSources(config["mapStyle"]);
   }
   if (path[path.length - 1] === "style" && (Array.isArray(node["layers"]) || isObject(node["sources"]))) {
     if (node["basemap"] !== undefined) scope.basemap = basemapSources(node["basemap"]);
@@ -349,24 +326,17 @@ function walk(node: unknown, path: Path, inherited: Scope, ctx: Context, rootAll
     if (key === "layers") {
       if (Array.isArray(value)) {
         value.forEach((layer, i) => checkLayer(layer, [...path, key, i], scope, ctx));
-      } else if (isObject(value) && rootAll) {
-        // The multi-page root's reusable `layers:` record: each entry lands
-        // in a block by `$ref`, so a source any block defines can serve it.
-        const recordScope: Scope = { ...scope, defined: rootAll, basemap: undefined };
-        for (const [name, layer] of Object.entries(value)) {
-          checkLayer(layer, [...path, key, name], recordScope, ctx);
-        }
       }
       continue;
     }
     if (key === "sources") continue;
-    walk(value, [...path, key], scope, ctx, undefined);
+    walk(value, [...path, key], scope, ctx);
   }
 }
 
 /**
  * Check every layer's `source:` name in a materialized document — a v1 or v2
- * map, a story, or a multi-page root document.
+ * map, or a story.
  *
  * @param positions - The YAML document, for line/column; omit for values
  *   that did not come from YAML text.
@@ -376,25 +346,17 @@ export function checkLayerSources(
   positions?: { doc: Document; lineCounter: LineCounter }
 ): { errors: SourceRefError[]; warnings: ValidationWarning[] } {
   if (!isObject(value)) return { errors: [], warnings: [] };
-  const isRoot = Array.isArray(value["pages"]);
   const ctx: Context = {
     errors: [],
     warnings: [],
     ...(positions ? { positions } : {}),
-    refs: { sources: value["sources"], layers: value["layers"], root: isRoot },
+    refs: { sources: value["sources"], layers: value["layers"] },
   };
-  let rootAll: string[] | undefined;
-  if (isRoot) {
-    const names = new Set<string>();
-    allDefined(value, names);
-    rootAll = [...names];
-  }
   walk(
     value,
     [],
     { defined: [], generated: [], inlineIds: new Map(), basemap: undefined, home: "sources:" },
-    ctx,
-    rootAll
+    ctx
   );
   return { errors: ctx.errors, warnings: ctx.warnings };
 }

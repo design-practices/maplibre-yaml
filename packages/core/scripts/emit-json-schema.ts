@@ -12,9 +12,8 @@
  * Emits:
  *  - `map.schema.json`             (MapBlockSchema — the `<ml-map>`/CLI unit)
  *  - `scrollytelling.schema.json`  (ScrollytellingBlockSchema)
- *  - `root.schema.json`            (RootSchema — a `pages:` document)
- *  - `any.schema.json`             (oneOf over the three, matching the
- *                                   Phase-1 `safeParseAny` dispatcher)
+ *  - `any.schema.json`             (oneOf over the two, matching the
+ *                                   `safeParseAny` dispatcher)
  *
  * ## Strictness (Decision D8)
  * The emitted schemas describe the **strict** shape: enumerated object nodes
@@ -49,7 +48,6 @@ import {
 import { MapBlockSchema } from "../src/schemas/map.schema";
 import { MapBlockV2Schema } from "../src/schemas/map-v2.schema";
 import { ScrollytellingBlockSchema } from "../src/schemas/scrollytelling.schema";
-import { RootSchema } from "../src/schemas/page.schema";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 /** Output directory: packages/core/schemas */
@@ -185,8 +183,11 @@ function annotateDeprecated(node: any, parentKey?: string): void {
       const legacyRefresh =
         isGeoJSONSource &&
         (LEGACY_REFRESH_FIELDS as readonly string[]).includes(key);
+      // `fetchStrategy: runtime` names what always happens (ml-cxo): on the
+      // v1 geojson source and under a v2 source `runtime:` alike.
+      const fetchStrategy = key === "fetchStrategy";
 
-      if (child && typeof child === "object" && (deprecatedAction || legacyRefresh)) {
+      if (child && typeof child === "object" && (deprecatedAction || legacyRefresh || fetchStrategy)) {
         child.deprecated = true;
       }
       annotateDeprecated(child, key);
@@ -240,11 +241,11 @@ function emit(
 }
 
 /** The block names emitted, in stable order. */
-export const SCHEMA_NAMES = ["map", "scrollytelling", "root", "any"] as const;
+export const SCHEMA_NAMES = ["map", "scrollytelling", "any"] as const;
 export type SchemaName = (typeof SCHEMA_NAMES)[number];
 
 /**
- * Build all four JSON Schema documents in memory (no file I/O).
+ * Build all three JSON Schema documents in memory (no file I/O).
  * Shared by the file emitter and the test suite so both see identical output.
  */
 export function buildSchemas(): Record<SchemaName, JsonSchema> {
@@ -252,7 +253,7 @@ export function buildSchemas(): Record<SchemaName, JsonSchema> {
     title: "maplibre-yaml map block",
     description:
       "A single `type: map` block — the unit consumed by <ml-map src> and " +
-      "by `mlym validate`. This is NOT a `pages:` root document.",
+      "by `mlym validate`.",
   });
 
   const scrollytelling = emit(ScrollytellingBlockSchema, "scrollytelling", {
@@ -262,29 +263,22 @@ export function buildSchemas(): Record<SchemaName, JsonSchema> {
       "consumed by <ml-map src> and by `mlym validate`.",
   });
 
-  const root = emit(RootSchema, "root", {
-    title: "maplibre-yaml root (pages) document",
-    description:
-      "A top-level document with a `pages:` array (multi-page app). " +
-      'Root documents omit "type" and use a top-level "pages:" array.',
-  });
-
-  // `any` mirrors the Phase-1 safeParseAny dispatcher: map | scrollytelling |
-  // root, discriminated on the top-level `type` field (root has no `type`).
+  // `any` mirrors the safeParseAny dispatcher: map | scrollytelling,
+  // discriminated on the top-level `type` field.
   const any = emit(
-    z.union([MapBlockSchema, ScrollytellingBlockSchema, RootSchema]),
+    z.union([MapBlockSchema, ScrollytellingBlockSchema]),
     "any",
     {
-      title: "maplibre-yaml document (any block or root)",
+      title: "maplibre-yaml document (any block)",
       description:
-        "Any maplibre-yaml document: a `type: map` block, a " +
-        "`type: scrollytelling` block, or a `pages:` root document. Mirrors " +
-        "the `safeParseAny` dispatcher used by <ml-map> and `mlym validate`.",
+        "Any maplibre-yaml document: a `type: map` block or a " +
+        "`type: scrollytelling` block. Mirrors the `safeParseAny` dispatcher " +
+        "used by <ml-map> and `mlym validate`.",
     },
   );
   // zod unions convert to `anyOf`; rename to `oneOf` since exactly one of the
-  // three block/document shapes matches a given document (they are mutually
-  // exclusive once additionalProperties is strict + discriminated on `type`).
+  // two block shapes matches a given document (they are mutually exclusive
+  // once additionalProperties is strict + discriminated on `type`).
   const anyDef = (any.$defs as JsonSchema | undefined)?.any as
     | JsonSchema
     | undefined;
@@ -297,8 +291,8 @@ export function buildSchemas(): Record<SchemaName, JsonSchema> {
     rewriteRefs(any, "#/$defs/any/anyOf/", "#/$defs/any/oneOf/");
   }
 
-  for (const doc of [map, scrollytelling, root, any]) acceptNormalized(doc);
-  return { map, scrollytelling, root, any };
+  for (const doc of [map, scrollytelling, any]) acceptNormalized(doc);
+  return { map, scrollytelling, any };
 }
 
 /**
@@ -309,8 +303,7 @@ export function buildSchemas(): Record<SchemaName, JsonSchema> {
  *   (each `oneOf` branch for `any`), because draft-07 ignores keys beside the
  *   top-level `$ref` (ml-ohh.15);
  * - nested string tables under a document's `locale:` (flattened to dotted
- *   keys), any depth. Not under a root document's `pages:` blocks, which the
- *   parser does not flatten.
+ *   keys), any depth.
  */
 export function acceptNormalized(doc: JsonSchema): void {
   for (const def of Object.values<any>(doc.$defs ?? {})) {
@@ -322,7 +315,7 @@ export function acceptNormalized(doc: JsonSchema): void {
     }
   }
   const walk = (node: unknown, pointer: string): void => {
-    if (!node || typeof node !== "object" || pointer.includes("/pages/")) return;
+    if (!node || typeof node !== "object") return;
     const locale = (node as any).properties?.locale;
     if (locale?.type === "object" && locale.additionalProperties?.type === "string") {
       locale.additionalProperties = { anyOf: [{ type: "string" }, { $ref: `${pointer}/properties/locale` }] };
@@ -336,20 +329,20 @@ export function acceptNormalized(doc: JsonSchema): void {
 
 /**
  * Build one combined JSON Schema covering every document shape — v1 map,
- * scrollytelling, `pages:` root, **and** the format-v2 map block — for the
- * docs site's generated YAML reference (docs/scripts/generate-yaml-reference).
+ * scrollytelling, **and** the format-v2 map block — for the docs site's
+ * generated YAML reference (docs/scripts/generate-yaml-reference).
  *
  * @remarks
  * Not written to disk and not published: format v2 has no hosted JSON Schema
  * yet, and this document exists only so the reference renders from the same
  * {@link emit} pipeline (strictness + `deprecated` annotations) as the
- * published artifacts. Emitting all four shapes in ONE document matters: the
+ * published artifacts. Emitting all three shapes in ONE document matters: the
  * `"root"` ref strategy turns every repeat of a shared Zod schema (layers,
  * sources, controls, ...) into a `$ref` to its first occurrence, which is what
  * lets the reference document a shared structure once and link to it.
  *
  * Branch order is the `$defs.reference.anyOf` index: 0 = v1 map, 1 = v2 map,
- * 2 = scrollytelling, 3 = root.
+ * 2 = scrollytelling.
  */
 export function buildReferenceSchema(): JsonSchema {
   return emit(
@@ -357,7 +350,6 @@ export function buildReferenceSchema(): JsonSchema {
       MapBlockSchema,
       MapBlockV2Schema,
       ScrollytellingBlockSchema,
-      RootSchema,
     ]),
     "reference",
     {

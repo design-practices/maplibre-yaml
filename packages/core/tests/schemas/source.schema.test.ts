@@ -132,14 +132,18 @@ describe('GeoJSONSourceSchema', () => {
       expect(result.fetchStrategy).toBe('runtime');
     });
 
-    it('accepts custom fetch strategy', () => {
-      const source = {
-        type: 'geojson' as const,
-        url: 'https://example.com/data.geojson',
-        fetchStrategy: 'build' as const,
-      };
-      const result = GeoJSONSourceSchema.parse(source);
-      expect(result.fetchStrategy).toBe('build');
+    it('rejects fetchStrategy: build and hybrid, naming prefetchedData (ml-cxo)', () => {
+      for (const fetchStrategy of ['build', 'hybrid']) {
+        const result = GeoJSONSourceSchema.safeParse({
+          type: 'geojson',
+          url: 'https://example.com/data.geojson',
+          fetchStrategy,
+        });
+        expect(result.success).toBe(false);
+        const message = result.error!.issues[0]!.message;
+        expect(message).toContain(`"fetchStrategy: ${fetchStrategy}" is not supported`);
+        expect(message).toContain('prefetchedData');
+      }
     });
   });
 

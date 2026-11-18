@@ -10,7 +10,7 @@ import { YAMLParser } from "../../src/parser/yaml-parser";
  * expanded `Feature` is what the schema validates (a v2 RFC-7946 hard error, a
  * v1 lenient pass) and schema errors on the expanded geometry re-anchor to the
  * authored sugar key (KTD1a). The seam covers the standalone v1/v2 map-block
- * path and the multi-page `RootSchema`/`pages:` path.
+ * path and the story path.
  */
 
 const V2_LOCATION = `
@@ -64,28 +64,6 @@ layers:
   - id: poly-layer
     type: fill
     source: poly
-`;
-
-const ROOT_LOCATION = `
-pages:
-  - path: "/"
-    title: Home
-    blocks:
-      - type: map
-        id: page-map
-        config:
-          center: [0, 0]
-          zoom: 5
-          mapStyle: "https://demotiles.maplibre.org/style.json"
-        sources:
-          pts:
-            type: geojson
-            location:
-              coordinates: [-73.9857, 40.7484]
-        layers:
-          - id: pts-layer
-            type: circle
-            source: pts
 `;
 
 const V1_SUGAR_ON_VECTOR = `
@@ -204,19 +182,6 @@ describe("geo-sugar parse seam (U2)", () => {
     expect(source.data.geometry.coordinates).toEqual([[[0]]]);
   });
 
-  it("multi-page `pages:` document expands a v1 `location:` sugar source (OQ1/R1)", () => {
-    const result = YAMLParser.safeParse(ROOT_LOCATION);
-    expect(result.success).toBe(true);
-    const source = (result.data as any).pages[0].blocks[0].sources.pts;
-    expect(source.location).toBeUndefined();
-    expect(source.data.type).toBe("Feature");
-    expect(source.data.geometry.type).toBe("Point");
-    // Not the "GeoJSON source requires url/data/prefetchedData" failure.
-    expect(
-      result.errors.some((e) => /requires .*url|data/i.test(e.message))
-    ).toBe(false);
-  });
-
   it("a sugar key on a `type: vector` source is a sugar-specific error, not a source-union failure (R5)", () => {
     const result = YAMLParser.safeParseMapBlock(V1_SUGAR_ON_VECTOR);
     expect(result.success).toBe(false);
@@ -297,47 +262,3 @@ style:
   });
 });
 
-describe("geo-sugar parse seam — validate() does not mutate caller input", () => {
-  it("expanding a sugar source leaves the caller's object untouched", () => {
-    // `validate(config)` receives the caller's own object; expansion must not
-    // silently rewrite the sugar key to `data` under it.
-    const config = {
-      pages: [
-        {
-          blocks: [
-            {
-              type: "map",
-              id: "m",
-              config: {
-                center: [0, 0],
-                zoom: 5,
-                mapStyle: "https://demotiles.maplibre.org/style.json",
-              },
-              sources: {
-                pts: { type: "geojson", location: { coordinates: [0, 0] } },
-              },
-              layers: [{ id: "dot", type: "circle", source: "pts" }],
-            },
-          ],
-        },
-      ],
-    };
-    const before = JSON.parse(JSON.stringify(config));
-    // Expansion runs (on a clone) before schema validation; whether validate()
-    // ultimately succeeds or throws on unrelated schema shape is irrelevant to
-    // the property under test — the caller's object must survive untouched.
-    try {
-      YAMLParser.validate(config);
-    } catch {
-      /* schema validity is not what this test asserts */
-    }
-    // The caller's object is unchanged: the sugar key survives, no `data` added.
-    expect(config).toEqual(before);
-    expect(
-      (config.pages[0].blocks[0] as any).sources.pts.location
-    ).toBeDefined();
-    expect(
-      (config.pages[0].blocks[0] as any).sources.pts.data
-    ).toBeUndefined();
-  });
-});
