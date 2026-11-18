@@ -14,6 +14,7 @@
 
 import { z } from "zod/v3";
 import { colorProblem } from "./css-colors";
+import { longitudesOk, OPEN_LONGITUDE_RULE } from "../utils/bounds";
 
 /**
  * Longitude value in degrees.
@@ -163,6 +164,56 @@ export const LngLatBoundsLikeSchema = z
 
 /** Inferred type for {@link LngLatBoundsLikeSchema}. */
 export type LngLatBoundsLike = z.infer<typeof LngLatBoundsLikeSchema>;
+
+/**
+ * A `maxBounds` longitude: finite, or `-Infinity` west with `Infinity` east
+ * (MapLibre's open longitude, checked as a pair by {@link MaxBoundsSchema}).
+ * Not `.finite()`, unlike `BOUNDS_LONGITUDE`: the JSON Schema stays
+ * `type: number`, and the pair rule is what rejects a half-open value.
+ */
+const MAX_BOUNDS_LONGITUDE = z.number();
+
+const openOk = { message: OPEN_LONGITUDE_RULE };
+
+/**
+ * `maxBounds` (ml-vwz): either bounds form, finite or with the longitude
+ * left open the way `Map#setMaxBounds` takes it from maplibre-gl 6.16 —
+ * "Use `-Infinity` and `Infinity` for an unconstrained longitude range,
+ * with finite latitude limits". In YAML those are `-.inf` and `.inf`.
+ *
+ * @remarks
+ * Only the longitude may be open, and only both ends together; MapLibre
+ * throws on a half-open pair, so the schema refuses it with MapLibre's own
+ * message ({@link OPEN_LONGITUDE_RULE}). The latitudes stay within ±90 as in
+ * every bounds. `bounds` (the initial fit) keeps {@link LngLatBoundsLikeSchema}:
+ * a fit to an infinite box has no meaning.
+ *
+ * @example YAML
+ * ```yaml
+ * maxBounds: [-74.3, 40.5, -73.7, 40.9]       # a box
+ * maxBounds: [-.inf, 40.5, .inf, 40.9]        # any longitude, these latitudes
+ * maxBounds: [[-.inf, 40.5], [.inf, 40.9]]    # the same, as two corners
+ * ```
+ */
+export const MaxBoundsSchema = z
+  .union([
+    z
+      .tuple([MAX_BOUNDS_LONGITUDE, LatitudeSchema, MAX_BOUNDS_LONGITUDE, LatitudeSchema])
+      .refine(([west, , east]) => longitudesOk(west, east), openOk),
+    z
+      .tuple([
+        z.tuple([MAX_BOUNDS_LONGITUDE, LatitudeSchema]),
+        z.tuple([MAX_BOUNDS_LONGITUDE, LatitudeSchema]),
+      ])
+      .refine(([[west], [east]]) => longitudesOk(west, east), openOk),
+  ])
+  .describe(
+    "Maximum bounds as [west, south, east, north] or [[west, south], [east, north]]; " +
+      "-.inf west with .inf east leaves longitude open (maplibre-gl 6.16+)"
+  );
+
+/** Inferred type for {@link MaxBoundsSchema}. */
+export type MaxBounds = z.infer<typeof MaxBoundsSchema>;
 
 /**
  * CSS color value.

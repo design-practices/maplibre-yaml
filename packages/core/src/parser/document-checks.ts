@@ -49,10 +49,13 @@ interface Positions {
 }
 
 /**
- * MapLibre `MapOptions` across the supported majors (4, 5, 6), read from each
- * release's type declarations. The map `config:` passes these through to the
- * `Map` constructor, so they are never "unknown". Plus `customAttribution`
- * (maplibre-gl 3's spelling, still honoured by the renderer).
+ * MapLibre `MapOptions` across the supported majors (4, 5, 6 through 6.18),
+ * read from each release's type declarations. The map `config:` passes these
+ * through to the `Map` constructor, so they are never "unknown". Plus
+ * `customAttribution` (maplibre-gl 3's spelling, still honoured by the
+ * renderer). `globalState` (6.14) and `transformStyle` (6.16, a function, so
+ * only a JS host's config object carries it) are MapLibre's; `globalState`
+ * draws its own warning, since `state:` is where a document declares it.
  */
 export const MAPLIBRE_MAP_OPTIONS: ReadonlySet<string> = new Set([
   "anisotropicFilterPitch", "antialias", "aroundCenter", "attributionControl", "bearing",
@@ -60,16 +63,45 @@ export const MAPLIBRE_MAP_OPTIONS: ReadonlySet<string> = new Set([
   "canvasContextAttributes", "center", "centerClampedToGround", "clickTolerance",
   "collectResourceTiming", "container", "cooperativeGestures", "crossSourceCollisions",
   "doubleClickZoom", "dragPan", "dragRotate", "elevation", "experimentalZoomLevelsToOverscale",
-  "fadeDuration", "failIfMajorPerformanceCaveat", "fitBoundsOptions", "hash", "interactive",
-  "keyboard", "locale", "localIdeographFontFamily", "logoPosition", "maplibreLogo", "maxBounds",
-  "maxCanvasSize", "maxPitch", "maxTileCacheSize", "maxTileCacheZoomLevels", "maxZoom",
+  "fadeDuration", "failIfMajorPerformanceCaveat", "fitBoundsOptions", "globalState", "hash",
+  "interactive", "keyboard", "locale", "localIdeographFontFamily", "logoPosition", "maplibreLogo",
+  "maxBounds", "maxCanvasSize", "maxPitch", "maxTileCacheSize", "maxTileCacheZoomLevels", "maxZoom",
   "minPitch", "minZoom", "pitch", "pitchSpeed", "pitchWithRotate", "pixelRatio",
   "preserveDrawingBuffer", "reduceMotion", "refreshExpiredTiles", "renderWorldCopies", "roll",
   "rollEnabled", "rotateSpeed", "scrollZoom", "style", "terrainSkirtLength", "touchPitch",
   "touchZoomRotate", "trackResize", "transformCameraUpdate", "transformConstrain",
-  "transformRequest", "validateStyle", "zoom", "zoomLevelsToOverscale", "zoomSnap",
+  "transformRequest", "transformStyle", "validateStyle", "zoom", "zoomLevelsToOverscale", "zoomSnap",
   "customAttribution",
 ]);
+
+/**
+ * `globalState` written among the map options (v1 `config.globalState`, v2
+ * `runtime.map.globalState`, ml-vwz). It is a MapLibre `MapOptions` key
+ * (6.14), so not unknown — but a document declares its global state under
+ * `state:`, and the renderer hands THOSE defaults to the constructor on a
+ * 6.14+ runtime (and writes them with `setGlobalStateProperty` on older
+ * ones). A second copy here would be a second source of truth, so it is
+ * replaced by `state:` and the author is told where it belongs.
+ *
+ * @param mapOptions - the options table (`config`, or `runtime.map`).
+ * @param path - where the table sits, e.g. `["config"]`.
+ */
+export function globalStateOptionWarning(
+  mapOptions: unknown,
+  path: (string | number)[],
+  positions?: Positions
+): ValidationWarning | undefined {
+  if (!isObject(mapOptions) || !("globalState" in mapOptions)) return undefined;
+  const where = path.join(".");
+  return {
+    path: `${where}.globalState`,
+    message:
+      `globalState under ${where}: is not read; a document declares its global state at the ` +
+      `top level as \`state: { key: { default: value } }\`. Move the keys there.`,
+    ...atKey(positions, path, "globalState"),
+    onPage: true,
+  };
+}
 
 /** Keys the map `config:` schema itself lists. */
 function configKeys(): string[] {
@@ -395,6 +427,11 @@ export function checkDocument(
           ...atKey(positions, ["config"], key),
           onPage: true,
         });
+        continue;
+      }
+      if (key === "globalState") {
+        const warning = globalStateOptionWarning(config, ["config"], positions);
+        if (warning) warnings.push(warning);
         continue;
       }
       if (known.includes(key)) continue;

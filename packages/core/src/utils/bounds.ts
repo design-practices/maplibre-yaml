@@ -10,6 +10,11 @@
  * neither, the message names the order — longitude first — and, when the
  * numbers only fit with latitude and longitude swapped, gives the swapped
  * value to copy (the slip `center:` gets the same help for, ml-aot.65).
+ *
+ * `maxBounds` alone may leave longitude open (ml-vwz): `-Infinity` west with
+ * `Infinity` east together, the way `Map#setMaxBounds` takes it from
+ * maplibre-gl 6.16 ("an unconstrained longitude range, with finite latitude
+ * limits"). A half-open pair is refused in MapLibre's own words.
  */
 
 /** `[west, south, east, north]`. */
@@ -17,20 +22,49 @@ export type FlatBounds = [number, number, number, number];
 /** `[[west, south], [east, north]]`. */
 export type CornerBounds = [[number, number], [number, number]];
 
-const isNumber = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
+/** How a bounds value is read. */
+export interface BoundsOptions {
+  /** Accept `-Infinity` west with `Infinity` east (`maxBounds`, maplibre-gl 6.16+). */
+  openLongitude?: boolean;
+}
 
-/** Either form as `[west, south, east, north]`, or `null` when it is neither. */
-export function toFlatBounds(value: unknown): FlatBounds | null {
+const isNumber = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
+const isNumberOrInfinite = (v: unknown): v is number => typeof v === "number" && !Number.isNaN(v);
+
+/** MapLibre's rule for `maxBounds` longitudes, in its words (`Transform.setMaxBounds`). */
+export const OPEN_LONGITUDE_RULE =
+  "Longitude maxBounds values must either be finite or span from -Infinity to Infinity";
+
+/** Both longitudes finite, or `-Infinity` west with `Infinity` east. */
+export const longitudesOk = (west: number, east: number): boolean =>
+  (Number.isFinite(west) && Number.isFinite(east)) || (west === -Infinity && east === Infinity);
+
+/** The raw pieces of either form, infinite values included; `null` when it is neither. */
+function pieces(value: unknown): { flat: FlatBounds; corners: boolean } | null {
   if (!Array.isArray(value)) return null;
-  if (value.length === 4 && value.every(isNumber)) return [...value] as FlatBounds;
+  if (value.length === 4 && value.every(isNumberOrInfinite)) return { flat: [...value] as FlatBounds, corners: false };
   if (
     value.length === 2 &&
-    value.every((corner) => Array.isArray(corner) && corner.length === 2 && corner.every(isNumber))
+    value.every((corner) => Array.isArray(corner) && corner.length === 2 && corner.every(isNumberOrInfinite))
   ) {
     const [[w, s], [e, n]] = value as CornerBounds;
-    return [w, s, e, n];
+    return { flat: [w, s, e, n], corners: true };
   }
   return null;
+}
+
+/**
+ * Either form as `[west, south, east, north]`, or `null` when it is neither.
+ * Infinite values are refused unless `openLongitude` is set, and then only
+ * `-Infinity` west with `Infinity` east together (finite latitudes always).
+ */
+export function toFlatBounds(value: unknown, options: BoundsOptions = {}): FlatBounds | null {
+  const read = pieces(value);
+  if (!read) return null;
+  const [w, s, e, n] = read.flat;
+  if (!isNumber(s) || !isNumber(n)) return null;
+  if (isNumber(w) && isNumber(e)) return read.flat;
+  return options.openLongitude && w === -Infinity && e === Infinity ? read.flat : null;
 }
 
 const ORDER =
@@ -52,11 +86,15 @@ function ranges(lngs: number[], lats: number[]): { ok: boolean; swappedOk: boole
 
 const list = (values: number[]) => values.join(", ");
 
+/** A value as the author would write it, `-.inf` / `.inf` for the infinities. */
+const yaml = (v: number) => (v === Infinity ? ".inf" : v === -Infinity ? "-.inf" : String(v));
+
 /**
  * What is wrong with a bounds value, in words — or `undefined` when it is a
  * valid bounds.
  *
- * @param key - The key as the author wrote it (`bounds`, `maxBounds`).
+ * @param key - The key as the author wrote it (`bounds`, `maxBounds`). Only
+ *   `maxBounds` may leave longitude open.
  */
 export function boundsProblem(value: unknown, key = "bounds"): string | undefined {
   const expected = `${key} is written ${ORDER}`;
@@ -70,36 +108,27 @@ export function boundsProblem(value: unknown, key = "bounds"): string | undefine
   }
   if (!Array.isArray(value)) return `${expected}; got ${value === null ? "null" : typeof value}.`;
 
-  // Four numbers.
-  if (value.length === 4 && value.every(isNumber)) {
-    const [a, b, c, d] = value as FlatBounds;
+  const read = pieces(value);
+  if (read) {
+    const [a, b, c, d] = read.flat;
+    const written = read.corners
+      ? `[[${yaml(a)}, ${yaml(b)}], [${yaml(c)}, ${yaml(d)}]]`
+      : `[${yaml(a)}, ${yaml(b)}, ${yaml(c)}, ${yaml(d)}]`;
+    if (read.flat.some((v) => !Number.isFinite(v))) {
+      const open = "-.inf west and .inf east";
+      if (key !== "maxBounds") return `${key} ${written} needs finite numbers; only maxBounds leaves longitude open (${open}).`;
+      if (!isNumber(b) || !isNumber(d)) return `${key} ${written}: the latitude limits must be finite; only longitude can be open (${open}).`;
+      if (!longitudesOk(a, c)) return `${key} ${written}: ${OPEN_LONGITUDE_RULE}. Write ${open} together, or two finite longitudes.`;
+      return ranges([], [b, d]).ok ? undefined : `${key} ${written} has a latitude outside -90 to 90. ${expected}.`;
+    }
     const { ok, swappedOk } = ranges([a, c], [b, d]);
     if (ok) return undefined;
     if (swappedOk) {
-      return (
-        `${key} [${list([a, b, c, d])}] has a latitude outside -90 to 90: it looks written ` +
-        `[latitude, longitude]. ${expected}. Did you mean [${list([b, a, d, c])}]?`
-      );
+      const meant = read.corners ? `[[${list([b, a])}], [${list([d, c])}]]` : `[${list([b, a, d, c])}]`;
+      const how = read.corners ? "each corner looks written [latitude, longitude]" : "it looks written [latitude, longitude]";
+      return `${key} ${written} has a latitude outside -90 to 90: ${how}. ${expected}. Did you mean ${meant}?`;
     }
-    return `${key} [${list([a, b, c, d])}] has a latitude outside -90 to 90. ${expected}.`;
-  }
-
-  // Two corners.
-  if (
-    value.length === 2 &&
-    value.every((corner) => Array.isArray(corner) && corner.length === 2 && corner.every(isNumber))
-  ) {
-    const [[a, b], [c, d]] = value as CornerBounds;
-    const { ok, swappedOk } = ranges([a, c], [b, d]);
-    if (ok) return undefined;
-    if (swappedOk) {
-      return (
-        `${key} [[${list([a, b])}], [${list([c, d])}]] has a latitude outside -90 to 90: each ` +
-        `corner looks written [latitude, longitude]. ${expected}. Did you mean ` +
-        `[[${list([b, a])}], [${list([d, c])}]]?`
-      );
-    }
-    return `${key} [[${list([a, b])}], [${list([c, d])}]] has a latitude outside -90 to 90. ${expected}.`;
+    return `${key} ${written} has a latitude outside -90 to 90. ${expected}.`;
   }
 
   const numbers = value.filter(isNumber).length;

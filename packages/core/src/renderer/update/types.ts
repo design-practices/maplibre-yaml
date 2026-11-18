@@ -119,6 +119,8 @@ export type OptionKey =
   | "minZoom"
   | "maxZoom"
   | "maxBounds"
+  /** `config.dragRotate`: `map.dragRotate.enable(options)` / `disable()` (ml-vwz). */
+  | "dragRotate"
   | "title"
   | "description"
   | "controls"
@@ -338,6 +340,13 @@ export interface RuntimeHost {
   loadImages(images: Record<string, ImageConfig>): Promise<void>;
   /** Apply or clear one 3D/projection/light block through the feature-detecting helpers. */
   applyScene(option: "projection" | "sky" | "terrain" | "light", value: unknown): void;
+  /**
+   * Apply one map option whose value the running maplibre-gl may need
+   * reshaped first (ml-vwz): `dragRotate` (`enable(options)` / `disable()`,
+   * options from 6.15) and `maxBounds` (`setMaxBounds`; an open longitude
+   * from 6.16, closed at ±180 before). `undefined` clears or resets it.
+   */
+  applyMapOption(option: "dragRotate" | "maxBounds", value: unknown): void;
   /** Frame `fitTo`'s source once, now or when its data lands, as first render does. */
   fitTo(fitTo: FitToConfig, sources: Record<string, LayerSource>): void;
 }

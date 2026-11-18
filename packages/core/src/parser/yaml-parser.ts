@@ -299,7 +299,7 @@ import {
   type ValidationWarning,
 } from "./validation-utils";
 import { isLikelyMisspelling } from "../utils/suggest";
-import { checkDocument, chapterLabel, checkLocaleKeys, missingBasemapWarning, pmtilesBasemapNote } from "./document-checks";
+import { checkDocument, chapterLabel, checkLocaleKeys, globalStateOptionWarning, missingBasemapWarning, pmtilesBasemapNote } from "./document-checks";
 import { SOURCE_RUNTIME_KEYS } from "../model/normalize";
 import { checkSourceFormats } from "./format-checks";
 import { applyCogDefaults, checkCogSources } from "./cog-checks";
@@ -1123,6 +1123,13 @@ export class YAMLParser {
         ["runtime", "map", "locale"],
         positioned ? { doc: m.doc, lineCounter: m.lineCounter } : undefined
       );
+      // `globalState` among the map options: `state:` is the place (ml-vwz).
+      const globalState = globalStateOptionWarning(
+        runtimeMap,
+        ["runtime", "map"],
+        positioned ? { doc: m.doc, lineCounter: m.lineCounter } : undefined
+      );
+      if (globalState) localeWarnings.push(globalState);
       const withLocale = localeWarnings.length === 0 ? v2 : { ...v2, warnings: [...v2.warnings, ...localeWarnings] };
       return withRuntimeKeyHints(withLocale);
     }
@@ -1841,9 +1848,24 @@ export class YAMLParser {
           }
           break;
 
-        case "custom":
+        case "custom": {
+          // A half-open `maxBounds` longitude (ml-vwz): the schema's refine
+          // fires on the whole value, so zod reports it rather than the
+          // union; the bounds helper says what to write.
+          const bounds = boundsIssue(err.path, ctx?.value);
+          if (bounds) return withPosition(bounds, ctx);
           message = err.message || "Validation failed";
           break;
+        }
+
+        case "not_finite": {
+          // An infinite number inside `bounds:` (only `maxBounds` may leave
+          // longitude open, ml-vwz): one message for the whole value.
+          const bounds = boundsIssue(err.path, ctx?.value);
+          if (bounds) return withPosition(bounds, ctx);
+          message = "Number must be finite";
+          break;
+        }
 
         case "invalid_literal": {
           // `type: Map` — say what was expected AND that case matters.

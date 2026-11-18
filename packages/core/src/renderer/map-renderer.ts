@@ -31,6 +31,7 @@ import { PopupsManager } from './popups-manager';
 import { geojsonBounds, type Bounds } from '../interactions/geometry-bounds';
 import { swappedCenter } from '../utils/swapped-center';
 import { COLOR_RELIEF_RUNTIME_FLOOR, meetsVersion } from '../capabilities';
+import { dragRotateForRuntime, globalStateForRuntime, maxBoundsForRuntime } from './map-options';
 import { loadDocumentImages } from './images-loader';
 import { ChromeLayout, type ChromeCorner } from './chrome-layout';
 import {
@@ -844,8 +845,19 @@ export class MapRenderer {
           )
         : undefined;
 
+    // Options whose shape depends on the running maplibre-gl (ml-vwz,
+    // map-options.ts): `dragRotate` options (6.15) and an open-longitude
+    // `maxBounds` (6.16) degrade below their floor with one notice each, and
+    // the document's `state:` defaults ride in as `globalState` from 6.14 so
+    // the first frame reads them (the setter path still runs on load: a
+    // `setStyle` resets global state, and older runtimes have no option).
+    // A host's `config.globalState` is replaced by `state:` — one source of
+    // truth (the parser warns at the key).
+    const runtimeOptions = this.shapeMapOptions(mapConfig, options.state);
+
     this.map = new MapLibreMap({
       ...mapConfig,
+      ...runtimeOptions,
       ...(transformRequest ? { transformRequest } : {}),
       ...(locale !== undefined ? { locale } : {}),
       ...initialFit,
@@ -2203,6 +2215,51 @@ export class MapRenderer {
     });
   }
 
+  /**
+   * The constructor options whose shape depends on the running maplibre-gl
+   * (ml-vwz): `dragRotate`, `maxBounds` and `globalState`, each as
+   * map-options.ts shapes it for `runtimeVersion()`, with its notice printed.
+   * Only keys that need a word are returned, so the spread changes nothing else.
+   */
+  private shapeMapOptions(config: Record<string, unknown>, state: Record<string, unknown> | undefined): Record<string, unknown> {
+    const version = runtimeVersion();
+    const shaped: Record<string, unknown> = {};
+    for (const [key, shape] of [['dragRotate', dragRotateForRuntime], ['maxBounds', maxBoundsForRuntime]] as const) {
+      if (config[key] === undefined) continue;
+      const { value, notice } = shape(config[key], version);
+      if (notice) console.warn(`[maplibre-yaml] ${notice}`);
+      shaped[key] = value;
+    }
+    const globalState = globalStateForRuntime(state, version);
+    if (globalState) shaped['globalState'] = globalState;
+    return shaped;
+  }
+
+  /**
+   * One map option with a setter whose value the runtime may need reshaped
+   * (ml-vwz, live documents KTD7): `dragRotate` through the handler's
+   * `enable(options)` / `disable()`, `maxBounds` through `setMaxBounds`
+   * (`undefined`, a removed key, clears it). The same shaping as construction.
+   */
+  private applyMapOption(option: 'dragRotate' | 'maxBounds', value: unknown): void {
+    const version = this.mapVersion();
+    if (option === 'dragRotate') {
+      const handler = (this.map as unknown as { dragRotate?: { enable?: (o?: unknown) => void; disable?: () => void } }).dragRotate;
+      if (!handler) return;
+      if (value === false) {
+        handler.disable?.();
+        return;
+      }
+      const shaped = dragRotateForRuntime(value ?? true, version);
+      if (shaped.notice) console.warn(`[maplibre-yaml] ${shaped.notice}`);
+      handler.enable?.(shaped.value);
+      return;
+    }
+    const shaped = maxBoundsForRuntime(value, version);
+    if (shaped.notice) console.warn(`[maplibre-yaml] ${shaped.notice}`);
+    (this.map as unknown as { setMaxBounds: (b: unknown) => void }).setMaxBounds(shaped.value ?? null);
+  }
+
   /** One 3D, projection or light block applied in place, or cleared when the document dropped it. */
   private applyScene(option: 'projection' | 'sky' | 'terrain' | 'light', value: unknown): void {
     const map3d = this.map as unknown as Scene3DMap;
@@ -2546,6 +2603,7 @@ export class MapRenderer {
       loadImages: (images) =>
         loadDocumentImages(this.map, images, (name, url) => this.emit('image:error', { name, url })),
       applyScene: (option, value) => this.applyScene(option, value),
+      applyMapOption: (option, value) => this.applyMapOption(option, value),
       fitTo: (fitTo, sources) => this.fitToSource(fitTo, sources),
     };
     return {

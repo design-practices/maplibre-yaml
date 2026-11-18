@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>map options: maplibre-gl 6.15–6.16 shapes</title>
+  <!--
+    ml-vwz — two `config:` options in the shape MapLibre 6.x gave them:
+      left   dragRotate: { around: pointer }   (6.15, DragRotateOptions)
+      right  maxBounds: [-.inf, -60, .inf, 75] (6.16, an open longitude:
+             "Use -Infinity and Infinity for an unconstrained longitude
+             range, with finite latitude limits")
+    PASS = two maps, no error card; the left map's drag-rotate handler is
+    around the pointer; the right map pans to any longitude but never past
+    75°N / 60°S. Below each floor the renderer degrades with one console
+    line (dragRotate: true; longitude closed at ±180) — the e2e spec skips
+    there, this page still shows the maps.
+    Serve from the repo root:  pnpm verify:serve
+    Then open: http://localhost:4174/examples/verification/map-options-6x.html
+  -->
+  <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; }
+    header { padding: 8px 16px; background: #1d3557; color: white; font-size: 13px; }
+    main { padding: 12px 16px; display: grid; gap: 12px; grid-template-columns: 1fr 1fr; }
+    ml-map { display: block; height: 360px; }
+    p { margin: 0 0 4px; font-size: 13px; }
+  </style>
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }
+  </script>
+</head>
+<body>
+  <header>PASS = two maps; left rotates around the pointer, right never pans past 75°N / 60°S.</header>
+  <main>
+    <div>
+      <p><code>dragRotate: { around: pointer }</code> (right-drag or ctrl-drag to rotate)</p>
+      <ml-map id="rotate">
+        <script type="text/yaml">
+type: map
+id: rotate
+config:
+  center: [-74.006, 40.7128]
+  zoom: 12
+  pitch: 45
+  dragRotate: { around: pointer }
+  mapStyle: "/examples/verification/configs/local-style.json"
+layers: []
+        </script>
+      </ml-map>
+    </div>
+    <div>
+      <p><code>maxBounds: [-.inf, -60, .inf, 75]</code> (drag north: the map stops at 75°N)</p>
+      <ml-map id="band">
+        <script type="text/yaml">
+type: map
+id: band
+config:
+  center: [0, 30]
+  zoom: 1
+  maxBounds: [-.inf, -60, .inf, 75]
+  mapStyle: "/examples/verification/configs/local-style.json"
+layers:
+  - id: limits
+    type: line
+    source:
+      type: geojson
+      data:
+        type: FeatureCollection
+        features:
+          - type: Feature
+            properties: {}
+            geometry: { type: LineString, coordinates: [[-180, 75], [180, 75]] }
+          - type: Feature
+            properties: {}
+            geometry: { type: LineString, coordinates: [[-180, -60], [180, -60]] }
+    paint: { line-color: "#e63946", line-width: 2 }
+        </script>
+      </ml-map>
+    </div>
+  </main>
+  <script type="module" src="../../packages/core/register.js"></script>
+</body>
+</html>
