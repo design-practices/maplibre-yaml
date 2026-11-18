@@ -102,6 +102,25 @@ describe("v1 maps", () => {
     expect(error!.message).toContain("Layer reference not found: #/layers/quakes.");
     expect(error!.message).toContain("which a map or story document does not have");
   });
+
+  it("a layers: entry $ref naming a list index or property is the same one error, and resolves nothing", () => {
+    // `#/layers/0` must not duplicate layer 0, `#/layers/1` must not leave
+    // the raw { $ref } in the layers, `#/layers/length` must not paste a 2.
+    for (const pointer of ["#/layers/0", "#/layers/1", "#/layers/length"]) {
+      const result = YAMLParser.safeParseMapBlock(
+        map(`  - id: dots
+    type: circle
+    source: quakes
+  - $ref: "${pointer}"
+`)
+      );
+      expect(result.success, pointer).toBe(false);
+      expect(result.data, pointer).toBeUndefined();
+      expect(result.errors.map((e) => e.path), pointer).toEqual(["layers.1.$ref"]);
+      expect(result.errors[0]!.message, pointer).toContain(`Layer reference not found: ${pointer}.`);
+      expect(result.errors[0]!.message, pointer).toContain("(its layers: is a list)");
+    }
+  });
 });
 
 describe("stories", () => {

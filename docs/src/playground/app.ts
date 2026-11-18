@@ -77,7 +77,6 @@ export function start(): void {
   let typingLine: number | null = null;
   let allDiagnostics: Diagnostic[] = [];
   let shownDiagnostics: Diagnostic[] = [];
-  let blockedByPages = false;
   let runTimer = 0;
   let holdTimer = 0;
   let schemaName = "";
@@ -137,7 +136,7 @@ export function start(): void {
     stale.hidden = !(errors && lastRendered !== null);
     empty.hidden = !(errors && lastRendered === null);
     root.dataset.errors = String(shown.filter((d) => d.severity === "error").length);
-    if (!blockedByPages) refreshStatus();
+    refreshStatus();
   }
 
   // ---- the pipeline: parse, diagnose, render -----------------------------
@@ -220,18 +219,12 @@ export function start(): void {
     // Any error, held or not, keeps the document from the map.
     const errors = diagnostics.some((d) => d.severity === "error");
     const valid = !errors && parsed.result.success;
-    blockedByPages = valid && parsed.blockType !== "map" && parsed.blockType !== "scrollytelling";
-    if (valid && !blockedByPages) {
+    if (valid) {
+      // A successful read is a map or a story (a `pages:` document is an error).
       lastKind = parsed.blockType as Kind;
       if (source !== lastRendered || previewKind !== parsed.blockType) render(source, value, lastKind);
     }
     showDiagnostics();
-    if (blockedByPages) {
-      setStatus(
-        "warning",
-        "This document has pages — the playground previews one map or one story map at a time.",
-      );
-    }
   }
 
   function render(source: string, doc: unknown, kind: Kind): void {

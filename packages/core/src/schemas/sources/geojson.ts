@@ -109,7 +109,7 @@ import {
  * @remarks
  * `build` and `hybrid` were accepted and inert from the start (nothing in
  * maplibre-yaml fetches at build time) and warned since 0.9.1; they are
- * errors now (ml-cxo). The error names the alternative: `prefetchedData`,
+ * errors since 0.11 (ml-cxo). The error names the alternative: `prefetchedData`,
  * which the Astro loader fills. `runtime` stays accepted for one more
  * release, deprecated, because it names what always happens.
  */

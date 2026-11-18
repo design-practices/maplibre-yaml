@@ -33,7 +33,7 @@
  * worded as the runtime words it ({@link refNotFoundMessage}), so validation
  * and the page agree. A layer entry `- $ref: "#/layers/shared"` names an
  * entry of a `layers:` record, which only the multi-page documents removed in
- * 0.10 (ml-cxo) had: it is an error on any layer now. v2 documents don't
+ * 0.11 (ml-cxo) had: it is an error on any layer now. v2 documents don't
  * resolve `$ref` (their schema rejects one), so they are not checked here. A
  * reference written as a string (`source: "#/sources/quakes"`) is never
  * resolved, so it is an error on any layer.
@@ -127,9 +127,13 @@ export function refNotFoundMessage(ref: string, section: "layers" | "sources", r
 
 const REF = /^#\/(layers|sources)\/(.+)$/;
 
-/** Whether `name` is an entry of a `$ref` target record (the runtime's own test). */
+/**
+ * Whether `name` is an entry of a `$ref` target record (the runtime's own
+ * test). A list is not a record: `#/layers/0` on a map's `layers:` list
+ * names nothing, as `#/layers/length` names nothing.
+ */
 function inRecord(record: unknown, name: string): boolean {
-  return (isObject(record) || Array.isArray(record)) && name in record;
+  return isObject(record) && name in record;
 }
 
 /**
@@ -159,7 +163,7 @@ function checkRef(
 
   let message = refNotFoundMessage(ref, want, record);
   const hint = suggest(name, isObject(record) ? Object.keys(record) : []);
-  if (want === "layers") {
+  if (want === "layers" && !isObject(record)) {
     message +=
       " A layer $ref names an entry of a layers: record, which a map or story document" +
       " does not have (its layers: is a list): write the layer here instead.";

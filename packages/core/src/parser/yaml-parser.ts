@@ -285,6 +285,7 @@ import {
   LAYER_TYPES,
   SOURCE_TYPES,
   BLOCK_TYPES,
+  MULTI_PAGE_MESSAGE,
   type HashCommentValue,
   type PositionIndex,
   type ValidationWarning,
@@ -431,13 +432,9 @@ export interface RefScope {
   sources?: unknown;
 }
 
-/**
- * The one error a multi-page `pages:` document gets (removed in 0.10, ml-cxo):
- * what to write instead, and who composes pages now.
- */
-export const MULTI_PAGE_MESSAGE =
-  "Multi-page documents (pages:) are not supported: write one document per page " +
-  "(type: map or type: scrollytelling); Astro and the web component compose pages.";
+// The one error a multi-page `pages:` document gets (removed in 0.11,
+// ml-cxo), defined beside the unknown-key walker that also quotes it.
+export { MULTI_PAGE_MESSAGE };
 
 /**
  * Discriminated result returned by {@link YAMLParser.safeParseAny}
@@ -1235,7 +1232,7 @@ export class YAMLParser {
    *
    * Any other `type:` value produces a failure result listing the valid
    * values, as does a document without one. A multi-page `pages:` document
-   * (removed in 0.10, ml-cxo) fails with one error saying to write one
+   * (removed in 0.11, ml-cxo) fails with one error saying to write one
    * document per page. This method never throws.
    *
    * A `source` says that `yaml` was synthesized from a value read from other
@@ -1316,7 +1313,7 @@ export class YAMLParser {
       };
     }
 
-    // A multi-page `pages:` document (removed in 0.10, ml-cxo): one error,
+    // A multi-page `pages:` document (removed in 0.11, ml-cxo): one error,
     // at the key, saying what to write instead.
     if (doc !== null && "pages" in doc) {
       const pos = positionForKey(yamlDoc, lineCounter, [], "pages");
@@ -1434,9 +1431,11 @@ export class YAMLParser {
 
           const [, section, name] = match;
 
-          // Look up the referenced item
+          // Look up the referenced item. A list (a map or story block's
+          // `layers:`) is not a record: `#/layers/0` must not duplicate layer
+          // 0, nor `#/layers/length` paste a number into the layers.
           const record = section === "layers" ? config.layers : config.sources;
-          if (!record || typeof record !== "object" || !(name in record)) {
+          if (!record || typeof record !== "object" || Array.isArray(record) || !(name in record)) {
             throw new Error(refNotFoundMessage(ref, section as "layers" | "sources", record));
           }
           return (record as Record<string, unknown>)[name];

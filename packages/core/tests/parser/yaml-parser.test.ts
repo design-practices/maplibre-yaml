@@ -33,6 +33,12 @@ describe("YAMLParser", () => {
       expect(() => YAMLParser.resolveReferences(block([{ $ref: "#/layers/shared" }]))).toThrow(
         "Layer reference not found"
       );
+      // A list index or property is not an entry either: nothing is duplicated.
+      for (const pointer of ["#/layers/0", "#/layers/1", "#/layers/length"]) {
+        expect(() =>
+          YAMLParser.resolveReferences(block([{ id: "dots", type: "circle", source: "quakes" }, { $ref: pointer }]))
+        ).toThrow(`Layer reference not found: ${pointer}.`);
+      }
     });
 
     it("throws on invalid reference format", () => {

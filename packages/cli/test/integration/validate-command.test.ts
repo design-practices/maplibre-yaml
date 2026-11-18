@@ -191,6 +191,17 @@ describe('validate command (integration)', () => {
   // Skipping help test - citty's help output timing is inconsistent in CI
   // Help functionality is provided by the framework and works reliably
 
+  it('passes --strict with a deprecated fetchStrategy: runtime (a deprecation, not promoted) (ml-cxo)', async () => {
+    const { stdout } = await execAsync(
+      `node "${CLI}" validate --strict "test/fixtures/warns-fetch-strategy-runtime.yaml"`
+    );
+    // execAsync resolves only on exit 0: a deprecation is not promoted by --strict.
+    expect(stdout).toContain('warns-fetch-strategy-runtime.yaml');
+    expect(stdout).toContain('"fetchStrategy: runtime" is deprecated and has no effect');
+    expect(stdout).toContain('1 file(s) with warnings');
+    expect(stdout).not.toContain('error');
+  });
+
   it('respects --strict flag', async () => {
     // Create a test case where we'd have warnings if they existed
     // For now, just test the flag is accepted

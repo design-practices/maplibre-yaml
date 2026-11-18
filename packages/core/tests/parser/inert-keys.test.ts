@@ -1,6 +1,6 @@
 /**
  * Keys that were accepted but inert (ml-1q8, 0.9.1: a "has no effect"
- * deprecation warning) are removed in 0.10 (ml-cxo), each with an error
+ * deprecation warning) are removed in 0.11 (ml-cxo), each with an error
  * that names the alternative:
  *
  * - `fetchStrategy: build | hybrid` (ml-j2p.1): nothing fetches at build time.
@@ -84,9 +84,23 @@ describe("multi-page pages: documents are an error (ml-cxo)", () => {
     expect(result.errors.map((e) => e.message)).toEqual([MESSAGE]);
   });
 
-  it("the map and story entry points reject pages: as an unknown key", () => {
-    expect(map(D.root).success).toBe(false);
-    expect(YAMLParser.safeParseScrollytellingBlock(D.root).success).toBe(false);
+  it("a type: map block with a stray pages: key quotes the same message, not a did-you-mean", () => {
+    const result = map(`type: map
+id: m
+config:
+  center: [0, 0]
+  zoom: 2
+  mapStyle: https://example.com/style.json
+pages:
+  - path: /
+    title: Home
+    blocks: []
+`);
+    expect(result.success).toBe(true);
+    const warning = result.warnings.find((w) => w.path === "pages");
+    expect(warning).toMatchObject({ message: `Unknown key "pages". ${MESSAGE}`, line: 7, column: 1 });
+    expect(warning).not.toHaveProperty("suggestion");
+    expect(result.warnings.filter((w) => w.message.includes("Did you mean"))).toEqual([]);
   });
 
   it("a story's own theme: is untouched", () => {

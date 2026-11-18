@@ -87,7 +87,7 @@ const CORPUS: Expectation[] = [
     messageContains: "YAML syntax error",
   },
   {
-    // Multi-page documents were removed in 0.10 (ml-cxo): one error, at the key.
+    // Multi-page documents were removed in 0.11 (ml-cxo): one error, at the key.
     file: "pages-document.yaml",
     blockType: "unknown",
     path: "pages",

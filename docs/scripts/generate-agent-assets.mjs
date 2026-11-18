@@ -50,7 +50,7 @@ const SITE = 'https://docs.maplibre-yaml.org';
 const BLOCKS = ['map', 'scrollytelling', 'any'];
 /**
  * The schemas llms.txt recommends and llms-full.txt prints: all of them.
- * (`root`, the multi-page `pages:` document, was removed in 0.10, ml-cxo: such
+ * (`root`, the multi-page `pages:` document, was removed in 0.11, ml-cxo: such
  * a document is an error now, and its schema is no longer emitted or served.)
  */
 export const RECOMMENDED_BLOCKS = ['map', 'scrollytelling', 'any'];

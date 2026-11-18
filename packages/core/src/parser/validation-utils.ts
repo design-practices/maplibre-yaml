@@ -114,6 +114,15 @@ export const SOURCE_TYPES = [
 export const BLOCK_TYPES = ["map", "scrollytelling"] as const;
 
 /**
+ * The one error a multi-page `pages:` document gets (removed in 0.11, ml-cxo):
+ * what to write instead, and who composes pages now. Also appended to the
+ * unknown-key warning for a stray `pages:` on a map or story block.
+ */
+export const MULTI_PAGE_MESSAGE =
+  "Multi-page documents (pages:) are not supported: write one document per page " +
+  "(type: map or type: scrollytelling); Astro and the web component compose pages.";
+
+/**
  * Known MapLibre expression operators.
  *
  * @remarks
@@ -533,11 +542,21 @@ function walk(
           walk(value[key], fieldSchema, [...path, key], ctx);
         } else if (!open) {
           if (specKeys?.has(key)) continue; // real spec key on passthrough
+          const pos = positionForKey(ctx.doc, ctx.lineCounter, path, key);
+          if (key === "pages" && path.length === 0) {
+            // A stray `pages:` on a map or story block (ml-cxo): say what
+            // multi-page documents became, not `Did you mean "images"?`.
+            ctx.warnings.push({
+              path: key,
+              message: `Unknown key "${key}". ${MULTI_PAGE_MESSAGE}`,
+              ...(pos ? { line: pos.line, column: pos.column } : {}),
+            });
+            continue;
+          }
           const hint = suggest(
             key,
             specKeys ? [...knownKeys, ...specKeys] : knownKeys
           );
-          const pos = positionForKey(ctx.doc, ctx.lineCounter, path, key);
           ctx.warnings.push({
             path: [...path, key].join("."),
             message:

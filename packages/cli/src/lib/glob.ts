@@ -76,7 +76,8 @@ const SNIFF_CONCURRENCY = 16;
  * Whether a JSON or TOML file under a folder argument is a map or story
  * document, judged from its raw text, not a parse (KTD11), by core's
  * {@link looksLikeDocumentText}: a `type` of `map` or `scrollytelling`, a
- * `pages` key, or a `$schema` under docs.maplibre-yaml.org/schema/. A
+ * `pages` key (reported as an error), or a `$schema` under
+ * docs.maplibre-yaml.org/schema/. A
  * document with a syntax error, or one too large to parse quickly, still
  * joins the run and fails there, rather than vanishing from it.
  *

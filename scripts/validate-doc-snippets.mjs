@@ -24,7 +24,7 @@
  * with core's `parseDocumentText` in that format. A fence is a document by
  * the rule `mlym validate` uses to pick JSON and TOML files out of a folder
  * (KTD11), applied to the fence's text: it names a `type` of `map` or
- * `scrollytelling`, has a top-level `pages` key (an error since 0.10), or
+ * `scrollytelling`, has a top-level `pages` key (an error since 0.11), or
  * carries a `$schema` (or, in TOML, a `#:schema` directive) under
  * docs.maplibre-yaml.org/schema/.
  * Every other JSON fence (a style.json, GeoJSON, package.json, editor
