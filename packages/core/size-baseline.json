@@ -2,6 +2,6 @@
   "file": "dist/register.browser.js",
   "baselineGzip": 183052,
   "allowanceGzip": 3072,
-  "recordedAt": "parity-map-options (ml-vwz B)",
+  "recordedAt": "f97037f",
   "measuredWith": "gzip -9 -c | wc -c"
 }
