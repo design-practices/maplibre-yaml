@@ -56,6 +56,32 @@ export const GLOBE_RUNTIME_FLOOR = "5.0.0";
  */
 export const COLOR_RELIEF_RUNTIME_FLOOR = "5.6.0";
 
+/**
+ * The maplibre-gl release whose `Map` constructor takes `globalState`
+ * (ml-vwz). From here the renderer passes a document's `state:` defaults at
+ * construction, so the first frame already reads them; below it (and for
+ * live updates on any version) `setGlobalStateProperty` applies them.
+ */
+export const GLOBAL_STATE_OPTION_RUNTIME_FLOOR = "6.14.0";
+
+/**
+ * The maplibre-gl release whose `dragRotate` option and
+ * `DragRotateHandler.enable` take `DragRotateOptions` — `{ around:
+ * 'pointer' }` or `{ around: 'center', movement: 'circular' | 'linear' }`
+ * (ml-vwz). Below it the renderer passes `true`, so the map still rotates,
+ * and warns.
+ */
+export const DRAG_ROTATE_OPTIONS_RUNTIME_FLOOR = "6.15.0";
+
+/**
+ * The maplibre-gl release whose `maxBounds` / `setMaxBounds` take an open
+ * longitude, `[-Infinity, south, Infinity, north]` — "an unconstrained
+ * longitude range, with finite latitude limits" (ml-vwz). Below it an
+ * infinite longitude breaks the constrain maths, so the renderer closes the
+ * longitude at ±180 (the latitude limit still holds) and warns.
+ */
+export const MAX_BOUNDS_OPEN_LONGITUDE_RUNTIME_FLOOR = "6.16.0";
+
 export interface CapabilityPolicy {
   /**
    * Target maplibre-gl version, as a semver string.

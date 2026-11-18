@@ -15,6 +15,7 @@ import { z } from "zod/v3";
 import {
   LngLatSchema,
   LngLatBoundsLikeSchema,
+  MaxBoundsSchema,
   ZoomLevelSchema,
   ColorSchema,
   ColorOrExpressionSchema,
@@ -40,6 +41,38 @@ export const ControlPositionSchema = z.enum([
 
 /** Inferred type for control position. */
 export type ControlPosition = z.infer<typeof ControlPositionSchema>;
+
+/**
+ * MapLibre's `DragRotateOptions` (maplibre-gl 6.15, ml-vwz), as `config.dragRotate`
+ * takes it beside `true`/`false`: the map turns around the point under the
+ * pointer, or around its center — following the pointer like a wheel
+ * (`circular`, the default) or with its horizontal movement (`linear`,
+ * which replaces the deprecated `aroundCenter: false`). `movement` only goes
+ * with `around: center`: a drag around the pointer always turns linearly.
+ *
+ * @example YAML
+ * ```yaml
+ * dragRotate: { around: pointer }
+ * dragRotate: { around: center, movement: linear }
+ * ```
+ */
+export const DragRotateOptionsSchema = z
+  .union([
+    z.object({ around: z.literal("pointer").describe("Turn around the point under the pointer") }).strict(),
+    z
+      .object({
+        around: z.literal("center").describe("Turn around the map's center"),
+        movement: z
+          .enum(["circular", "linear"])
+          .optional()
+          .describe("circular: follow the pointer around the center; linear: follow its horizontal movement"),
+      })
+      .strict(),
+  ])
+  .describe("MapLibre DragRotateOptions: { around: pointer } or { around: center, movement: circular | linear }");
+
+/** Inferred type for {@link DragRotateOptionsSchema}. */
+export type DragRotateOptions = z.infer<typeof DragRotateOptionsSchema>;
 
 /**
  * Individual control configuration.
@@ -390,15 +423,16 @@ export const MapConfigSchema = z
     maxZoom: ZoomLevelSchema.optional().describe("Maximum zoom level"),
     minPitch: z.number().min(0).max(85).optional().describe("Minimum pitch"),
     maxPitch: z.number().min(0).max(85).optional().describe("Maximum pitch"),
-    maxBounds: LngLatBoundsLikeSchema.optional().describe(
-      "Maximum geographic bounds, in either bounds form",
-    ),
+    maxBounds: MaxBoundsSchema.optional(),
 
     // Interaction
     interactive: z.boolean().default(true).describe("Enable map interaction"),
     scrollZoom: z.boolean().optional().describe("Enable scroll to zoom"),
     boxZoom: z.boolean().optional().describe("Enable box zoom (shift+drag)"),
-    dragRotate: z.boolean().optional().describe("Enable drag to rotate"),
+    dragRotate: z
+      .union([z.boolean(), DragRotateOptionsSchema])
+      .optional()
+      .describe("Enable drag to rotate: true/false, or DragRotateOptions (maplibre-gl 6.15+)"),
     dragPan: z.boolean().optional().describe("Enable drag to pan"),
     keyboard: z.boolean().optional().describe("Enable keyboard shortcuts"),
     doubleClickZoom: z

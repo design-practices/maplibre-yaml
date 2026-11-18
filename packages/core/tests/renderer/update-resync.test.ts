@@ -121,6 +121,7 @@ function createHost(map: MockMap, camera: "document" | "host" = "document") {
     setTitle: vi.fn(),
     loadImages: vi.fn(async () => undefined),
     applyScene: vi.fn(),
+    applyMapOption: vi.fn(),
     fitTo: vi.fn(),
   };
   const host: UpdateHost = {
@@ -264,6 +265,24 @@ describe("runUpdate: camera ownership (KTD13, AE6)", () => {
     const { map } = await update(doc([circle("a")]), next);
     expect(map.setMinZoom).toHaveBeenCalledWith(3);
     expect(map.setMaxZoom).toHaveBeenCalledWith(12);
+  });
+
+  it("dragRotate and maxBounds go through the renderer's applyMapOption, which shapes them for the runtime (ml-vwz)", async () => {
+    const next = doc([circle("a")]);
+    const open = [-Infinity, 40.5, Infinity, 40.9];
+    next.config = { ...next.config, dragRotate: { around: "pointer" }, maxBounds: open } as never;
+    const { map, runtime } = await update(doc([circle("a")]), next);
+    expect(runtime.applyMapOption).toHaveBeenCalledWith("dragRotate", { around: "pointer" });
+    expect(runtime.applyMapOption).toHaveBeenCalledWith("maxBounds", open);
+    // Never straight to the setter: an open longitude below 6.16 needs shaping first.
+    expect(map.setMaxBounds).not.toHaveBeenCalled();
+  });
+
+  it("a removed maxBounds reaches applyMapOption as undefined (the renderer clears it)", async () => {
+    const applied = doc([circle("a")]);
+    applied.config = { ...applied.config, maxBounds: [-74.3, 40.5, -73.7, 40.9] } as never;
+    const { runtime } = await update(applied, doc([circle("a")]));
+    expect(runtime.applyMapOption).toHaveBeenCalledWith("maxBounds", undefined);
   });
 });
 

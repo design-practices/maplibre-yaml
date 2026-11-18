@@ -79,12 +79,14 @@ export {
   LngLatSchema,
   LngLatBoundsSchema,
   LngLatBoundsLikeSchema,
+  MaxBoundsSchema,
   ColorSchema,
   ExpressionSchema,
   NumberOrExpressionSchema,
   ColorOrExpressionSchema,
   ZoomLevelSchema,
 } from "./base.schema";
+export type { LngLatBoundsLike, MaxBounds } from "./base.schema";
 
 // Source schemas
 export {
@@ -162,6 +164,7 @@ export {
 // Map schemas
 export {
   ControlPositionSchema,
+  DragRotateOptionsSchema,
   ControlsConfigSchema,
   LegendConfigSchema,
   MapConfigSchema,
@@ -184,6 +187,7 @@ export {
 } from "./map.schema";
 export type {
   ControlPosition,
+  DragRotateOptions,
   ControlsConfig,
   LegendConfig,
   MapConfig,

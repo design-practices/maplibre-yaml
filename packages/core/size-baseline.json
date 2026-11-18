@@ -1,7 +1,7 @@
 {
   "file": "dist/register.browser.js",
-  "baselineGzip": 179306,
+  "baselineGzip": 183052,
   "allowanceGzip": 3072,
-  "recordedAt": "8fe5b54",
+  "recordedAt": "f97037f",
   "measuredWith": "gzip -9 -c | wc -c"
 }

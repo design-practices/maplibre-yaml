@@ -43,3 +43,6 @@ export {
 export type { ChapterHTMLOptions, StoryProblem, ErrorCardOptions } from "./render";
 export { SCROLLYTELLING_CSS, injectScrollytellingStyles } from "./styles";
 export { STORY_MAP_KEYS } from "./keys";
+// The story (and its map half) as `config` attribute text that reads back
+// whole: `JSON.stringify` loses an open-longitude maxBounds (ml-vwz).
+export { serializeDocument } from "../parser/serialize-document";

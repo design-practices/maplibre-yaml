@@ -349,6 +349,24 @@ describe("diff: fallback and map options", () => {
     expect(result.ops).toEqual([{ op: "optionSet", option: "projection", value: { type: "globe" } }]);
     expect(result.summary.rebuild).toBe(false);
   });
+
+  it("changing dragRotate produces optionSet (map.dragRotate.enable/disable), not a fallback (ml-vwz)", () => {
+    const pointer = { around: "pointer" };
+    const on = diff(doc(), withConfig(doc(), { dragRotate: pointer } as never), NO_HINTS);
+    expect(on.ops).toEqual([{ op: "optionSet", option: "dragRotate", value: pointer }]);
+    expect(on.summary.rebuild).toBe(false);
+    const off = diff(withConfig(doc(), { dragRotate: pointer } as never), withConfig(doc(), { dragRotate: false }), NO_HINTS);
+    expect(off.ops).toEqual([{ op: "optionSet", option: "dragRotate", value: false }]);
+    // Removed: back to MapLibre's default (`undefined`).
+    const gone = diff(withConfig(doc(), { dragRotate: false }), doc(), NO_HINTS);
+    expect(gone.ops).toEqual([{ op: "optionSet", option: "dragRotate", value: undefined }]);
+  });
+
+  it("changing maxBounds to an open longitude produces optionSet", () => {
+    const open = [-Infinity, 40.5, Infinity, 40.9];
+    const result = diff(doc(), withConfig(doc(), { maxBounds: open } as never), NO_HINTS);
+    expect(result.ops).toEqual([{ op: "optionSet", option: "maxBounds", value: open }]);
+  });
 });
 
 describe("diff: camera (KTD13)", () => {

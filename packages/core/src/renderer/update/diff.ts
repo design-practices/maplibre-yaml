@@ -36,8 +36,11 @@ import { asObject, changedKeys, same, sourceIdOf, type Obj } from "./compare";
 
 const CAMERA_KEYS = ["center", "zoom", "bearing", "pitch"] as const;
 
-/** `config:` keys with a MapLibre setter: applied in place as `optionSet` (KTD7). */
-const SETTABLE_CONFIG_KEYS = new Set<string>(["minZoom", "maxZoom", "maxBounds"]);
+/**
+ * `config:` keys with a MapLibre setter: applied in place as `optionSet`
+ * (KTD7). `dragRotate` through the handler's `enable` / `disable` (ml-vwz).
+ */
+const SETTABLE_CONFIG_KEYS = new Set<string>(["minZoom", "maxZoom", "maxBounds", "dragRotate"]);
 
 /** Option blocks compared whole, each its own `optionSet`. */
 const OPTION_BLOCKS: readonly OptionKey[] = [

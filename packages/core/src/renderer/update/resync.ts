@@ -164,10 +164,17 @@ export async function resync(host: UpdateHost, request: UpdateRequest, ops: read
 
   // Map options with a setter (KTD7).
   const setter = map as unknown as Record<string, ((value: unknown) => unknown) | undefined>;
-  for (const [option, name] of [["minZoom", "setMinZoom"], ["maxZoom", "setMaxZoom"], ["maxBounds", "setMaxBounds"]] as const) {
+  for (const [option, name] of [["minZoom", "setMinZoom"], ["maxZoom", "setMaxZoom"]] as const) {
     const op = sets.get(option);
     const apply = setter[name];
     if (op && typeof apply === "function") await guard(host, summary, "optionSet", () => void apply.call(map, op.value ?? null));
+  }
+  // ... and the two whose value the running maplibre-gl may need reshaped
+  // first (ml-vwz): through the renderer, which knows the version and the
+  // floors (a value import this chunk must not make).
+  for (const option of ["dragRotate", "maxBounds"] as const) {
+    const op = sets.get(option);
+    if (op) await guard(host, summary, "optionSet", () => runtime.applyMapOption(option, op.value));
   }
 
   // Camera (KTD13): the document's keys that changed, and a fitTo added or re-targeted; nothing under host ownership.

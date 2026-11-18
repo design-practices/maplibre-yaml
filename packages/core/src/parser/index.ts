@@ -18,6 +18,9 @@ export { YAMLParser, parseYAMLConfig, safeParseYAMLConfig, safeParseAny } from '
 // The canonical parse options + `!html` tag — the single source of truth a
 // consumer parsing YAML itself imports rather than re-declaring (which drifts).
 export { YAML_PARSE_OPTIONS, htmlTag } from './yaml-parser';
+// A parsed document as `config` attribute text that reads back whole (an
+// open-longitude maxBounds does not survive JSON.stringify, ml-vwz).
+export { serializeDocument } from './serialize-document';
 // The path to show a reader before a message (chapter problems name the
 // chapter in the message instead): for error cards, CLIs, editors.
 export { displayPath } from './validation-utils';

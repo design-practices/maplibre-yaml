@@ -38,6 +38,7 @@ export const IN_PLACE_CONFIG_KEYS: ReadonlySet<string> = new Set([
   "minZoom",
   "maxZoom",
   "maxBounds",
+  "dragRotate",
 ]);
 
 /**

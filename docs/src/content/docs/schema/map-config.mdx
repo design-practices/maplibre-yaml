@@ -163,6 +163,24 @@ config:
   mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 ```
 
+To limit only how far north and south readers can go, leave the longitude
+open: write `-.inf` for west and `.inf` for east, together. The map pans
+around the world and never past the latitude limits (MapLibre's own
+`setMaxBounds` shape; needs maplibre-gl 6.16 or later — on an older
+runtime the longitude closes at ±180 instead, with one console line):
+
+```yaml
+config:
+  center: [0, 30]
+  zoom: 2
+  maxBounds: [-.inf, -60, .inf, 75]   # any longitude, 60°S to 75°N
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
+```
+
+Only the longitude can be open, and only both ends at once: `-.inf` on one
+side with a number on the other is an error at the `maxBounds` line, in
+MapLibre's words.
+
 ### How readers can move the map \{#interaction-settings}
 
 Each way of moving the map is a MapLibre option in `config:`, on by default.
@@ -176,6 +194,23 @@ config:
   scrollZoom: false     # the page scrolls past the map
   dragRotate: false     # north stays up
   touchPitch: false     # two fingers don't tilt it on a phone
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
+```
+
+`dragRotate` also takes MapLibre's options object, to say what the map turns
+around when a reader right-drags (or ctrl-drags). `{ around: pointer }`
+turns and tilts around the point under the pointer, so that spot stays put
+on the screen; `{ around: center, movement: linear }` turns around the
+center but follows the pointer's sideways movement instead of circling it.
+Needs maplibre-gl 6.15 or later; an older runtime rotates around the center
+as `dragRotate: true` and says so in the console:
+
+```yaml
+config:
+  center: [-74.006, 40.7128]
+  zoom: 12
+  pitch: 45
+  dragRotate: { around: pointer }
   mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 ```
 

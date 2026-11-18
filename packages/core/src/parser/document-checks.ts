@@ -49,10 +49,13 @@ interface Positions {
 }
 
 /**
- * MapLibre `MapOptions` across the supported majors (4, 5, 6), read from each
- * release's type declarations. The map `config:` passes these through to the
- * `Map` constructor, so they are never "unknown". Plus `customAttribution`
- * (maplibre-gl 3's spelling, still honoured by the renderer).
+ * MapLibre `MapOptions` across the supported majors (4, 5, 6 through 6.18),
+ * read from each release's type declarations. The map `config:` passes these
+ * through to the `Map` constructor, so they are never "unknown". Plus
+ * `customAttribution` (maplibre-gl 3's spelling, still honoured by the
+ * renderer). `globalState` (6.14) and `transformStyle` (6.16, a function, so
+ * only a JS host's config object carries it) are MapLibre's; `globalState`
+ * draws its own warning, since `state:` is where a document declares it.
  */
 export const MAPLIBRE_MAP_OPTIONS: ReadonlySet<string> = new Set([
   "anisotropicFilterPitch", "antialias", "aroundCenter", "attributionControl", "bearing",
@@ -60,16 +63,72 @@ export const MAPLIBRE_MAP_OPTIONS: ReadonlySet<string> = new Set([
   "canvasContextAttributes", "center", "centerClampedToGround", "clickTolerance",
   "collectResourceTiming", "container", "cooperativeGestures", "crossSourceCollisions",
   "doubleClickZoom", "dragPan", "dragRotate", "elevation", "experimentalZoomLevelsToOverscale",
-  "fadeDuration", "failIfMajorPerformanceCaveat", "fitBoundsOptions", "hash", "interactive",
-  "keyboard", "locale", "localIdeographFontFamily", "logoPosition", "maplibreLogo", "maxBounds",
-  "maxCanvasSize", "maxPitch", "maxTileCacheSize", "maxTileCacheZoomLevels", "maxZoom",
+  "fadeDuration", "failIfMajorPerformanceCaveat", "fitBoundsOptions", "globalState", "hash",
+  "interactive", "keyboard", "locale", "localIdeographFontFamily", "logoPosition", "maplibreLogo",
+  "maxBounds", "maxCanvasSize", "maxPitch", "maxTileCacheSize", "maxTileCacheZoomLevels", "maxZoom",
   "minPitch", "minZoom", "pitch", "pitchSpeed", "pitchWithRotate", "pixelRatio",
   "preserveDrawingBuffer", "reduceMotion", "refreshExpiredTiles", "renderWorldCopies", "roll",
   "rollEnabled", "rotateSpeed", "scrollZoom", "style", "terrainSkirtLength", "touchPitch",
   "touchZoomRotate", "trackResize", "transformCameraUpdate", "transformConstrain",
-  "transformRequest", "validateStyle", "zoom", "zoomLevelsToOverscale", "zoomSnap",
+  "transformRequest", "transformStyle", "validateStyle", "zoom", "zoomLevelsToOverscale", "zoomSnap",
   "customAttribution",
 ]);
+
+/**
+ * The `MapOptions` that take a function: a document cannot express one, and
+ * MapLibre calls the value as it is (`transformStyle: "x"` throws at style
+ * load). The parser warns ({@link mapOptionsWarnings}) and the renderer drops
+ * a non-function value before the constructor.
+ */
+export const MAPLIBRE_FUNCTION_OPTIONS: ReadonlySet<string> = new Set([
+  "transformStyle", "transformRequest", "transformCameraUpdate", "transformConstrain",
+]);
+
+/**
+ * Map options a document writes that MapLibre would read differently from
+ * what the author meant (v1 `config`, v2 `runtime.map`, ml-vwz):
+ *
+ * - `globalState`: a `MapOptions` key (6.14), so not unknown — but a document
+ *   declares its global state under `state:`, and the renderer hands THOSE
+ *   defaults to the constructor (6.14+) or `setGlobalStateProperty`. A second
+ *   copy would be a second source of truth, so the renderer drops it and the
+ *   author is told where it belongs.
+ * - a function-typed option ({@link MAPLIBRE_FUNCTION_OPTIONS}) with a value
+ *   that is not a function (always, from YAML): dropped by the renderer.
+ *
+ * @param mapOptions - the options table (`config`, or `runtime.map`).
+ * @param path - where the table sits, e.g. `["config"]`.
+ */
+export function mapOptionsWarnings(
+  mapOptions: unknown,
+  path: (string | number)[],
+  positions?: Positions
+): ValidationWarning[] {
+  if (!isObject(mapOptions)) return [];
+  const where = path.join(".");
+  const warnings: ValidationWarning[] = [];
+  if ("globalState" in mapOptions) {
+    warnings.push({
+      path: `${where}.globalState`,
+      message:
+        `globalState under ${where}: is not read; a document declares its global state at the ` +
+        `top level as \`state: { key: { default: value } }\`. Move the keys there.`,
+      ...atKey(positions, path, "globalState"),
+      onPage: true,
+    });
+  }
+  for (const key of MAPLIBRE_FUNCTION_OPTIONS) {
+    if (!(key in mapOptions) || typeof mapOptions[key] === "function") continue;
+    warnings.push({
+      path: `${where}.${key}`,
+      message:
+        `${key} takes a function, which a document cannot express, so this value is ignored. ` +
+        `Set it from JS on the map, or through the host's config object.`,
+      ...atKey(positions, path, key),
+    });
+  }
+  return warnings;
+}
 
 /** Keys the map `config:` schema itself lists. */
 function configKeys(): string[] {
@@ -383,9 +442,13 @@ export function checkDocument(
   if (isObject(config)) {
     const misplaced = misplacedRootKeys(kind);
     const known = [...configKeys(), ...MAPLIBRE_MAP_OPTIONS];
+    // ml-vwz — `globalState` (state: is the place) and a function-typed option.
+    const optionWarnings = mapOptionsWarnings(config, ["config"], positions);
+    warnings.push(...optionWarnings);
+    const warned = new Set(optionWarnings.map((w) => w.path));
     for (const key of Object.keys(config)) {
       const path = `config.${key}`;
-      if (already.has(path) || key.startsWith("x-")) continue;
+      if (already.has(path) || warned.has(path) || key.startsWith("x-")) continue;
       if (misplaced.has(key)) {
         warnings.push({
           path,
