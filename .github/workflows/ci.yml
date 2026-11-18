@@ -160,14 +160,22 @@ jobs:
     # ^6.4.1 — never one without the other. v6 is ESM-only: e2e/server.mjs
     # detects the missing UMD file and vendors dist/*.mjs instead, keeping the
     # /vendor/maplibre-gl.esm.js import-map contract on every leg. The repo's
-    # default (devDependencies, docs pins) is v6, so this leg is a no-op
-    # override that still runs the assert below.
+    # default (devDependencies, docs pins) is v6, so the ^6.12.0 leg is a
+    # no-op override that still runs the assert below.
+    #
+    # Two v6 legs (ml-vwz): ^6.12.0 is the lockfile's pin and the floor the
+    # repo develops against; ^6.19.0 resolves the newest release, so the
+    # keys that arrived between them (`*-layer-blend` 6.18, `sparse` 6.17)
+    # are exercised where they work AND where the renderer must drop them
+    # with a notice. The assert only checks the major — both legs are 6 —
+    # so the 6.19 leg's value is the resolution itself: a caret on 6.19
+    # cannot resolve to 6.12.
     browser-verification:
         runs-on: ubuntu-latest
         strategy:
             fail-fast: false
             matrix:
-                maplibre-version: ["^4.7.1", "^5.24.0", "^6.12.0"]
+                maplibre-version: ["^4.7.1", "^5.24.0", "^6.12.0", "^6.19.0"]
         steps:
             - name: Checkout
               uses: actions/checkout@v4

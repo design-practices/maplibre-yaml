@@ -851,6 +851,10 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                         "type": "boolean",
                         "description": "Skip the tile cache (MapLibre \`volatile\`); for frequently changing tiles"
                       },
+                      "sparse": {
+                        "type": "boolean",
+                        "description": "Slice a missing tile from the nearest ancestor that exists instead of leaving a hole (MapLibre \`sparse\`, experimental; needs maplibre-gl 6.17 or later, older runtimes drop the key with a notice)"
+                      },
                       "encoding": {
                         "type": "string",
                         "enum": [
@@ -2164,6 +2168,19 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                                   "map",
                                   "viewport"
                                 ]
+                              },
+                              "line-layer-blend": {
+                                "type": "string",
+                                "enum": [
+                                  "normal",
+                                  "multiply",
+                                  "color",
+                                  "luminosity",
+                                  "plus-lighter",
+                                  "screen",
+                                  "overlay"
+                                ],
+                                "description": "How the whole layer blends over what is under it (MapLibre *-layer-blend; needs maplibre-gl 6.18 or later, older runtimes drop the key with a notice)"
                               }
                             },
                             "additionalProperties": true,
@@ -2310,6 +2327,10 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                                     "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/filter"
                                   }
                                 ]
+                              },
+                              "fill-layer-blend": {
+                                "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/1/properties/paint/properties/line-layer-blend",
+                                "description": "How the whole layer blends over what is under it (MapLibre *-layer-blend; needs maplibre-gl 6.18 or later, older runtimes drop the key with a notice)"
                               }
                             },
                             "additionalProperties": true,
@@ -2840,6 +2861,10 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                               },
                               "raster-fade-duration": {
                                 "type": "number"
+                              },
+                              "raster-layer-blend": {
+                                "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/1/properties/paint/properties/line-layer-blend",
+                                "description": "How the whole layer blends over what is under it (MapLibre *-layer-blend; needs maplibre-gl 6.18 or later, older runtimes drop the key with a notice)"
                               }
                             },
                             "additionalProperties": true,
@@ -5639,6 +5664,10 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                     "type": "boolean",
                     "description": "Skip the tile cache (MapLibre \`volatile\`); for frequently changing tiles"
                   },
+                  "sparse": {
+                    "type": "boolean",
+                    "description": "Slice a missing tile from the nearest ancestor that exists instead of leaving a hole (MapLibre \`sparse\`, experimental; needs maplibre-gl 6.17 or later, older runtimes drop the key with a notice)"
+                  },
                   "encoding": {
                     "type": "string",
                     "enum": [
@@ -6952,6 +6981,19 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                               "map",
                               "viewport"
                             ]
+                          },
+                          "line-layer-blend": {
+                            "type": "string",
+                            "enum": [
+                              "normal",
+                              "multiply",
+                              "color",
+                              "luminosity",
+                              "plus-lighter",
+                              "screen",
+                              "overlay"
+                            ],
+                            "description": "How the whole layer blends over what is under it (MapLibre *-layer-blend; needs maplibre-gl 6.18 or later, older runtimes drop the key with a notice)"
                           }
                         },
                         "additionalProperties": true,
@@ -7098,6 +7140,10 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                                 "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/filter"
                               }
                             ]
+                          },
+                          "fill-layer-blend": {
+                            "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/1/properties/paint/properties/line-layer-blend",
+                            "description": "How the whole layer blends over what is under it (MapLibre *-layer-blend; needs maplibre-gl 6.18 or later, older runtimes drop the key with a notice)"
                           }
                         },
                         "additionalProperties": true,
@@ -7628,6 +7674,10 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                           },
                           "raster-fade-duration": {
                             "type": "number"
+                          },
+                          "raster-layer-blend": {
+                            "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/1/properties/paint/properties/line-layer-blend",
+                            "description": "How the whole layer blends over what is under it (MapLibre *-layer-blend; needs maplibre-gl 6.18 or later, older runtimes drop the key with a notice)"
                           }
                         },
                         "additionalProperties": true,
@@ -9336,6 +9386,10 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                                 "type": "boolean",
                                 "description": "Skip the tile cache (MapLibre \`volatile\`); for frequently changing tiles"
                               },
+                              "sparse": {
+                                "type": "boolean",
+                                "description": "Slice a missing tile from the nearest ancestor that exists instead of leaving a hole (MapLibre \`sparse\`, experimental; needs maplibre-gl 6.17 or later, older runtimes drop the key with a notice)"
+                              },
                               "encoding": {
                                 "type": "string",
                                 "enum": [
@@ -10616,6 +10670,19 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                           "map",
                           "viewport"
                         ]
+                      },
+                      "line-layer-blend": {
+                        "type": "string",
+                        "enum": [
+                          "normal",
+                          "multiply",
+                          "color",
+                          "luminosity",
+                          "plus-lighter",
+                          "screen",
+                          "overlay"
+                        ],
+                        "description": "How the whole layer blends over what is under it (MapLibre *-layer-blend; needs maplibre-gl 6.18 or later, older runtimes drop the key with a notice)"
                       }
                     },
                     "additionalProperties": true,
@@ -10762,6 +10829,10 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                             "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/filter"
                           }
                         ]
+                      },
+                      "fill-layer-blend": {
+                        "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/1/properties/paint/properties/line-layer-blend",
+                        "description": "How the whole layer blends over what is under it (MapLibre *-layer-blend; needs maplibre-gl 6.18 or later, older runtimes drop the key with a notice)"
                       }
                     },
                     "additionalProperties": true,
@@ -11292,6 +11363,10 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                       },
                       "raster-fade-duration": {
                         "type": "number"
+                      },
+                      "raster-layer-blend": {
+                        "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/1/properties/paint/properties/line-layer-blend",
+                        "description": "How the whole layer blends over what is under it (MapLibre *-layer-blend; needs maplibre-gl 6.18 or later, older runtimes drop the key with a notice)"
                       }
                     },
                     "additionalProperties": true,
@@ -14340,6 +14415,10 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                                     "type": "boolean",
                                     "description": "Skip the tile cache (MapLibre \`volatile\`); for frequently changing tiles"
                                   },
+                                  "sparse": {
+                                    "type": "boolean",
+                                    "description": "Slice a missing tile from the nearest ancestor that exists instead of leaving a hole (MapLibre \`sparse\`, experimental; needs maplibre-gl 6.17 or later, older runtimes drop the key with a notice)"
+                                  },
                                   "encoding": {
                                     "type": "string",
                                     "enum": [
@@ -15629,6 +15708,19 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                               "map",
                               "viewport"
                             ]
+                          },
+                          "line-layer-blend": {
+                            "type": "string",
+                            "enum": [
+                              "normal",
+                              "multiply",
+                              "color",
+                              "luminosity",
+                              "plus-lighter",
+                              "screen",
+                              "overlay"
+                            ],
+                            "description": "How the whole layer blends over what is under it (MapLibre *-layer-blend; needs maplibre-gl 6.18 or later, older runtimes drop the key with a notice)"
                           }
                         },
                         "additionalProperties": true,
@@ -15775,6 +15867,10 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                                 "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/filter"
                               }
                             ]
+                          },
+                          "fill-layer-blend": {
+                            "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/1/properties/paint/properties/line-layer-blend",
+                            "description": "How the whole layer blends over what is under it (MapLibre *-layer-blend; needs maplibre-gl 6.18 or later, older runtimes drop the key with a notice)"
                           }
                         },
                         "additionalProperties": true,
@@ -16305,6 +16401,10 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                           },
                           "raster-fade-duration": {
                             "type": "number"
+                          },
+                          "raster-layer-blend": {
+                            "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/1/properties/paint/properties/line-layer-blend",
+                            "description": "How the whole layer blends over what is under it (MapLibre *-layer-blend; needs maplibre-gl 6.18 or later, older runtimes drop the key with a notice)"
                           }
                         },
                         "additionalProperties": true,

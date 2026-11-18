@@ -28,6 +28,8 @@ import {
   SKY_RUNTIME_FLOOR,
   GLOBE_RUNTIME_FLOOR,
   COLOR_RELIEF_RUNTIME_FLOOR,
+  LAYER_BLEND_RUNTIME_FLOOR,
+  SPARSE_SOURCE_RUNTIME_FLOOR,
   meetsVersion,
   supportsState,
 } from "../capabilities";
@@ -112,7 +114,59 @@ export function applyRuntimeGate(
   result: EmitResult,
   policy: CapabilityPolicy
 ): EmitResult {
-  return gateState(gateScene(gateLayerTypes(result, policy), policy), policy);
+  return gateState(
+    gateScene(gateRuntimeKeys(gateLayerTypes(result, policy), policy), policy),
+    policy
+  );
+}
+
+/**
+ * Report keys the declared target does not know: `*-layer-blend` paint
+ * properties (maplibre-gl 6.18) and the `sparse` vector-source option
+ * (6.17). Nothing is rewritten — the keys are spec-valid and the runtime
+ * that knows them should get them — but a style validator on the declared
+ * target rejects an unknown property, and MapLibre's own `addLayer` /
+ * `addSource` refuse the layer or source outright, so this is `lossy`. An
+ * undeclared target makes no claim and stays quiet, as for `color-relief`.
+ */
+function gateRuntimeKeys(result: EmitResult, policy: CapabilityPolicy): EmitResult {
+  if (!policy.target) return result;
+  const warnings: EmitWarning[] = [];
+  if (!meetsVersion(policy.target, LAYER_BLEND_RUNTIME_FLOOR)) {
+    const layers = Array.isArray(result.style["layers"]) ? result.style["layers"] : [];
+    for (const layer of layers) {
+      if (!isPlainObject(layer) || !isPlainObject(layer["paint"])) continue;
+      for (const key of Object.keys(layer["paint"])) {
+        if (!key.endsWith("-layer-blend")) continue;
+        warnings.push({
+          path: `layers.${String(layer["id"])}.paint.${key}`,
+          kind: "lossy",
+          construct: "layer-blend",
+          exportClass: "exports",
+          message:
+            `\`${key}\` needs maplibre-gl ${LAYER_BLEND_RUNTIME_FLOOR} or later; the target is ` +
+            `${policy.target}, which does not know the property and refuses the layer ` +
+            `"${String(layer["id"])}" as a whole.`,
+        });
+      }
+    }
+  }
+  if (!meetsVersion(policy.target, SPARSE_SOURCE_RUNTIME_FLOOR)) {
+    const sources = isPlainObject(result.style["sources"]) ? result.style["sources"] : {};
+    for (const [id, source] of Object.entries(sources)) {
+      if (!isPlainObject(source) || source["type"] !== "vector" || source["sparse"] === undefined) continue;
+      warnings.push({
+        path: `sources.${id}.sparse`,
+        kind: "lossy",
+        construct: "sparse",
+        exportClass: "exports",
+        message:
+          `\`sparse\` needs maplibre-gl ${SPARSE_SOURCE_RUNTIME_FLOOR} or later; the target is ` +
+          `${policy.target}, which does not know the option and refuses the source "${id}".`,
+      });
+    }
+  }
+  return warnings.length > 0 ? { ...result, warnings: [...result.warnings, ...warnings] } : result;
 }
 
 /**

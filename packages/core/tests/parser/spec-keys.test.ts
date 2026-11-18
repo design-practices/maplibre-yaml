@@ -122,3 +122,37 @@ describe("spec keys outside the curated shapes do not warn", () => {
     ).toBe(true);
   });
 });
+
+describe("style-spec 26.8 keys (maplibre-gl 6.18 layer blending, ml-vwz)", () => {
+  it("accepts fill-, line- and raster-layer-blend without unknown-key warnings", () => {
+    const result = YAMLParser.safeParseMapBlock(
+      mapBlock(`  - id: shade
+    type: fill
+    source: { type: geojson, url: "https://example.com/d.geojson" }
+    paint:
+      fill-color: "#3366cc"
+      fill-layer-blend: multiply
+  - id: roads
+    type: line
+    source: { type: geojson, url: "https://example.com/d.geojson" }
+    paint:
+      line-layer-blend: screen
+  - id: imagery
+    type: raster
+    source: { type: raster, tiles: ["https://example.com/{z}/{x}/{y}.png"] }
+    paint:
+      raster-layer-blend: overlay`)
+    );
+    expect(result.success).toBe(true);
+    expect(result.warnings.filter((w) => /Unknown key/.test(w.message))).toEqual([]);
+  });
+
+  it("lists the layer-blend keys and the oklab/oklch interpolations in the generated sets", async () => {
+    const { SPEC_EXPRESSION_OPERATORS } = await import("../../src/parser/spec-keys.generated");
+    for (const key of ["fill-layer-blend", "line-layer-blend", "raster-layer-blend"]) {
+      expect(SPEC_PAINT_KEYS.has(key)).toBe(true);
+    }
+    expect(SPEC_EXPRESSION_OPERATORS.has("interpolate-oklab")).toBe(true);
+    expect(SPEC_EXPRESSION_OPERATORS.has("interpolate-oklch")).toBe(true);
+  });
+});

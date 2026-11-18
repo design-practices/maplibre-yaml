@@ -304,8 +304,8 @@ importers:
         version: 2.8.2
     devDependencies:
       '@maplibre/maplibre-gl-style-spec':
-        specifier: ^26.4.4
-        version: 26.4.4
+        specifier: ^26.8.0
+        version: 26.8.0
       '@types/node':
         specifier: ^20.0.0
         version: 20.19.27
@@ -341,8 +341,8 @@ importers:
         specifier: 0.10.0
         version: 0.10.0(maplibre-gl@6.12.0)
       '@maplibre/maplibre-gl-style-spec':
-        specifier: ^26.4.4
-        version: 26.4.4
+        specifier: ^26.8.0
+        version: 26.8.0
       '@protomaps/basemaps':
         specifier: ^5.7.2
         version: 5.7.2
@@ -429,8 +429,8 @@ importers:
         specifier: 6.1.0
         version: 6.1.0
       '@maplibre/maplibre-gl-style-spec':
-        specifier: ^26.4.4
-        version: 26.4.4
+        specifier: ^26.8.0
+        version: 26.8.0
       '@maplibre/vt-pbf':
         specifier: 4.3.0
         version: 4.3.0

@@ -177,6 +177,7 @@ are synthesised, not files on disk.
 | `07-u5-hover-highlight.html` | U5 | hovering the red circle repaints it gold |
 | `08-u6-hillshade.html` | U6 | hillshade layer added from a raster-dem source, no console error |
 | `02-controls-legend.html` | U3 regression | a map configuring NO attribution still shows MapLibre's own |
+| `layer-blend.html` | ml-vwz | `fill-layer-blend: multiply` turns the overlap of a yellow and a cyan square green on maplibre-gl 6.18+; before 6.18 the key is dropped with one console notice and the overlap stays cyan (the layer is not refused) |
 
 The last row is load-bearing: an earlier form of the U3 guard always set
 `attributionControl`, so an unconfigured map received `undefined`, which MapLibre
