@@ -137,6 +137,29 @@ config:
 Relative URLs inside the style resolve against the style
 ([PMTiles inside a basemap style](/guides/pmtiles/#pmtiles-inside-a-basemap-style)).
 
+## Protomaps' hosted basemap instead \{#hosted}
+
+You don't have to host the file. [Protomaps' API](https://protomaps.com/api)
+serves the same basemap from its CDN, with an API key, as a complete style.
+`mapStyle:` takes it like any style URL, with the flavor and the label
+language in the path:
+
+```yaml
+config:
+  mapStyle: "https://api.protomaps.com/styles/v5/light/en.json?key=YOUR_KEY"
+```
+
+The key is in the page anyone can read, as with every browser map key. When
+you create it, restrict it to your site's domain on the Protomaps dashboard.
+
+A hosted style is a plain style URL, so it doesn't get what the shorthand
+above does for you:
+- `lang:` following the page's language;
+- the right-to-left text plugin on older maplibre-gl;
+- the notices when fonts, icons or the file itself don't load.
+
+Write the language you want into the URL.
+
 ## Troubleshooting
 
 When something is wrong the map shows a notice instead of a blank basemap:
